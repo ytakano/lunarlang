@@ -28,7 +28,7 @@ public:
     };
 
     CH_RESULT
-    push(char *val) {
+    push(const char *val) {
         if (m_flags & CH_WRITE_CLOSED)
             return CH_WRITE_CLOSED;
 
@@ -67,7 +67,7 @@ public:
 
         m_head += m_bucket_size;
         if (m_head >= m_end)
-            m_tail = m_buf;
+            m_head = m_buf;
 
         m_len--;
 
