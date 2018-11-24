@@ -92,6 +92,6 @@ private:
     int  m_flags;
 };
 
-}
+} // namespace lunar
 
 #endif // LUNAR_CHANNEL_HPP

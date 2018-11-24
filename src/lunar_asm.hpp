@@ -47,6 +47,6 @@ popcntq(uint64_t num)
 #endif // __x86_64__
 }
 
-}
+} // namespace lunar
 
 #endif // LUNAR_ASM_HPP

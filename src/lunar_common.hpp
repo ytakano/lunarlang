@@ -1,6 +1,8 @@
 #ifndef LUNAR_COMMON_HPP
 #define LUNAR_COMMON_HPP
 
+#include <stdint.h>
+
 namespace lunar {
 
 enum CH_RESULT {
@@ -11,6 +13,6 @@ enum CH_RESULT {
     CH_WRITE_CLOSED = 0x08,
 };
 
-}
+} // namespace lunar
 
 #endif // LUNAR_COMMON_HPP

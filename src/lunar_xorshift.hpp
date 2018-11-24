@@ -130,6 +130,6 @@ private:
     int p;
 };
 
-}
+} // namespace lunar
 
 #endif // LUNAR_XORSHIFT_HPP
