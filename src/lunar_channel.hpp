@@ -49,8 +49,6 @@ public:
         return CH_SUCCESS;
     }
 
-    CH_RESULT pushN(char *val, int num);
-
     CH_RESULT
     pop(char *ret) {
         if (m_flags & CH_READ_CLOSED)
@@ -73,8 +71,6 @@ public:
 
         return CH_SUCCESS;
     }
-
-    CH_RESULT popN(char **ret, int &num);
 
     void close_read() { m_flags |= CH_READ_CLOSED; };
     void close_write() { m_flags |= CH_WRITE_CLOSED; };
