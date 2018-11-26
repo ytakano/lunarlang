@@ -6,6 +6,8 @@
 #include <deque>
 #include <memory>
 
+#include <unordered_map>
+
 #include "lunar_common.hpp"
 
 extern "C" {
@@ -52,15 +54,17 @@ public:
 
     typedef std::unique_ptr<context> ptr_context;
 
-    void yield();
-    void run();
-    void spawn();
+    void     yield();
+    void     run();
+    uint64_t spawn(void (*func)(void*), void *arg, int stack_size);
 
 private:
     sigjmp_buf  m_jmp_buf;
-    ptr_context m_running;
 
-    std::deque<ptr_context> m_suspend;
+    context              *m_running;
+    std::deque<context*>  m_suspend;
+
+    std::unordered_map<uint64_t, ptr_context> m_id2ctx;
 };
 
 } // namespace lunar

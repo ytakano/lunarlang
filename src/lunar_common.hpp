@@ -2,6 +2,10 @@
 #define LUNAR_COMMON_HPP
 
 #include <stdint.h>
+#include <errno.h>
+
+#define HASKEY(CONTAINER, KEY) !(CONTAINER.find(KEY) == CONTAINER.end())
+#define PRINTERR(M, ...) fprintf(stderr, "ERROR (%s:%d): " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 namespace lunar {
 
