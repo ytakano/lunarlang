@@ -10,18 +10,27 @@
 
 #include "lunar_common.hpp"
 
-extern "C" {
-void init_thread();
+extern "C"
+{
+
+    void init_thread();
+    void run_green_thread();
+    void yield_green_thread();
+    void spawn_green_thread(void (*func)(void *), void *arg, int stack_size = 4096 * 32);
+
 } // extern "C"
 
-namespace lunar {
+namespace lunar
+{
 
-class green_thread {
-public:
+class green_thread
+{
+  public:
     green_thread();
     virtual ~green_thread();
 
-    struct context {
+    struct context
+    {
         // STATE := READY
         //        | RUNNING
         //        | TERMINATED
@@ -45,26 +54,31 @@ public:
         static const int WAITING_CHAN_MT_WRITE = 0x0100;
         static const int WAITING_FD            = 0x0200;
 
-        uint32_t   m_state;
-        uint32_t   m_stack_size;
-        uint64_t   m_id; // m_id must not be less than or equal to 0
-        uint64_t  *m_stack;
+        uint32_t m_state;
+        uint32_t m_stack_size;
+        uint64_t m_id; // m_id must not be less than or equal to 0
+        uint64_t *m_stack;
         sigjmp_buf m_jmp_buf;
     };
 
     typedef std::unique_ptr<context> ptr_context;
 
-    void     yield();
-    void     run();
-    uint64_t spawn(void (*func)(void*), void *arg, int stack_size);
+    void yield();
+    void run();
+    uint64_t spawn(void (*func)(void *), void *arg, int stack_size = 4096 * 32);
 
-private:
-    sigjmp_buf  m_jmp_buf;
+  private:
+    sigjmp_buf m_jmp_buf;
 
-    context              *m_running;
-    std::deque<context*>  m_suspend;
+    context *m_running;
+    std::deque<context *> m_suspend;
 
     std::unordered_map<uint64_t, ptr_context> m_id2ctx;
+
+    ptr_context m_remove;
+
+    void remove_context(context *ctx);
+    void first_switch(context *pre, context *ctx);
 };
 
 } // namespace lunar
