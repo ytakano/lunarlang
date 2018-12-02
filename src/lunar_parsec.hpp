@@ -1,6 +1,7 @@
 #ifndef LUNAR_PARSEC_HPP
 #define LUNAR_PARSEC_HPP
 
+#include <iostream>
 #include <string>
 #include <unordered_set>
 
@@ -10,16 +11,36 @@
         auto r = X;                                                            \
         if (P.is_fail()) {                                                     \
             P.revert();                                                        \
+            P.set_fail(false);                                                 \
             break;                                                             \
         }                                                                      \
         RET.push_back(r);                                                      \
-        P.set_fail(false);                                                     \
+    }
+
+#define PMANYMV(P, RET, X)                                                     \
+    for (;;) {                                                                 \
+        P.checkpoint();                                                        \
+        auto r = X;                                                            \
+        if (P.is_fail()) {                                                     \
+            P.revert();                                                        \
+            P.set_fail(false);                                                 \
+            break;                                                             \
+        }                                                                      \
+        RET.push_back(std::move(r));                                           \
     }
 
 #define PTRY(P, RET, X)                                                        \
     do {                                                                       \
         P.checkpoint();                                                        \
         RET = X;                                                               \
+        if (P.is_fail())                                                       \
+            P.revert();                                                        \
+    } while (0);
+
+#define PTRYMV(P, RET, X)                                                      \
+    do {                                                                       \
+        P.checkpoint();                                                        \
+        RET = std::move(X);                                                    \
         if (P.is_fail())                                                       \
             P.revert();                                                        \
     } while (0);
@@ -68,35 +89,37 @@ class parsec {
     }
 
     char oneof(const std::unordered_set<char> &c) {
-        if (m_pos == m_str.size()) {
+        if (m_pos >= m_str.size()) {
             m_fail = true;
             return 0;
         }
 
-        if (c.find(m_str[m_pos]) == c.end()) {
+        char ret = m_str[m_pos];
+        if (c.find(ret) == c.end()) {
             m_fail = true;
             return 0;
         }
 
         m_pos++;
         m_fail = false;
-        return m_str[m_pos];
+        return ret;
     }
 
     char oneof_not(const std::unordered_set<char> &c) {
-        if (m_pos == m_str.size()) {
+        if (m_pos >= m_str.size()) {
             m_fail = true;
             return 0;
         }
 
-        if (c.find(m_str[m_pos]) != c.end()) {
+        char ret = m_str[m_pos];
+        if (c.find(ret) != c.end()) {
             m_fail = true;
             return 0;
         }
 
         m_pos++;
         m_fail = false;
-        return m_str[m_pos];
+        return ret;
     }
 
     char space() { return oneof(m_spaces); }
@@ -119,7 +142,7 @@ class parsec {
         std::size_t m_pos;
     } m_checkpoint;
 
-    const std::string &m_str;
+    std::string m_str;
     std::size_t m_pos;
     bool m_fail;
 

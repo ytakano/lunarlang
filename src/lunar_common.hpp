@@ -18,6 +18,12 @@ enum CH_RESULT {
     CH_WRITE_CLOSED = 0x08,
 };
 
+enum type_spec {
+    TYPE_BOOL,
+    TYPE_U64,
+    TYPE_U32,
+};
+
 } // namespace lunar
 
 #endif // LUNAR_COMMON_HPP
