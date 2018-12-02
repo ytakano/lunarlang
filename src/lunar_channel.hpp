@@ -5,33 +5,23 @@
 // this is MT-UNSAFE and non-blocking
 
 #include <stdint.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "lunar_common.hpp"
 
-namespace lunar
-{
+namespace lunar {
 
-class channel
-{
+class channel {
   public:
-    channel(int bucket_size, int len) : m_len(0),
-                                        m_max_len(len),
-                                        m_bucket_size(bucket_size),
-                                        m_buf(new char[bucket_size * len]),
-                                        m_end(&m_buf[bucket_size * len]),
-                                        m_head(m_buf),
-                                        m_tail(m_buf),
-                                        m_flags(0) {}
-    virtual ~channel()
-    {
-        delete[] m_buf;
-    }
+    channel(int bucket_size, int len)
+        : m_len(0), m_max_len(len), m_bucket_size(bucket_size),
+          m_buf(new char[bucket_size * len]), m_end(&m_buf[bucket_size * len]),
+          m_head(m_buf), m_tail(m_buf), m_flags(0) {}
+    virtual ~channel() { delete[] m_buf; }
 
     CH_RESULT
-    push(const char *val)
-    {
+    push(const char *val) {
         if (m_flags & CH_WRITE_CLOSED)
             return CH_WRITE_CLOSED;
 
@@ -53,13 +43,11 @@ class channel
     }
 
     CH_RESULT
-    pop(char *ret)
-    {
+    pop(char *ret) {
         if (m_flags & CH_READ_CLOSED)
             return CH_READ_CLOSED;
 
-        if (m_len == 0)
-        {
+        if (m_len == 0) {
             if (m_flags & CH_WRITE_CLOSED)
                 return CH_WRITE_CLOSED;
             else
