@@ -8,11 +8,12 @@
     for (;;) {                                                                 \
         P.checkpoint();                                                        \
         auto r = X;                                                            \
-        RET.push_back(r);                                                      \
         if (P.is_fail()) {                                                     \
             P.revert();                                                        \
             break;                                                             \
         }                                                                      \
+        RET.push_back(r);                                                      \
+        P.set_fail(false);                                                     \
     }
 
 #define PTRY(P, RET, X)                                                        \
@@ -26,7 +27,12 @@
 namespace lunar {
 class parsec {
   public:
-    parsec(const std::string &str) : m_str(str), m_pos(0), m_fail(false) {}
+    parsec(const std::string &str) : m_str(str), m_pos(0), m_fail(false) {
+        m_spaces.insert(' ');
+        m_spaces.insert('\t');
+        m_spaces.insert('\r');
+        m_spaces.insert('\n');
+    }
     virtual ~parsec() {}
 
     std::string str(std::string match) {
@@ -45,10 +51,23 @@ class parsec {
             }
             m_pos++;
         }
+
+        m_fail = false;
         return match;
     }
 
-    char chara(std::unordered_set<char> c) {
+    char character(char c) {
+        if (m_pos >= m_str.size() || m_str[m_pos] != c) {
+            m_fail = true;
+            return 0;
+        }
+
+        m_pos++;
+        m_fail = false;
+        return c;
+    }
+
+    char oneof(const std::unordered_set<char> &c) {
         if (m_pos == m_str.size()) {
             m_fail = true;
             return 0;
@@ -57,13 +76,14 @@ class parsec {
         if (c.find(m_str[m_pos]) == c.end()) {
             m_fail = true;
             return 0;
-        } else {
-            m_pos++;
-            return m_str[m_pos];
         }
+
+        m_pos++;
+        m_fail = false;
+        return m_str[m_pos];
     }
 
-    char not_char(std::unordered_set<char> c) {
+    char oneof_not(const std::unordered_set<char> &c) {
         if (m_pos == m_str.size()) {
             m_fail = true;
             return 0;
@@ -72,23 +92,38 @@ class parsec {
         if (c.find(m_str[m_pos]) != c.end()) {
             m_fail = true;
             return 0;
-        } else {
-            m_pos++;
-            return m_str[m_pos];
         }
+
+        m_pos++;
+        m_fail = false;
+        return m_str[m_pos];
     }
 
-    void checkpoint() { m_checkpoint = m_pos; }
-    void revert() { m_pos = m_checkpoint; }
+    char space() { return oneof(m_spaces); }
+
+    std::string spaces() {
+        std::string s;
+        PMANY((*this), s, space());
+        return s;
+    }
+
+    void checkpoint() { m_checkpoint.m_pos = m_pos; }
+    void revert() { m_pos = m_checkpoint.m_pos; }
 
     bool is_fail() { return m_fail; }
+    void set_fail(bool is_fail) { m_fail = is_fail; }
     bool is_eof() { return m_pos == m_str.size(); }
 
   private:
+    struct checkpoint_t {
+        std::size_t m_pos;
+    } m_checkpoint;
+
     const std::string &m_str;
     std::size_t m_pos;
     bool m_fail;
-    std::size_t m_checkpoint;
+
+    std::unordered_set<char> m_spaces;
 };
 
 } // namespace lunar
