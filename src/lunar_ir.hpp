@@ -31,7 +31,7 @@ struct ir_defun : public ir_expr {
     virtual ~ir_defun() {}
     std::string m_name;
     std::list<ptr_ir_type> m_ret;
-    std::list<std::pair<ptr_ir_type, std::string>> m_args;
+    std::list<std::unique_ptr<std::pair<ptr_ir_type, std::string>>> m_args;
     ptr_ir_expr m_expr;
 };
 
@@ -42,7 +42,7 @@ class ir {
     ir(const std::string &filename, const std::string &str);
     virtual ~ir() {}
 
-    std::unique_ptr<ir_expr> parse();
+    bool parse(std::list<ptr_ir_defun> &defuns);
 
   private:
     parsec m_parsec;

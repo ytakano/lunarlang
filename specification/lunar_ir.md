@@ -1,5 +1,6 @@
 
-$EXPR := $LET | $DEFUN | $APPLY
+$TOP := $DEFUN*
+$EXPR := $LET | $APPLY
 
 ## Identifier
 

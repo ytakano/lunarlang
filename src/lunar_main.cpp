@@ -5,9 +5,10 @@
 
 void world(void *arg) {
     //    printf("World!\n");
-    lunar::ir ir("test.ir", "(defun fun (bool, u32, u64) ");
-    auto expr = ir.parse();
-    if (expr) {
+    std::list<lunar::ptr_ir_defun> defuns;
+    lunar::ir ir("test.ir", "(defun fun (bool u32 u64) ((u64 arg1)))");
+    auto result = ir.parse(defuns);
+    if (result) {
         printf("parsed!\n");
     }
     yield_green_thread();

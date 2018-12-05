@@ -60,29 +60,52 @@ ir::ir(const std::string &filename, const std::string &str)
     m_no_id_char_head.insert('9');
 }
 
-ptr_ir_expr ir::parse() { return parse_expr(); }
+bool ir::parse(std::list<ptr_ir_defun> &defuns) {
+    for (;;) {
+        m_parsec.spaces();
+        char c;
+        PTRY(m_parsec, c, m_parsec.character('('));
+        if (m_parsec.is_fail()) {
+            if (m_parsec.is_eof()) {
+                return true;
+            } else {
+                SYNTAXERR("expected ( or EOF");
+            }
+
+            return false;
+        }
+
+        m_parsec.spaces();
+        auto id = parse_id();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected identifier");
+            return false;
+        }
+
+        if (id == "defun") {
+            auto defun = parse_defun();
+            if (!defun)
+                return false;
+
+            defuns.push_back(std::move(defun));
+        } else {
+            SYNTAXERR("expected defun");
+            return false;
+        }
+
+        m_parsec.spaces();
+        m_parsec.character(')');
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected )");
+            return false;
+        }
+    }
+
+    return false; // never reach here
+}
 
 ptr_ir_expr ir::parse_expr() {
-    ptr_ir_expr expr;
-
-    m_parsec.spaces();
-    m_parsec.character('(');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected (");
-        return nullptr;
-    }
-
-    m_parsec.spaces();
-    auto id = parse_id();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected identifier");
-        return nullptr;
-    }
-
-    if (id == "defun") {
-        expr = parse_defun();
-    } else {
-    }
+    ptr_ir_expr expr(new ir_expr);
 
     return expr;
 }
@@ -154,12 +177,10 @@ ptr_ir_defun ir::parse_defun() {
     for (;;) {
         char tmp;
         m_parsec.spaces();
-
-        PTRY(m_parsec, tmp, m_parsec.character(','));
-        if (m_parsec.is_fail())
+        PTRY(m_parsec, tmp, m_parsec.character(')'));
+        if (!m_parsec.is_fail())
             break;
 
-        m_parsec.spaces();
         auto t2 = parse_type();
         if (m_parsec.is_fail()) {
             SYNTAXERR("expected type or identifier");
@@ -169,12 +190,71 @@ ptr_ir_defun ir::parse_defun() {
         defun->m_ret.push_back(std::move(t2));
     }
 
-    m_parsec.spaces();
-    m_parsec.character(')');
+    m_parsec.space();
     if (m_parsec.is_fail()) {
-        SYNTAXERR("expected )");
+        SYNTAXERR("expected whitespace");
         return nullptr;
     }
+    m_parsec.spaces();
+
+    // parse arguments
+    m_parsec.character('(');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected (");
+        return nullptr;
+    }
+
+    for (;;) {
+        m_parsec.spaces();
+        char tmp;
+        PTRY(m_parsec, tmp, m_parsec.character(')'));
+        if (m_parsec.is_fail()) {
+            m_parsec.character('(');
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected (");
+                return nullptr;
+            }
+
+            m_parsec.spaces();
+
+            auto t = parse_type();
+            if (!t) {
+                SYNTAXERR("expected type");
+                return nullptr;
+            }
+
+            m_parsec.space();
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected whitespace");
+                return nullptr;
+            }
+
+            auto id = parse_id();
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected identifier");
+                return nullptr;
+            }
+
+            auto p = std::make_unique<std::pair<ptr_ir_type, std::string>>(
+                std::move(t), id);
+            defun->m_args.push_back(std::move(p));
+
+            m_parsec.spaces();
+            m_parsec.character(')');
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected )");
+                return nullptr;
+            }
+        } else {
+            break;
+        }
+    }
+
+    auto expr = parse_expr();
+    if (!expr)
+        return nullptr;
+
+    defun->m_expr = std::move(expr);
 
     return defun;
 }
