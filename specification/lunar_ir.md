@@ -1,12 +1,24 @@
 
 $TOP := $DEFUN*
-$EXPR := $LET | $APPLY
+$EXPR := $LET | $ID | DECIMAL | $APPLY
+
+## NOP
+
+```
+$NOP := ()
+```
 
 ## Identifier
 
 ```
 $ID := [^0-9$WHITESPACE][^$WHITESPACE]+
 $WHITESPACE = space | tab | \r | \n | \r\n
+```
+
+## Decimal Number
+
+```
+$DECIMAL := [1-9][0-9]*
 ```
 
 ## Type
@@ -24,19 +36,19 @@ $SCALAR := bool | u64 | u32
 ## Let
 
 ```
-$LET := (let (($TYPE $ID)+ $EXPR)+ $EXPR*)
+$LET := (let (($TYPE $ID)+ $EXPR)+ $EXPR+)
 ```
 
 ## Function Definition
 
 ```
-$DEFUN := (defun $ID? ($TYPE*) (($TYPE $ID)*) $EXPR*)
+$DEFUN := (defun $ID? ($TYPE*) (($TYPE $ID)*) $EXPR+)
 ```
 
 ## Function Apply
 
 ```
-$APPLY := ($ID $ID*)
+$APPLY := ($EXPR*)
 ```
 
 ### Yield

@@ -105,9 +105,22 @@ bool ir::parse(std::list<ptr_ir_defun> &defuns) {
 }
 
 ptr_ir_expr ir::parse_expr() {
-    ptr_ir_expr expr(new ir_expr);
+    std::string id;
+    PTRY(m_parsec, id, parse_id());
+    if (m_parsec.is_fail()) {
+        // APPLY
+    } else {
+        if (id == "let") {
+            // LET
+        } else {
+            // IDENTIFIER
+            auto e = std::make_unique<ir_id>();
+            e->m_id = id;
+            return e;
+        }
+    }
 
-    return expr;
+    return nullptr;
 }
 
 ptr_ir_type ir::parse_type() {
@@ -250,6 +263,13 @@ ptr_ir_defun ir::parse_defun() {
         }
     }
 
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+    m_parsec.spaces();
+
     auto expr = parse_expr();
     if (!expr)
         return nullptr;
@@ -270,6 +290,49 @@ std::string ir::parse_id() {
     PMANY(m_parsec, ret, m_parsec.oneof_not(m_no_id_char));
 
     return ret;
+}
+
+void ir_scalar::print() {
+    std::cout << "\"";
+    switch (m_type) {
+    case TYPE_BOOL:
+        std::cout << "bool";
+        break;
+    case TYPE_U32:
+        std::cout << "u32";
+        break;
+    case TYPE_U64:
+        std::cout << "u64";
+        break;
+    }
+    std::cout << "\"";
+}
+
+void ir_defun::print() {
+    std::cout << "{\"defun\":{\"id\":\"" << m_name << "\","
+              << "\"ret\":[";
+    auto n = m_ret.size();
+    for (auto &p : m_ret) {
+        p->print();
+        n--;
+        if (n > 0) {
+            std::cout << ",";
+        }
+    }
+    std::cout << "],\"args\":[";
+    n = m_args.size();
+    for (auto &q : m_args) {
+        std::cout << "{\"type\":";
+        q->first->print();
+        std::cout << ",\"id\":\"" << q->second << "\"}";
+        n--;
+        if (n > 0) {
+            std::cout << ",";
+        }
+    }
+    std::cout << "],\"expr\":";
+    m_expr->print();
+    std::cout << "}}";
 }
 
 } // namespace lunar

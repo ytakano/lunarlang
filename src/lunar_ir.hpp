@@ -11,6 +11,7 @@ namespace lunar {
 struct ir_expr {
     ir_expr() {}
     virtual ~ir_expr() {}
+    virtual void print() {}
 };
 
 typedef std::unique_ptr<ir_expr> ptr_ir_expr;
@@ -18,24 +19,44 @@ typedef std::unique_ptr<ir_expr> ptr_ir_expr;
 struct ir_type {
     ir_type() {}
     virtual ~ir_type() {}
+    virtual void print() {}
 };
 
 typedef std::unique_ptr<ir_type> ptr_ir_type;
 
 struct ir_scalar : public ir_type {
     type_spec m_type;
+
+    void print();
 };
 
-struct ir_defun : public ir_expr {
+struct ir_statement {
+    ir_statement() {}
+    virtual ~ir_statement() {}
+    virtual void print() {}
+};
+
+struct ir_defun : public ir_statement {
     ir_defun() {}
     virtual ~ir_defun() {}
+
     std::string m_name;
     std::list<ptr_ir_type> m_ret;
     std::list<std::unique_ptr<std::pair<ptr_ir_type, std::string>>> m_args;
     ptr_ir_expr m_expr;
+
+    void print();
 };
 
 typedef std::unique_ptr<ir_defun> ptr_ir_defun;
+
+struct ir_id : public ir_expr {
+    std::string m_id;
+
+    void print() { std::cout << "{\"id\":\"" << m_id << "\"}"; }
+};
+
+typedef std::unique_ptr<ir_id> ptr_ir_id;
 
 class ir {
   public:

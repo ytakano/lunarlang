@@ -4,18 +4,23 @@
 #include <stdio.h>
 
 void world(void *arg) {
-    //    printf("World!\n");
     std::list<lunar::ptr_ir_defun> defuns;
-    lunar::ir ir("test.ir", "(defun fun (bool u32 u64) ((u64 arg1)))");
+    std::string s = "(defun fun (bool u32 u64) ((u64 arg1) (u32 arg2)) e)";
+    lunar::ir ir("test.ir", s);
     auto result = ir.parse(defuns);
     if (result) {
-        printf("parsed!\n");
+        std::cout << "{\"input\":\"" << s << "\",\"AST\":";
+        for (auto &p : defuns) {
+            p->print();
+        }
+        std::cout << "}" << std::endl;
+    } else {
+        std::cout << "false" << std::endl;
     }
     yield_green_thread();
 }
 
 void hello(void *arg) {
-    //    printf("Hello ");
     spawn_green_thread(world, nullptr);
     yield_green_thread();
 }

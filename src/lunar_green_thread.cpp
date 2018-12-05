@@ -61,7 +61,7 @@ namespace lunar {
 
 green_thread::green_thread() : m_running(nullptr) {}
 
-green_thread::~green_thread() { printf("delete green thread\n"); }
+green_thread::~green_thread() {}
 
 void green_thread::remove_context(context *ctx) {}
 
@@ -75,7 +75,6 @@ void green_thread::yield() {
             previous->m_state = context::SUSPENDING;
             m_suspend.push_back(previous);
         } else if (previous->m_state == context::TERMINATED) {
-            printf("remove: id = %llu\n", previous->m_id);
             auto it = m_id2ctx.find(previous->m_id);
             m_remove = std::move(it->second);
             m_id2ctx.erase(it);
@@ -88,8 +87,6 @@ void green_thread::yield() {
         m_suspend.pop_front();
         auto state = m_running->m_state;
         m_running->m_state = context::RUNNING;
-
-        printf("yield: id = %llu\n", m_running->m_id);
 
         if (state == context::READY) {
             if (previous) {
