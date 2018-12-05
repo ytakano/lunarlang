@@ -27,6 +27,8 @@ struct ir_scalar : public ir_type {
 };
 
 struct ir_defun : public ir_expr {
+    ir_defun() {}
+    virtual ~ir_defun() {}
     std::string m_name;
     std::list<ptr_ir_type> m_ret;
     std::list<std::pair<ptr_ir_type, std::string>> m_args;
@@ -37,13 +39,14 @@ typedef std::unique_ptr<ir_defun> ptr_ir_defun;
 
 class ir {
   public:
-    ir(const std::string &str);
+    ir(const std::string &filename, const std::string &str);
     virtual ~ir() {}
 
     std::unique_ptr<ir_expr> parse();
 
   private:
     parsec m_parsec;
+    std::string m_filename;
     std::unordered_set<char> m_no_id_char_head;
     std::unordered_set<char> m_no_id_char;
 

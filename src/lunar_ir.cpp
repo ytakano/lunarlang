@@ -2,9 +2,14 @@
 
 #include <iostream>
 
+#define SYNTAXERR(M, ...)                                                      \
+    fprintf(stderr, "syntax error (%s:%lu:%lu): " M "\n", m_filename.c_str(),  \
+            m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
+
 namespace lunar {
 
-ir::ir(const std::string &str) : m_parsec(str) {
+ir::ir(const std::string &filename, const std::string &str)
+    : m_filename(filename), m_parsec(str) {
 
     m_no_id_char.insert(' ');
     m_no_id_char.insert('\r');
@@ -63,14 +68,14 @@ ptr_ir_expr ir::parse_expr() {
     m_parsec.spaces();
     m_parsec.character('(');
     if (m_parsec.is_fail()) {
-        // print
+        SYNTAXERR("expected (");
         return nullptr;
     }
 
     m_parsec.spaces();
     auto id = parse_id();
     if (m_parsec.is_fail()) {
-        // print
+        SYNTAXERR("expected identifier");
         return nullptr;
     }
 
@@ -107,17 +112,25 @@ ptr_ir_type ir::parse_type() {
 ptr_ir_defun ir::parse_defun() {
     m_parsec.space();
     if (m_parsec.is_fail()) {
-        // print
+        SYNTAXERR("expected (");
         return nullptr;
     }
 
     // parse function name
     ptr_ir_defun defun(new ir_defun);
     auto id = parse_id();
-    if (m_parsec.is_fail())
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected identifier");
         return nullptr;
+    }
 
     defun->m_name = id;
+
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected space");
+        return nullptr;
+    }
 
     m_parsec.spaces();
 
@@ -125,6 +138,7 @@ ptr_ir_defun ir::parse_defun() {
     m_parsec.character('(');
     if (m_parsec.is_fail()) {
         // print
+        SYNTAXERR("expected (");
         return nullptr;
     }
 
@@ -132,6 +146,7 @@ ptr_ir_defun ir::parse_defun() {
 
     auto t = parse_type();
     if (m_parsec.is_fail()) {
+        SYNTAXERR("expected type or identifier");
         return nullptr;
     }
     defun->m_ret.push_back(std::move(t));
@@ -147,6 +162,7 @@ ptr_ir_defun ir::parse_defun() {
         m_parsec.spaces();
         auto t2 = parse_type();
         if (m_parsec.is_fail()) {
+            SYNTAXERR("expected type or identifier");
             return nullptr;
         }
 
@@ -156,7 +172,7 @@ ptr_ir_defun ir::parse_defun() {
     m_parsec.spaces();
     m_parsec.character(')');
     if (m_parsec.is_fail()) {
-        // print
+        SYNTAXERR("expected )");
         return nullptr;
     }
 
@@ -167,10 +183,8 @@ std::string ir::parse_id() {
     std::string ret;
 
     char c = m_parsec.oneof_not(m_no_id_char_head);
-    if (m_parsec.is_fail()) {
-        // print
+    if (m_parsec.is_fail())
         return ret;
-    }
 
     ret.push_back(c);
     PMANY(m_parsec, ret, m_parsec.oneof_not(m_no_id_char));

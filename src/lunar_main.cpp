@@ -5,7 +5,7 @@
 
 void world(void *arg) {
     //    printf("World!\n");
-    lunar::ir ir("(defun fun (bool, u32, u64) ");
+    lunar::ir ir("test.ir", "(defun fun (bool, u32, u64) ");
     auto expr = ir.parse();
     if (expr) {
         printf("parsed!\n");

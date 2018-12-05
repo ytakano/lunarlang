@@ -48,7 +48,8 @@
 namespace lunar {
 class parsec {
   public:
-    parsec(const std::string &str) : m_str(str), m_pos(0), m_fail(false) {
+    parsec(const std::string &str)
+        : m_str(str), m_pos(0), m_line(0), m_column(0), m_fail(false) {
         m_spaces.insert(' ');
         m_spaces.insert('\t');
         m_spaces.insert('\r');
@@ -71,6 +72,7 @@ class parsec {
                 return "";
             }
             m_pos++;
+            increment();
         }
 
         m_fail = false;
@@ -83,7 +85,7 @@ class parsec {
             return 0;
         }
 
-        m_pos++;
+        increment();
         m_fail = false;
         return c;
     }
@@ -100,7 +102,7 @@ class parsec {
             return 0;
         }
 
-        m_pos++;
+        increment();
         m_fail = false;
         return ret;
     }
@@ -117,7 +119,7 @@ class parsec {
             return 0;
         }
 
-        m_pos++;
+        increment();
         m_fail = false;
         return ret;
     }
@@ -130,20 +132,44 @@ class parsec {
         return s;
     }
 
-    void checkpoint() { m_checkpoint.m_pos = m_pos; }
-    void revert() { m_pos = m_checkpoint.m_pos; }
+    void increment() {
+        if (m_str[m_pos] == '\n') {
+            m_line++;
+            m_column = 0;
+        }
+        m_column++;
+        m_pos++;
+    }
+
+    void checkpoint() {
+        m_checkpoint.m_pos = m_pos;
+        m_checkpoint.m_line = m_line;
+        m_checkpoint.m_column = m_column;
+    }
+
+    void revert() {
+        m_pos = m_checkpoint.m_pos;
+        m_line = m_checkpoint.m_line;
+        m_column = m_checkpoint.m_column;
+    }
 
     bool is_fail() { return m_fail; }
     void set_fail(bool is_fail) { m_fail = is_fail; }
     bool is_eof() { return m_pos == m_str.size(); }
+    std::size_t get_line() { return m_line; }
+    std::size_t get_column() { return m_column; }
 
   private:
     struct checkpoint_t {
         std::size_t m_pos;
+        std::size_t m_line;
+        std::size_t m_column;
     } m_checkpoint;
 
     std::string m_str;
     std::size_t m_pos;
+    std::size_t m_line;
+    std::size_t m_column;
     bool m_fail;
 
     std::unordered_set<char> m_spaces;
