@@ -15,30 +15,19 @@ ir::ir(const std::string &filename, const std::string &str)
     m_no_id_char.insert('\r');
     m_no_id_char.insert('\n');
     m_no_id_char.insert('\t');
-    m_no_id_char.insert('!');
     m_no_id_char.insert('@');
     m_no_id_char.insert('#');
     m_no_id_char.insert('$');
-    m_no_id_char.insert('%');
-    m_no_id_char.insert('^');
-    m_no_id_char.insert('&');
-    m_no_id_char.insert('*');
     m_no_id_char.insert('(');
     m_no_id_char.insert(')');
-    m_no_id_char.insert('-');
-    m_no_id_char.insert('+');
     m_no_id_char.insert('{');
     m_no_id_char.insert('}');
     m_no_id_char.insert('[');
     m_no_id_char.insert(']');
-    m_no_id_char.insert('|');
-    m_no_id_char.insert('\\');
     m_no_id_char.insert(':');
     m_no_id_char.insert(';');
     m_no_id_char.insert('\'');
     m_no_id_char.insert('"');
-    m_no_id_char.insert('<');
-    m_no_id_char.insert('>');
     m_no_id_char.insert(',');
     m_no_id_char.insert('.');
     m_no_id_char.insert('?');
@@ -109,15 +98,44 @@ ptr_ir_expr ir::parse_expr() {
     PTRY(m_parsec, id, parse_id());
     if (m_parsec.is_fail()) {
         // APPLY
-    } else {
-        if (id == "let") {
-            // LET
-        } else {
-            // IDENTIFIER
-            auto e = std::make_unique<ir_id>();
-            e->m_id = id;
-            return e;
+        char tmp;
+        PTRY(m_parsec, tmp, m_parsec.character('('));
+        if (m_parsec.is_fail()) {
+            // NUMBER, OPS
+            return nullptr;
         }
+
+        auto apply = std::make_unique<ir_apply>();
+
+        for (;;) {
+            PTRY(m_parsec, tmp, [](parsec &p) {
+                p.spaces();
+                return p.character(')');
+            }(m_parsec));
+
+            if (!m_parsec.is_fail())
+                return apply;
+
+            if (apply->m_expr.size() > 0) {
+                m_parsec.space();
+                if (m_parsec.is_fail()) {
+                    SYNTAXERR("expected white space");
+                    return nullptr;
+                }
+            }
+            m_parsec.spaces();
+
+            auto e = parse_expr();
+            if (!e)
+                return nullptr;
+
+            apply->m_expr.push_back(std::move(e));
+        }
+    } else {
+        // IDENTIFIER
+        auto e = std::make_unique<ir_id>();
+        e->m_id = id;
+        return e;
     }
 
     return nullptr;
@@ -333,6 +351,18 @@ void ir_defun::print() {
     std::cout << "],\"expr\":";
     m_expr->print();
     std::cout << "}}";
+}
+
+void ir_apply::print() {
+    int n = 0;
+    std::cout << "{\"apply\":[";
+    for (auto &p : m_expr) {
+        if (n > 0)
+            std::cout << ",";
+        p->print();
+        n++;
+    }
+    std::cout << "]}";
 }
 
 } // namespace lunar

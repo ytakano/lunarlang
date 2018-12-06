@@ -7,10 +7,11 @@
 
 #define PMANY(P, RET, X)                                                       \
     for (;;) {                                                                 \
-        P.checkpoint();                                                        \
+        std::size_t pos, line, column;                                         \
+        P.checkpoint(pos, line, column);                                       \
         auto r = X;                                                            \
         if (P.is_fail()) {                                                     \
-            P.revert();                                                        \
+            P.revert(pos, line, column);                                       \
             P.set_fail(false);                                                 \
             break;                                                             \
         }                                                                      \
@@ -19,10 +20,11 @@
 
 #define PMANYMV(P, RET, X)                                                     \
     for (;;) {                                                                 \
-        P.checkpoint();                                                        \
+        std::size_t pos, line, column;                                         \
+        P.checkpoint(pos, line, column);                                       \
         auto r = X;                                                            \
         if (P.is_fail()) {                                                     \
-            P.revert();                                                        \
+            P.revert(pos, line, column);                                       \
             P.set_fail(false);                                                 \
             break;                                                             \
         }                                                                      \
@@ -31,18 +33,20 @@
 
 #define PTRY(P, RET, X)                                                        \
     do {                                                                       \
-        P.checkpoint();                                                        \
+        std::size_t pos, line, column;                                         \
+        P.checkpoint(pos, line, column);                                       \
         RET = X;                                                               \
         if (P.is_fail())                                                       \
-            P.revert();                                                        \
+            P.revert(pos, line, column);                                       \
     } while (0);
 
 #define PTRYMV(P, RET, X)                                                      \
     do {                                                                       \
-        P.checkpoint();                                                        \
+        std::size_t pos, line, column;                                         \
+        P.checkpoint(pos, line, column);                                       \
         RET = std::move(X);                                                    \
         if (P.is_fail())                                                       \
-            P.revert();                                                        \
+            P.revert(pos, line, column);                                       \
     } while (0);
 
 namespace lunar {
@@ -141,16 +145,16 @@ class parsec {
         m_pos++;
     }
 
-    void checkpoint() {
-        m_checkpoint.m_pos = m_pos;
-        m_checkpoint.m_line = m_line;
-        m_checkpoint.m_column = m_column;
+    void checkpoint(std::size_t &pos, std::size_t &line, std::size_t &column) {
+        pos = m_pos;
+        line = m_line;
+        column = m_column;
     }
 
-    void revert() {
-        m_pos = m_checkpoint.m_pos;
-        m_line = m_checkpoint.m_line;
-        m_column = m_checkpoint.m_column;
+    void revert(std::size_t pos, std::size_t line, std::size_t column) {
+        m_pos = pos;
+        m_line = line;
+        m_column = column;
     }
 
     bool is_fail() { return m_fail; }
@@ -160,12 +164,6 @@ class parsec {
     std::size_t get_column() { return m_column; }
 
   private:
-    struct checkpoint_t {
-        std::size_t m_pos;
-        std::size_t m_line;
-        std::size_t m_column;
-    } m_checkpoint;
-
     std::string m_str;
     std::size_t m_pos;
     std::size_t m_line;

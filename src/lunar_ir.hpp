@@ -58,6 +58,17 @@ struct ir_id : public ir_expr {
 
 typedef std::unique_ptr<ir_id> ptr_ir_id;
 
+struct ir_apply : public ir_expr {
+    ir_apply() {}
+    virtual ~ir_apply() {}
+
+    std::list<ptr_ir_expr> m_expr;
+
+    void print();
+};
+
+typedef std::unique_ptr<ir_apply> ptr_ir_apply;
+
 class ir {
   public:
     ir(const std::string &filename, const std::string &str);
