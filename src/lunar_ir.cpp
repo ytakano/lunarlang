@@ -6,6 +6,10 @@
     fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n", m_filename.c_str(),   \
             m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
 
+#define SEMANTICERR(M, ...)                                                    \
+    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n", m_filename.c_str(), \
+            m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
+
 namespace lunar {
 
 ir::ir(const std::string &filename, const std::string &str)
@@ -533,6 +537,16 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     auto bb = llvm::BasicBlock::Create(ref.get_llvm_ctx(), "entry", fun);
 
     return fun;
+}
+
+llvm::Value *ir_id::codegen(
+    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+    auto it = vals.find(m_id);
+    if (it != vals.end()) {
+        return it->second.back();
+    }
+
+    return nullptr;
 }
 
 void ir_scalar::print() {

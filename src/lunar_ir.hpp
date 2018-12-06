@@ -1,6 +1,7 @@
 #ifndef LUNAR_IR_HPP
 #define LUNAR_IR_HPP
 
+#include <deque>
 #include <list>
 #include <unordered_map>
 
@@ -16,14 +17,21 @@ namespace lunar {
 class ir;
 
 struct ir_ast {
-    ir_ast() {}
+    ir_ast() : m_line(0), m_column(0) {}
     virtual ~ir_ast() {}
     virtual void print() {}
+
+    std::size_t m_line;
+    std::size_t m_column;
 };
 
 struct ir_expr : public ir_ast {
     ir_expr() {}
     virtual ~ir_expr() {}
+
+    virtual llvm::Value *codegen(
+        ir &ref,
+        std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) = 0;
 };
 
 typedef std::unique_ptr<ir_expr> ptr_ir_expr;
@@ -69,6 +77,9 @@ struct ir_id : public ir_expr {
     std::string m_id;
 
     void print() { std::cout << "{\"id\":\"" << m_id << "\"}"; }
+    llvm::Value *
+    codegen(ir &ref,
+            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 };
 
 typedef std::unique_ptr<ir_id> ptr_ir_id;

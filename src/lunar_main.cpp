@@ -46,8 +46,10 @@ static std::string escapeJsonString(const std::string &input) {
 
 void world(void *arg) {
     std::list<lunar::ptr_ir_defun> defuns;
-    std::string s = "(defun fun (bool u32 u64) ((u64 arg1) (u32 arg2)) (let "
-                    "((x 100)) (e 200)))";
+    /*     std::string s = "(defun fun (bool u32 u64) ((u64 arg1) (u32 arg2))
+       (let "
+                        "((x 100)) (e 200)))"; */
+    std::string s = "(defun fun (u64) ((u64 arg)) arg)";
     lunar::ir ir("test.ir", s);
     auto result = ir.parse(defuns);
     if (result) {
