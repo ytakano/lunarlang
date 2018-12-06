@@ -75,7 +75,6 @@ class parsec {
                 m_fail = true;
                 return "";
             }
-            m_pos++;
             increment();
         }
 

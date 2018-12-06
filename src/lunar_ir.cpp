@@ -3,7 +3,7 @@
 #include <iostream>
 
 #define SYNTAXERR(M, ...)                                                      \
-    fprintf(stderr, "syntax error (%s:%lu:%lu): " M "\n", m_filename.c_str(),  \
+    fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n", m_filename.c_str(),   \
             m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
 
 namespace lunar {
@@ -117,19 +117,35 @@ ptr_ir_expr ir::parse_expr() {
     std::string id;
     PTRY(m_parsec, id, parse_id());
     if (m_parsec.is_fail()) {
-        // APPLY
         char tmp;
         PTRY(m_parsec, tmp, m_parsec.character('('));
         if (m_parsec.is_fail()) {
             // DECIMAL
-            auto d = parse_decimal();
-            if (d)
-                return d;
+            ptr_ir_decimal dec;
+            PTRY(m_parsec, dec, parse_decimal());
+            if (dec)
+                return dec;
+
+            SYNTAXERR("could not parse expression");
+
             return nullptr;
         }
 
-        auto apply = std::make_unique<ir_apply>();
+        PTRY(m_parsec, id, m_parsec.str("let"));
 
+        // LET
+        if (!m_parsec.is_fail()) {
+            m_parsec.space();
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected whitespace");
+                return nullptr;
+            }
+
+            return parse_let();
+        }
+
+        // APPLY
+        auto apply = std::make_unique<ir_apply>();
         for (;;) {
             PTRY(m_parsec, tmp, [](parsec &p) {
                 p.spaces();
@@ -142,7 +158,7 @@ ptr_ir_expr ir::parse_expr() {
             if (apply->m_expr.size() > 0) {
                 m_parsec.space();
                 if (m_parsec.is_fail()) {
-                    SYNTAXERR("expected white space");
+                    SYNTAXERR("expected whitespace");
                     return nullptr;
                 }
             }
@@ -348,6 +364,107 @@ ptr_ir_decimal ir::parse_decimal() {
     return d;
 }
 
+ptr_ir_let ir::parse_let() {
+    m_parsec.spaces();
+
+    // parse definitions
+    m_parsec.character('(');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected (");
+        return nullptr;
+    }
+
+    auto let = std::make_unique<ir_let>();
+
+    for (;;) {
+        if (let->m_def.size() > 0) {
+            m_parsec.space();
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected whitespace");
+                return nullptr;
+            }
+        }
+
+        m_parsec.spaces();
+        m_parsec.character('(');
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected (");
+            return nullptr;
+        }
+
+        auto id = parse_id();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected identifier");
+            return nullptr;
+        }
+
+        m_parsec.space();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected whitespace");
+            return nullptr;
+        }
+
+        auto e = parse_expr();
+        if (!e)
+            return nullptr;
+
+        m_parsec.spaces();
+        m_parsec.character(')');
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected )");
+            return nullptr;
+        }
+
+        auto p = std::make_unique<std::pair<std::string, ptr_ir_expr>>(
+            id, std::move(e));
+        let->m_def.push_back(std::move(p));
+
+        char tmp;
+        PTRY(m_parsec, tmp, [](parsec &p) {
+            p.spaces();
+            return p.character(')');
+        }(m_parsec));
+
+        if (!m_parsec.is_fail())
+            break;
+    }
+
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+
+    // parse expr
+    for (;;) {
+        char tmp;
+        PTRY(m_parsec, tmp, [](parsec &p) {
+            p.spaces();
+            return p.character(')');
+        }(m_parsec));
+
+        if (!m_parsec.is_fail())
+            return let;
+
+        if (let->m_expr.size() > 0) {
+            m_parsec.space();
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected whitespace");
+                return nullptr;
+            }
+        }
+        m_parsec.spaces();
+
+        auto e = parse_expr();
+        if (!e)
+            return nullptr;
+
+        let->m_expr.push_back(std::move(e));
+    }
+
+    return nullptr; // never reach here
+}
+
 void ir_scalar::print() {
     std::cout << "\"";
     switch (m_type) {
@@ -404,5 +521,28 @@ void ir_apply::print() {
 }
 
 void ir_decimal::print() { std::cout << "{\"decimal\":" << m_num << "}"; }
+
+void ir_let::print() {
+    int n = 0;
+    std::cout << "{\"let\":{\"def\":[";
+    for (auto &p : m_def) {
+        if (n > 0)
+            std::cout << ",";
+        std::cout << "[\"" << p->first << "\",";
+        p->second->print();
+        std::cout << "]";
+        n++;
+    }
+
+    n = 0;
+    std::cout << "], \"expr\":[";
+    for (auto &q : m_expr) {
+        if (n > 0)
+            std::cout << ",";
+        q->print();
+        n++;
+    }
+    std::cout << "]}}";
+}
 
 } // namespace lunar

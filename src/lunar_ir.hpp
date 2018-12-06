@@ -2,6 +2,7 @@
 #define LUNAR_IR_HPP
 
 #include <list>
+#include <unordered_map>
 
 #include "lunar_common.hpp"
 #include "lunar_parsec.hpp"
@@ -80,6 +81,18 @@ struct ir_decimal : public ir_expr {
 
 typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
 
+struct ir_let : public ir_expr {
+    ir_let() {}
+    virtual ~ir_let() {}
+
+    std::list<std::unique_ptr<std::pair<std::string, ptr_ir_expr>>> m_def;
+    std::list<ptr_ir_expr> m_expr;
+
+    void print();
+};
+
+typedef std::unique_ptr<ir_let> ptr_ir_let;
+
 class ir {
   public:
     ir(const std::string &filename, const std::string &str);
@@ -99,6 +112,7 @@ class ir {
     ptr_ir_defun parse_defun();
     ptr_ir_type parse_type();
     ptr_ir_decimal parse_decimal();
+    ptr_ir_let parse_let();
     std::string parse_id();
 };
 } // namespace lunar
