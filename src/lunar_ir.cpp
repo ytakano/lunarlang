@@ -31,7 +31,6 @@ ir::ir(const std::string &filename, const std::string &str)
     m_no_id_char.insert(',');
     m_no_id_char.insert('.');
     m_no_id_char.insert('?');
-    m_no_id_char.insert('/');
     m_no_id_char.insert('`');
     m_no_id_char.insert('~');
 
@@ -47,6 +46,27 @@ ir::ir(const std::string &filename, const std::string &str)
     m_no_id_char_head.insert('7');
     m_no_id_char_head.insert('8');
     m_no_id_char_head.insert('9');
+
+    m_0to9.insert('0');
+    m_0to9.insert('1');
+    m_0to9.insert('2');
+    m_0to9.insert('3');
+    m_0to9.insert('4');
+    m_0to9.insert('5');
+    m_0to9.insert('6');
+    m_0to9.insert('7');
+    m_0to9.insert('8');
+    m_0to9.insert('9');
+
+    m_1to9.insert('1');
+    m_1to9.insert('2');
+    m_1to9.insert('3');
+    m_1to9.insert('4');
+    m_1to9.insert('5');
+    m_1to9.insert('6');
+    m_1to9.insert('7');
+    m_1to9.insert('8');
+    m_1to9.insert('9');
 }
 
 bool ir::parse(std::list<ptr_ir_defun> &defuns) {
@@ -101,7 +121,10 @@ ptr_ir_expr ir::parse_expr() {
         char tmp;
         PTRY(m_parsec, tmp, m_parsec.character('('));
         if (m_parsec.is_fail()) {
-            // NUMBER, OPS
+            // DECIMAL
+            auto d = parse_decimal();
+            if (d)
+                return d;
             return nullptr;
         }
 
@@ -310,6 +333,21 @@ std::string ir::parse_id() {
     return ret;
 }
 
+ptr_ir_decimal ir::parse_decimal() {
+    std::string num;
+    char c = m_parsec.oneof(m_1to9);
+    if (m_parsec.is_fail())
+        return nullptr;
+
+    num.push_back(c);
+    PMANY(m_parsec, num, m_parsec.oneof(m_0to9));
+
+    auto d = std::make_unique<ir_decimal>();
+    d->m_num = num;
+
+    return d;
+}
+
 void ir_scalar::print() {
     std::cout << "\"";
     switch (m_type) {
@@ -364,5 +402,7 @@ void ir_apply::print() {
     }
     std::cout << "]}";
 }
+
+void ir_decimal::print() { std::cout << "{\"decimal\":" << m_num << "}"; }
 
 } // namespace lunar

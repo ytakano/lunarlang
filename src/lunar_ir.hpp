@@ -69,6 +69,17 @@ struct ir_apply : public ir_expr {
 
 typedef std::unique_ptr<ir_apply> ptr_ir_apply;
 
+struct ir_decimal : public ir_expr {
+    ir_decimal() {}
+    virtual ~ir_decimal() {}
+
+    std::string m_num;
+
+    void print();
+};
+
+typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
+
 class ir {
   public:
     ir(const std::string &filename, const std::string &str);
@@ -81,10 +92,13 @@ class ir {
     std::string m_filename;
     std::unordered_set<char> m_no_id_char_head;
     std::unordered_set<char> m_no_id_char;
+    std::unordered_set<char> m_0to9;
+    std::unordered_set<char> m_1to9;
 
     ptr_ir_expr parse_expr();
     ptr_ir_defun parse_defun();
     ptr_ir_type parse_type();
+    ptr_ir_decimal parse_decimal();
     std::string parse_id();
 };
 } // namespace lunar

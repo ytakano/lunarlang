@@ -6,7 +6,7 @@
 void world(void *arg) {
     std::list<lunar::ptr_ir_defun> defuns;
     std::string s =
-        "(defun fun (bool u32 u64) ((u64 arg1) (u32 arg2)) ( e1 e2 ))";
+        "(defun fun (bool u32 u64) ((u64 arg1) (u32 arg2)) ( e1 100 ))";
     lunar::ir ir("test.ir", s);
     auto result = ir.parse(defuns);
     if (result) {
