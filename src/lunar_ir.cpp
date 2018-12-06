@@ -9,7 +9,8 @@
 namespace lunar {
 
 ir::ir(const std::string &filename, const std::string &str)
-    : m_filename(filename), m_parsec(str) {
+    : m_filename(filename), m_parsec(str), m_llvm_builder(m_llvm_ctx),
+      m_llvm_module(filename, m_llvm_ctx) {
 
     m_no_id_char.insert(' ');
     m_no_id_char.insert('\r');
@@ -463,6 +464,75 @@ ptr_ir_let ir::parse_let() {
     }
 
     return nullptr; // never reach here
+}
+
+std::string ir::codegen(std::list<ptr_ir_defun> &defuns) {
+    for (auto &p : defuns)
+        p->codegen(*this);
+
+    std::string s;
+    llvm::raw_string_ostream os(s);
+    m_llvm_module.print(os, nullptr);
+
+    return s;
+}
+
+llvm::Type *ir_scalar::codegen(ir &ref) {
+    switch (m_type) {
+    case TYPE_BOOL:
+        return llvm::Type::getInt1Ty(ref.get_llvm_ctx());
+    case TYPE_U32:
+        return llvm::Type::getInt32Ty(ref.get_llvm_ctx());
+    case TYPE_U64:
+        return llvm::Type::getInt64Ty(ref.get_llvm_ctx());
+    }
+
+    return nullptr;
+}
+
+llvm::Function *ir_defun::codegen(ir &ref) {
+    // type of return values
+    llvm::Type *type;
+    if (m_ret.size() == 1) {
+        type = (*m_ret.begin())->codegen(ref);
+        if (type == nullptr)
+            return nullptr;
+    } else {
+        std::vector<llvm::Type *> types;
+
+        for (auto &p : m_ret) {
+            auto t = p->codegen(ref);
+            if (t == nullptr)
+                return nullptr;
+            types.push_back(t);
+        }
+
+        type = llvm::StructType::get(ref.get_llvm_ctx(), types);
+        if (type == nullptr)
+            return nullptr;
+    }
+
+    // type of arguments
+    std::vector<llvm::Type *> args;
+    for (auto &q : m_args) {
+        auto t = q->first->codegen(ref);
+        if (t == nullptr)
+            return nullptr;
+        args.push_back(t);
+    }
+
+    auto ftype = llvm::FunctionType::get(type, args, false);
+    auto fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
+                                      m_name, &ref.get_llvm_module());
+
+    // set name to the arguments
+    unsigned i = 0;
+    for (auto &arg : fun->args())
+        arg.setName(m_args[i++]->second);
+
+    auto bb = llvm::BasicBlock::Create(ref.get_llvm_ctx(), "entry", fun);
+
+    return fun;
 }
 
 void ir_scalar::print() {
