@@ -197,13 +197,29 @@ ptr_ir_type ir::parse_type() {
         auto t = new ir_scalar;
         t->m_type = TYPE_U64;
         return ptr_ir_type((ir_type *)t);
+    } else if (s == "s64") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_S64;
+        return ptr_ir_type((ir_type *)t);
     } else if (s == "u32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U32;
         return ptr_ir_type((ir_type *)t);
+    } else if (s == "s32") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_S32;
+        return ptr_ir_type((ir_type *)t);
     } else if (s == "bool") {
         auto t = new ir_scalar;
         t->m_type = TYPE_BOOL;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "fp64") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_FP32;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "fp32") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_FP32;
         return ptr_ir_type((ir_type *)t);
     }
 
@@ -456,7 +472,7 @@ ptr_ir_let ir::parse_let() {
         return nullptr;
     }
 
-    return nullptr; // never reach here
+    return let;
 }
 
 std::string ir::codegen(std::list<ptr_ir_defun> &defuns) {
@@ -474,10 +490,16 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
     switch (m_type) {
     case TYPE_BOOL:
         return llvm::Type::getInt1Ty(ref.get_llvm_ctx());
-    case TYPE_U32:
-        return llvm::Type::getInt32Ty(ref.get_llvm_ctx());
+    case TYPE_FP64:
+        return llvm::Type::getDoubleTy(ref.get_llvm_ctx());
+    case TYPE_FP32:
+        return llvm::Type::getFloatTy(ref.get_llvm_ctx());
     case TYPE_U64:
+    case TYPE_S64:
         return llvm::Type::getInt64Ty(ref.get_llvm_ctx());
+    case TYPE_U32:
+    case TYPE_S32:
+        return llvm::Type::getInt32Ty(ref.get_llvm_ctx());
     }
 
     return nullptr;
@@ -557,13 +579,49 @@ llvm::Value *ir_id::codegen(
 
 llvm::Value *ir_let::codegen(
     ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
-    return nullptr;
+
+    for (auto &p : m_def) {
+        auto v = p->second->codegen(ref, vals);
+        vals[p->first].push_back(v);
+    }
+
+    auto e = m_expr->codegen(ref, vals);
+
+    for (auto &p : m_def) {
+        auto it = vals.find(p->first);
+        it->second.pop_back();
+        if (it->second.size() == 0) {
+            vals.erase(it);
+        }
+    }
+
+    return e;
 }
 
 llvm::Value *ir_decimal::codegen(
     ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
     return nullptr;
 }
+
+#define BINARYOP(INTOP, FOP, OP, NAME)                                         \
+    do {                                                                       \
+        if (m_expr.size() < 3) {                                               \
+            SEMANTICERR(ref.get_filename().c_str(),                            \
+                        OP " requires more than or equal to 2 arguments");     \
+        }                                                                      \
+        auto e1 = m_expr[1]->codegen(ref, vals);                               \
+        if (e1 == nullptr)                                                     \
+            return nullptr;                                                    \
+                                                                               \
+        for (auto i = 2; i < m_expr.size(); i++) {                             \
+            auto e2 = m_expr[i]->codegen(ref, vals);                           \
+            if (e2 == nullptr)                                                 \
+                return nullptr;                                                \
+                                                                               \
+            e1 = ref.get_llvm_builder().INTOP(e1, e2, NAME);                   \
+        }                                                                      \
+        return e1;                                                             \
+    } while (0)
 
 llvm::Value *ir_apply::codegen(
     ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
@@ -575,30 +633,12 @@ llvm::Value *ir_apply::codegen(
     if ((*first)->m_type == ir_expr::EXPRID) {
         auto id = (ir_id *)(first->get());
         if (id->m_id == "+") {
-            return plus(ref, vals);
+            BINARYOP(CreateAdd, CreateFAdd, "+", "addtmp");
+        } else if (id->m_id == "-") {
+            BINARYOP(CreateSub, CreateFSub, "-", "subtmp");
+        } else if (id->m_id == "*") {
+            BINARYOP(CreateMul, CreateFMul, "*", "multmp");
         }
-    }
-
-    return nullptr;
-}
-
-llvm::Value *ir_apply::plus(
-    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
-    if (m_expr.size() < 3) {
-        SEMANTICERR(ref.get_filename().c_str(),
-                    "+ requires more than or equal to 2 arguments");
-    }
-
-    auto e1 = m_expr[1]->codegen(ref, vals);
-    if (e1 == nullptr)
-        return nullptr;
-
-    for (auto i = 2; i < m_expr.size(); i++) {
-        auto e2 = m_expr[i]->codegen(ref, vals);
-        if (e2 == nullptr)
-            return nullptr;
-
-        // TODO add
     }
 
     return nullptr;
@@ -610,11 +650,23 @@ void ir_scalar::print() {
     case TYPE_BOOL:
         std::cout << "bool";
         break;
-    case TYPE_U32:
-        std::cout << "u32";
+    case TYPE_FP64:
+        std::cout << "fp64";
+        break;
+    case TYPE_FP32:
+        std::cout << "fp32";
         break;
     case TYPE_U64:
         std::cout << "u64";
+        break;
+    case TYPE_S64:
+        std::cout << "s64";
+        break;
+    case TYPE_U32:
+        std::cout << "u32";
+        break;
+    case TYPE_S32:
+        std::cout << "s32";
         break;
     }
     std::cout << "\"";

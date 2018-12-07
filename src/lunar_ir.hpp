@@ -100,10 +100,6 @@ struct ir_apply : public ir_expr {
     codegen(ir &ref,
             std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 
-    llvm::Value *
-    plus(ir &ref,
-         std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
-
     void print();
 };
 
