@@ -90,6 +90,10 @@ struct ir_apply : public ir_expr {
 
     std::vector<ptr_ir_expr> m_expr;
 
+    llvm::Value *
+    codegen(ir &ref,
+            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
+
     void print();
 };
 
@@ -100,6 +104,10 @@ struct ir_decimal : public ir_expr {
     virtual ~ir_decimal() {}
 
     std::string m_num;
+
+    llvm::Value *
+    codegen(ir &ref,
+            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 
     void print();
 };
@@ -112,6 +120,10 @@ struct ir_let : public ir_expr {
 
     std::vector<std::unique_ptr<std::pair<std::string, ptr_ir_expr>>> m_def;
     std::vector<ptr_ir_expr> m_expr;
+
+    llvm::Value *
+    codegen(ir &ref,
+            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 
     void print();
 };
@@ -128,6 +140,7 @@ class ir {
 
     llvm::LLVMContext &get_llvm_ctx() { return m_llvm_ctx; }
     llvm::Module &get_llvm_module() { return m_llvm_module; }
+    llvm::IRBuilder<> &get_llvm_builder() { return m_llvm_builder; }
 
   private:
     parsec m_parsec;

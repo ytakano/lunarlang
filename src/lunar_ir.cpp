@@ -529,14 +529,31 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     auto fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
                                       m_name, &ref.get_llvm_module());
 
-    // set name to the arguments
+    // bind name to the arguments and
+    std::unordered_map<std::string, std::deque<llvm::Value *>> vars;
     unsigned i = 0;
-    for (auto &arg : fun->args())
-        arg.setName(m_args[i++]->second);
+    for (auto &arg : fun->args()) {
+        auto s = m_args[i]->second;
+        arg.setName(s);
+        vars[s].push_back(&arg);
+        i++;
+    }
 
     auto bb = llvm::BasicBlock::Create(ref.get_llvm_ctx(), "entry", fun);
+    auto &builder = ref.get_llvm_builder();
+    builder.SetInsertPoint(bb);
 
-    return fun;
+    llvm::Value *retval = m_expr->codegen(ref, vars);
+    if (retval) {
+        builder.CreateRet(retval);
+
+        // Validate the generated code, checking for consistency.
+        // llvm::verifyFunction(fun);
+
+        return fun;
+    }
+
+    return nullptr;
 }
 
 llvm::Value *ir_id::codegen(
@@ -546,6 +563,21 @@ llvm::Value *ir_id::codegen(
         return it->second.back();
     }
 
+    return nullptr;
+}
+
+llvm::Value *ir_let::codegen(
+    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+    return nullptr;
+}
+
+llvm::Value *ir_decimal::codegen(
+    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+    return nullptr;
+}
+
+llvm::Value *ir_apply::codegen(
+    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
     return nullptr;
 }
 
