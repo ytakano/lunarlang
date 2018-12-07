@@ -26,8 +26,12 @@ struct ir_ast {
 };
 
 struct ir_expr : public ir_ast {
-    ir_expr() {}
+    ir_expr() : m_type(EXPRVAL) {}
     virtual ~ir_expr() {}
+
+    enum EXPRTYPE { EXPRNOP, EXPRID, EXPRVAL };
+
+    EXPRTYPE m_type;
 
     virtual llvm::Value *codegen(
         ir &ref,
@@ -74,6 +78,8 @@ struct ir_defun : public ir_statement {
 typedef std::unique_ptr<ir_defun> ptr_ir_defun;
 
 struct ir_id : public ir_expr {
+    ir_id() { m_type = EXPRID; }
+
     std::string m_id;
 
     void print() { std::cout << "{\"id\":\"" << m_id << "\"}"; }
@@ -93,6 +99,10 @@ struct ir_apply : public ir_expr {
     llvm::Value *
     codegen(ir &ref,
             std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
+
+    llvm::Value *
+    plus(ir &ref,
+         std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 
     void print();
 };
@@ -119,7 +129,7 @@ struct ir_let : public ir_expr {
     virtual ~ir_let() {}
 
     std::vector<std::unique_ptr<std::pair<std::string, ptr_ir_expr>>> m_def;
-    std::vector<ptr_ir_expr> m_expr;
+    ptr_ir_expr m_expr;
 
     llvm::Value *
     codegen(ir &ref,
@@ -141,6 +151,8 @@ class ir {
     llvm::LLVMContext &get_llvm_ctx() { return m_llvm_ctx; }
     llvm::Module &get_llvm_module() { return m_llvm_module; }
     llvm::IRBuilder<> &get_llvm_builder() { return m_llvm_builder; }
+
+    std::string get_filename() { return m_filename; }
 
   private:
     parsec m_parsec;

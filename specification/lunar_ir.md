@@ -1,6 +1,8 @@
 
+```
 $TOP := $DEFUN*
 $EXPR := $LET | $ID | DECIMAL | $APPLY
+```
 
 ## NOP
 
@@ -36,13 +38,13 @@ $SCALAR := bool | u64 | u32
 ## Let
 
 ```
-$LET := (let (($TYPE $ID)+ $EXPR)+ $EXPR+)
+$LET := (let (($TYPE $ID)+ $EXPR)+ $EXPR)
 ```
 
 ## Function Definition
 
 ```
-$DEFUN := (defun $ID? ($TYPE*) (($TYPE $ID)*) $EXPR+)
+$DEFUN := (defun $ID? ($TYPE*) (($TYPE $ID)*) $EXPR)
 ```
 
 ## Function Apply

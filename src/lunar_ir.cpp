@@ -6,9 +6,9 @@
     fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n", m_filename.c_str(),   \
             m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
 
-#define SEMANTICERR(M, ...)                                                    \
-    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n", m_filename.c_str(), \
-            m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
+#define SEMANTICERR(FILE, M, ...)                                              \
+    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n", FILE, m_line,       \
+            m_column, ##__VA_ARGS__)
 
 namespace lunar {
 
@@ -157,8 +157,11 @@ ptr_ir_expr ir::parse_expr() {
                 return p.character(')');
             }(m_parsec));
 
-            if (!m_parsec.is_fail())
+            if (!m_parsec.is_fail()) {
+                if (apply->m_expr.size() == 0)
+                    apply->m_type = ir_expr::EXPRNOP;
                 return apply;
+            }
 
             if (apply->m_expr.size() > 0) {
                 m_parsec.space();
@@ -440,31 +443,17 @@ ptr_ir_let ir::parse_let() {
         return nullptr;
     }
 
-    // parse expr
-    for (;;) {
-        char tmp;
-        PTRY(m_parsec, tmp, [](parsec &p) {
-            p.spaces();
-            return p.character(')');
-        }(m_parsec));
+    auto e = parse_expr();
+    if (!e)
+        return nullptr;
 
-        if (!m_parsec.is_fail())
-            return let;
+    let->m_expr = std::move(e);
 
-        if (let->m_expr.size() > 0) {
-            m_parsec.space();
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("expected whitespace");
-                return nullptr;
-            }
-        }
-        m_parsec.spaces();
-
-        auto e = parse_expr();
-        if (!e)
-            return nullptr;
-
-        let->m_expr.push_back(std::move(e));
+    m_parsec.spaces();
+    m_parsec.character(')');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected )");
+        return nullptr;
     }
 
     return nullptr; // never reach here
@@ -578,6 +567,40 @@ llvm::Value *ir_decimal::codegen(
 
 llvm::Value *ir_apply::codegen(
     ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+
+    auto first = m_expr.begin();
+    if (first == m_expr.end())
+        return nullptr;
+
+    if ((*first)->m_type == ir_expr::EXPRID) {
+        auto id = (ir_id *)(first->get());
+        if (id->m_id == "+") {
+            return plus(ref, vals);
+        }
+    }
+
+    return nullptr;
+}
+
+llvm::Value *ir_apply::plus(
+    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+    if (m_expr.size() < 3) {
+        SEMANTICERR(ref.get_filename().c_str(),
+                    "+ requires more than or equal to 2 arguments");
+    }
+
+    auto e1 = m_expr[1]->codegen(ref, vals);
+    if (e1 == nullptr)
+        return nullptr;
+
+    for (auto i = 2; i < m_expr.size(); i++) {
+        auto e2 = m_expr[i]->codegen(ref, vals);
+        if (e2 == nullptr)
+            return nullptr;
+
+        // TODO add
+    }
+
     return nullptr;
 }
 
@@ -651,14 +674,9 @@ void ir_let::print() {
     }
 
     n = 0;
-    std::cout << "], \"expr\":[";
-    for (auto &q : m_expr) {
-        if (n > 0)
-            std::cout << ",";
-        q->print();
-        n++;
-    }
-    std::cout << "]}}";
+    std::cout << "], \"expr\":";
+    m_expr->print();
+    std::cout << "}}";
 }
 
 } // namespace lunar
