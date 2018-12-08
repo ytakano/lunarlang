@@ -25,33 +25,27 @@ struct ir_ast {
     std::size_t m_column;
 };
 
-struct ir_expr : public ir_ast {
-    ir_expr() : m_type(EXPRVAL) {}
-    virtual ~ir_expr() {}
-
-    enum EXPRTYPE { EXPRNOP, EXPRID, EXPRVAL };
-
-    EXPRTYPE m_type;
-
-    virtual llvm::Value *codegen(
-        ir &ref,
-        std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) = 0;
-};
-
-typedef std::unique_ptr<ir_expr> ptr_ir_expr;
-
 struct ir_type : public ir_ast {
+    enum IRTYPE {
+        IRTYPE_SCALAR,
+    };
+
     ir_type() {}
     virtual ~ir_type() {}
 
     virtual llvm::Type *codegen(ir &ref) = 0;
+    virtual std::unique_ptr<ir_type> clone() = 0;
+    IRTYPE m_irtype;
 };
 
 typedef std::unique_ptr<ir_type> ptr_ir_type;
 
 struct ir_scalar : public ir_type {
+    ir_scalar() { m_irtype = IRTYPE_SCALAR; }
+
     type_spec m_type;
     void print();
+    ptr_ir_type clone() { return std::make_unique<ir_scalar>(*this); };
 
     llvm::Type *codegen(ir &ref);
 };
@@ -60,6 +54,9 @@ struct ir_statement : public ir_ast {
     ir_statement() {}
     virtual ~ir_statement() {}
 };
+
+struct ir_expr;
+typedef std::unique_ptr<ir_expr> ptr_ir_expr;
 
 struct ir_defun : public ir_statement {
     ir_defun() {}
@@ -72,10 +69,29 @@ struct ir_defun : public ir_statement {
 
     void print();
 
+    bool check_type(ir &ref);
+
     llvm::Function *codegen(ir &ref);
 };
 
 typedef std::unique_ptr<ir_defun> ptr_ir_defun;
+
+struct ir_expr : public ir_ast {
+    ir_expr() : m_type(EXPRVAL) {}
+    virtual ~ir_expr() {}
+
+    enum EXPRTYPE { EXPRNOP, EXPRID, EXPRVAL };
+
+    EXPRTYPE m_type;
+
+    virtual ptr_ir_type
+    get_type(ir &ref,
+             std::unordered_map<std::string, std::deque<ir_type *>> &vals) = 0;
+
+    virtual llvm::Value *codegen(
+        ir &ref,
+        std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) = 0;
+};
 
 struct ir_id : public ir_expr {
     ir_id() { m_type = EXPRID; }
@@ -83,6 +99,11 @@ struct ir_id : public ir_expr {
     std::string m_id;
 
     void print() { std::cout << "{\"id\":\"" << m_id << "\"}"; }
+
+    ptr_ir_type
+    get_type(ir &ref,
+             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
+
     llvm::Value *
     codegen(ir &ref,
             std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
@@ -95,6 +116,10 @@ struct ir_apply : public ir_expr {
     virtual ~ir_apply() {}
 
     std::vector<ptr_ir_expr> m_expr;
+
+    ptr_ir_type
+    get_type(ir &ref,
+             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
 
     llvm::Value *
     codegen(ir &ref,
@@ -110,6 +135,10 @@ struct ir_decimal : public ir_expr {
     virtual ~ir_decimal() {}
 
     std::string m_num;
+
+    ptr_ir_type
+    get_type(ir &ref,
+             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
 
     llvm::Value *
     codegen(ir &ref,
@@ -132,6 +161,10 @@ struct ir_let : public ir_expr {
 
     std::vector<std::unique_ptr<var>> m_def;
     ptr_ir_expr m_expr;
+
+    ptr_ir_type
+    get_type(ir &ref,
+             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
 
     llvm::Value *
     codegen(ir &ref,

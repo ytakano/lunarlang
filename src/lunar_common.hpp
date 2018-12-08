@@ -22,6 +22,7 @@ enum type_spec {
     TYPE_BOOL,
     TYPE_FP64, // double
     TYPE_FP32, // float
+    TYPE_INT,
     TYPE_U64,
     TYPE_S64,
     TYPE_U32,

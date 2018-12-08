@@ -6,11 +6,24 @@
     fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n", m_filename.c_str(),   \
             m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
 
-#define SEMANTICERR(FILE, M, ...)                                              \
-    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n", FILE, m_line,       \
-            m_column, ##__VA_ARGS__)
+#define SEMANTICERR(FILE, LINE, COLUMN, M, ...)                                \
+    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n", FILE, LINE + 1,     \
+            COLUMN + 1, ##__VA_ARGS__)
 
 namespace lunar {
+
+static bool eqt(const ir_type *lhs, const ir_type *rhs) {
+    if (lhs->m_irtype != rhs->m_irtype)
+        return false;
+
+    if (lhs->m_irtype == ir_type::IRTYPE_SCALAR) {
+        auto s1 = (const ir_scalar *)lhs;
+        auto s2 = (const ir_scalar *)rhs;
+        return s1->m_type == s2->m_type;
+    }
+
+    return false;
+}
 
 ir::ir(const std::string &filename, const std::string &str)
     : m_filename(filename), m_parsec(str), m_llvm_builder(m_llvm_ctx),
@@ -90,6 +103,8 @@ bool ir::parse(std::list<ptr_ir_defun> &defuns) {
         }
 
         m_parsec.spaces();
+        auto line = m_parsec.get_line();
+        auto column = m_parsec.get_column();
         auto id = parse_id();
         if (m_parsec.is_fail()) {
             SYNTAXERR("expected identifier");
@@ -101,6 +116,8 @@ bool ir::parse(std::list<ptr_ir_defun> &defuns) {
             if (!defun)
                 return false;
 
+            defun->m_line = line;
+            defun->m_column = column;
             defuns.push_back(std::move(defun));
         } else {
             SYNTAXERR("expected defun");
@@ -120,22 +137,35 @@ bool ir::parse(std::list<ptr_ir_defun> &defuns) {
 
 ptr_ir_expr ir::parse_expr() {
     std::string id;
+
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
+
     PTRY(m_parsec, id, parse_id());
     if (m_parsec.is_fail()) {
+
         char tmp;
         PTRY(m_parsec, tmp, m_parsec.character('('));
         if (m_parsec.is_fail()) {
             // DECIMAL
             ptr_ir_decimal dec;
+            line = m_parsec.get_line();
+            column = m_parsec.get_column();
             PTRY(m_parsec, dec, parse_decimal());
-            if (dec)
+
+            if (dec) {
+                dec->m_line = line;
+                dec->m_column = column;
                 return dec;
+            }
 
             SYNTAXERR("could not parse expression");
 
             return nullptr;
         }
 
+        line = m_parsec.get_line();
+        column = m_parsec.get_column();
         PTRY(m_parsec, id, m_parsec.str("let"));
 
         // LET
@@ -146,7 +176,13 @@ ptr_ir_expr ir::parse_expr() {
                 return nullptr;
             }
 
-            return parse_let();
+            auto let = parse_let();
+            if (let) {
+                let->m_line = line;
+                let->m_column = column;
+            }
+
+            return let;
         }
 
         // APPLY
@@ -172,16 +208,22 @@ ptr_ir_expr ir::parse_expr() {
             }
             m_parsec.spaces();
 
+            line = m_parsec.get_line();
+            column = m_parsec.get_column();
             auto e = parse_expr();
             if (!e)
                 return nullptr;
 
+            apply->m_line = line;
+            apply->m_column = column;
             apply->m_expr.push_back(std::move(e));
         }
     } else {
         // IDENTIFIER
         auto e = std::make_unique<ir_id>();
         e->m_id = id;
+        e->m_line = line;
+        e->m_column = column;
         return e;
     }
 
@@ -189,6 +231,9 @@ ptr_ir_expr ir::parse_expr() {
 }
 
 ptr_ir_type ir::parse_type() {
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
+
     std::string s = parse_id();
     if (m_parsec.is_fail())
         return nullptr;
@@ -196,30 +241,44 @@ ptr_ir_type ir::parse_type() {
     if (s == "u64") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U64;
+        t->m_line = line;
+        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "s64") {
         auto t = new ir_scalar;
         t->m_type = TYPE_S64;
+        t->m_line = line;
+        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "u32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U32;
+        t->m_line = line;
+        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "s32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_S32;
+        t->m_line = line;
+        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "bool") {
         auto t = new ir_scalar;
         t->m_type = TYPE_BOOL;
+        t->m_line = line;
+        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "fp64") {
         auto t = new ir_scalar;
         t->m_type = TYPE_FP32;
+        t->m_line = line;
+        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "fp32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_FP32;
+        t->m_line = line;
+        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     }
 
@@ -375,6 +434,8 @@ std::string ir::parse_id() {
 
 ptr_ir_decimal ir::parse_decimal() {
     std::string num;
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
     char c = m_parsec.oneof(m_1to9);
     if (m_parsec.is_fail())
         return nullptr;
@@ -384,6 +445,8 @@ ptr_ir_decimal ir::parse_decimal() {
 
     auto d = std::make_unique<ir_decimal>();
     d->m_num = num;
+    d->m_line = line;
+    d->m_column = column;
 
     return d;
 }
@@ -487,9 +550,138 @@ ptr_ir_let ir::parse_let() {
     return let;
 }
 
+bool ir_defun::check_type(ir &ref) {
+    std::unordered_map<std::string, std::deque<ir_type *>> vals;
+    for (auto &p : m_args)
+        vals[p->second].push_back(p->first.get());
+
+    auto t = m_expr->get_type(ref, vals);
+
+    if (!t)
+        return false;
+
+    if (!eqt(m_ret.begin()->get(), t.get())) {
+        SEMANTICERR(ref.get_filename().c_str(), m_line, m_column,
+                    "the type of the return value of the function \"%s\" "
+                    "is different from the type of the value returned by "
+                    "the expression",
+                    m_name.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+ptr_ir_type ir_decimal::get_type(
+    ir &ref, std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
+    auto t = std::make_unique<ir_scalar>();
+
+    t->m_type = TYPE_INT;
+
+    return t;
+}
+
+ptr_ir_type
+ir_let::get_type(ir &ref,
+                 std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
+    for (auto &p : m_def) {
+        auto t = p->m_expr->get_type(ref, vals);
+        if (!t)
+            return nullptr;
+
+        if (!eqt(p->m_type.get(), t.get())) {
+            SEMANTICERR(ref.get_filename().c_str(), p->m_type->m_line,
+                        p->m_type->m_column,
+                        "the type of the \"%s\" is different from the type "
+                        "of the value returned by the expression",
+                        p->m_id.c_str());
+            return nullptr;
+        }
+
+        vals[p->m_id].push_back(p->m_type.get());
+    }
+
+    auto e = m_expr->get_type(ref, vals);
+
+    for (auto &p : m_def)
+        vals[p->m_id].pop_back();
+
+    return e;
+}
+
+ptr_ir_type
+ir_id::get_type(ir &ref,
+                std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
+    auto it = vals.find(m_id);
+    if (it == vals.end())
+        return nullptr;
+
+    return it->second.back()->clone();
+}
+
+ptr_ir_type ir_apply::get_type(
+    ir &ref, std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
+
+    auto first = m_expr.begin();
+    if (first == m_expr.end())
+        return nullptr;
+
+    if ((*first)->m_type == ir_expr::EXPRID) {
+        auto id = (ir_id *)(first->get());
+        if (id->m_id == "+" || id->m_id == "-" || id->m_id == "*") {
+            if (m_expr.size() < 3) {
+                SEMANTICERR(ref.get_filename().c_str(), m_line, m_column,
+                            "%s requires more than or equal to 2 arguments",
+                            id->m_id.c_str());
+            }
+
+            auto t1 = m_expr[1]->get_type(ref, vals);
+            if (t1 == nullptr)
+                return nullptr;
+
+            if (t1->m_irtype != ir_type::IRTYPE_SCALAR) {
+                SEMANTICERR(ref.get_filename().c_str(), m_expr[1]->m_line,
+                            m_expr[1]->m_column, "value is not scalar type");
+                return nullptr;
+            }
+
+            for (auto i = 2; i < m_expr.size(); i++) {
+                auto t2 = m_expr[i]->get_type(ref, vals);
+                if (t2 == nullptr)
+                    return nullptr;
+
+                if (t2->m_irtype != ir_type::IRTYPE_SCALAR) {
+                    SEMANTICERR(ref.get_filename().c_str(), m_expr[i]->m_line,
+                                m_expr[i]->m_column,
+                                "value is not scalar type");
+                    return nullptr;
+                }
+
+                auto s1 = (ir_scalar *)t1.get();
+                auto s2 = (ir_scalar *)t2.get();
+
+                if (s1->m_type == TYPE_INT) {
+                    s1->m_type = s2->m_type;
+                } else if (s2->m_type == TYPE_INT) {
+                    continue;
+                } else if (s1->m_type != s2->m_type) {
+                    SEMANTICERR(ref.get_filename().c_str(), m_expr[i]->m_line,
+                                m_expr[i]->m_column, "unexpected type");
+                    return nullptr;
+                }
+            }
+            return t1;
+        }
+    }
+
+    return nullptr;
+}
+
 std::string ir::codegen(std::list<ptr_ir_defun> &defuns) {
-    for (auto &p : defuns)
+    for (auto &p : defuns) {
+        p->check_type(*this);
         p->codegen(*this);
+    }
 
     std::string s;
     llvm::raw_string_ostream os(s);
@@ -512,6 +704,8 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
     case TYPE_U32:
     case TYPE_S32:
         return llvm::Type::getInt32Ty(ref.get_llvm_ctx());
+    case TYPE_INT:
+        return nullptr;
     }
 
     return nullptr;
@@ -618,7 +812,7 @@ llvm::Value *ir_decimal::codegen(
 #define BINARYOP(INTOP, FOP, OP, NAME)                                         \
     do {                                                                       \
         if (m_expr.size() < 3) {                                               \
-            SEMANTICERR(ref.get_filename().c_str(),                            \
+            SEMANTICERR(ref.get_filename().c_str(), m_line, m_column,          \
                         OP " requires more than or equal to 2 arguments");     \
         }                                                                      \
         auto e1 = m_expr[1]->codegen(ref, vals);                               \
@@ -679,6 +873,9 @@ void ir_scalar::print() {
         break;
     case TYPE_S32:
         std::cout << "s32";
+        break;
+    case TYPE_INT:
+        std::cout << "int";
         break;
     }
     std::cout << "\"";
