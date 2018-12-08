@@ -6,13 +6,14 @@
     fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n", m_filename.c_str(),   \
             m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
 
-#define SEMANTICERR(FILE, LINE, COLUMN, M, ...)                                \
-    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n", FILE, LINE + 1,     \
-            COLUMN + 1, ##__VA_ARGS__)
+#define SEMANTICERR(IR, AST, M, ...)                                           \
+    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n",                     \
+            (IR).get_filename().c_str(), (AST)->m_line + 1,                    \
+            (AST)->m_column + 1, ##__VA_ARGS__)
 
 namespace lunar {
 
-static bool eqt(const ir_type *lhs, const ir_type *rhs) {
+static bool eq_type(const ir_type *lhs, const ir_type *rhs) {
     if (lhs->m_irtype != rhs->m_irtype)
         return false;
 
@@ -195,7 +196,7 @@ ptr_ir_expr ir::parse_expr() {
 
             if (!m_parsec.is_fail()) {
                 if (apply->m_expr.size() == 0)
-                    apply->m_type = ir_expr::EXPRNOP;
+                    apply->m_expr_type = ir_expr::EXPRNOP;
                 return apply;
             }
 
@@ -550,7 +551,8 @@ ptr_ir_let ir::parse_let() {
     return let;
 }
 
-bool ir_defun::check_type(ir &ref) {
+bool ir_defun::check_type(const ir &ref) {
+    /*
     std::unordered_map<std::string, std::deque<ir_type *>> vals;
     for (auto &p : m_args)
         vals[p->second].push_back(p->first.get());
@@ -568,10 +570,10 @@ bool ir_defun::check_type(ir &ref) {
                     m_name.c_str());
         return false;
     }
-
+*/
     return true;
 }
-
+/*
 ptr_ir_type ir_decimal::get_type(
     ir &ref, std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
     auto t = std::make_unique<ir_scalar>();
@@ -626,7 +628,7 @@ ptr_ir_type ir_apply::get_type(
     if (first == m_expr.end())
         return nullptr;
 
-    if ((*first)->m_type == ir_expr::EXPRID) {
+    if ((*first)->m_expr_type == ir_expr::EXPRID) {
         auto id = (ir_id *)(first->get());
         if (id->m_id == "+" || id->m_id == "-" || id->m_id == "*") {
             if (m_expr.size() < 3) {
@@ -676,10 +678,40 @@ ptr_ir_type ir_apply::get_type(
 
     return nullptr;
 }
+*/
+
+ir_expr::shared_type ir_id::check_type(const ir &ref, id2type &vars) {
+    auto it = vars.find(m_id);
+    if (it == vars.end()) {
+        SEMANTICERR(ref, this, "%s is undefined", m_id.c_str());
+        return nullptr;
+    }
+
+    assert(it->second.size() > 0);
+
+    m_type = it->second.back();
+    return m_type;
+}
+
+ir_expr::shared_type ir_decimal::check_type(const ir &ref, id2type &vars) {
+    auto p = new ir_scalar;
+    p->m_type = TYPE_INT;
+
+    m_type = shared_type(p);
+
+    return m_type;
+}
+
+ir_expr::shared_type ir_let::check_type(const ir &ref, id2type &vars) {
+    return nullptr;
+}
+
+ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
+    return nullptr;
+}
 
 std::string ir::codegen(std::list<ptr_ir_defun> &defuns) {
     for (auto &p : defuns) {
-        p->check_type(*this);
         p->codegen(*this);
     }
 
@@ -812,7 +844,7 @@ llvm::Value *ir_decimal::codegen(
 #define BINARYOP(INTOP, FOP, OP, NAME)                                         \
     do {                                                                       \
         if (m_expr.size() < 3) {                                               \
-            SEMANTICERR(ref.get_filename().c_str(), m_line, m_column,          \
+            SEMANTICERR(ref, this,                                             \
                         OP " requires more than or equal to 2 arguments");     \
         }                                                                      \
         auto e1 = m_expr[1]->codegen(ref, vals);                               \
@@ -836,7 +868,7 @@ llvm::Value *ir_apply::codegen(
     if (first == m_expr.end())
         return nullptr;
 
-    if ((*first)->m_type == ir_expr::EXPRID) {
+    if ((*first)->m_expr_type == ir_expr::EXPRID) {
         auto id = (ir_id *)(first->get());
         if (id->m_id == "+") {
             BINARYOP(CreateAdd, CreateFAdd, "+", "addtmp");

@@ -34,7 +34,7 @@ struct ir_type : public ir_ast {
     virtual ~ir_type() {}
 
     virtual llvm::Type *codegen(ir &ref) = 0;
-    virtual std::unique_ptr<ir_type> clone() = 0;
+    virtual ir_type *clone() = 0;
     IRTYPE m_irtype;
 };
 
@@ -43,11 +43,11 @@ typedef std::unique_ptr<ir_type> ptr_ir_type;
 struct ir_scalar : public ir_type {
     ir_scalar() { m_irtype = IRTYPE_SCALAR; }
 
-    type_spec m_type;
     void print();
-    ptr_ir_type clone() { return std::make_unique<ir_scalar>(*this); };
-
+    ir_type *clone() { return (new ir_scalar(*this)); };
     llvm::Type *codegen(ir &ref);
+
+    type_spec m_type;
 };
 
 struct ir_statement : public ir_ast {
@@ -62,47 +62,46 @@ struct ir_defun : public ir_statement {
     ir_defun() {}
     virtual ~ir_defun() {}
 
+    void print();
+    bool check_type(const ir &ref);
+    llvm::Function *codegen(ir &ref);
+
     std::string m_name;
     std::vector<ptr_ir_type> m_ret;
     std::vector<std::unique_ptr<std::pair<ptr_ir_type, std::string>>> m_args;
     ptr_ir_expr m_expr;
-
-    void print();
-
-    bool check_type(ir &ref);
-
-    llvm::Function *codegen(ir &ref);
 };
 
 typedef std::unique_ptr<ir_defun> ptr_ir_defun;
 
 struct ir_expr : public ir_ast {
-    ir_expr() : m_type(EXPRVAL) {}
+    ir_expr() : m_expr_type(EXPRVAL) {}
     virtual ~ir_expr() {}
 
     enum EXPRTYPE { EXPRNOP, EXPRID, EXPRVAL };
 
-    EXPRTYPE m_type;
+    typedef std::shared_ptr<ir_type> shared_type;
+    typedef std::unordered_map<std::string, std::deque<shared_type>> id2type;
+    typedef std::unordered_map<std::string, std::deque<llvm::Value *>> id2val;
 
-    virtual ptr_ir_type
-    get_type(ir &ref,
-             std::unordered_map<std::string, std::deque<ir_type *>> &vals) = 0;
+    EXPRTYPE m_expr_type;
+
+    virtual shared_type check_type(const ir &ref, id2type &vars) = 0;
 
     virtual llvm::Value *codegen(
         ir &ref,
         std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) = 0;
+
+    std::shared_ptr<ir_type> m_type;
 };
 
 struct ir_id : public ir_expr {
-    ir_id() { m_type = EXPRID; }
+    ir_id() { m_expr_type = EXPRID; }
 
     std::string m_id;
 
+    shared_type check_type(const ir &ref, id2type &vars);
     void print() { std::cout << "{\"id\":\"" << m_id << "\"}"; }
-
-    ptr_ir_type
-    get_type(ir &ref,
-             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
 
     llvm::Value *
     codegen(ir &ref,
@@ -115,17 +114,14 @@ struct ir_apply : public ir_expr {
     ir_apply() {}
     virtual ~ir_apply() {}
 
-    std::vector<ptr_ir_expr> m_expr;
+    shared_type check_type(const ir &ref, id2type &vars);
+    void print();
 
-    ptr_ir_type
-    get_type(ir &ref,
-             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
+    std::vector<ptr_ir_expr> m_expr;
 
     llvm::Value *
     codegen(ir &ref,
             std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
-
-    void print();
 };
 
 typedef std::unique_ptr<ir_apply> ptr_ir_apply;
@@ -134,17 +130,14 @@ struct ir_decimal : public ir_expr {
     ir_decimal() {}
     virtual ~ir_decimal() {}
 
-    std::string m_num;
+    shared_type check_type(const ir &ref, id2type &vars);
+    void print();
 
-    ptr_ir_type
-    get_type(ir &ref,
-             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
+    std::string m_num;
 
     llvm::Value *
     codegen(ir &ref,
             std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
-
-    void print();
 };
 
 typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
@@ -159,18 +152,15 @@ struct ir_let : public ir_expr {
         ptr_ir_expr m_expr;
     };
 
+    shared_type check_type(const ir &ref, id2type &vars);
+    void print();
+
     std::vector<std::unique_ptr<var>> m_def;
     ptr_ir_expr m_expr;
-
-    ptr_ir_type
-    get_type(ir &ref,
-             std::unordered_map<std::string, std::deque<ir_type *>> &vals);
 
     llvm::Value *
     codegen(ir &ref,
             std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
-
-    void print();
 };
 
 typedef std::unique_ptr<ir_let> ptr_ir_let;
@@ -187,7 +177,7 @@ class ir {
     llvm::Module &get_llvm_module() { return m_llvm_module; }
     llvm::IRBuilder<> &get_llvm_builder() { return m_llvm_builder; }
 
-    std::string get_filename() { return m_filename; }
+    std::string get_filename() const { return m_filename; }
 
   private:
     parsec m_parsec;
