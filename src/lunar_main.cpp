@@ -44,9 +44,9 @@ static std::string escapeJsonString(const std::string &input) {
     return ss.str();
 }
 
-const char *e1 =
-    "(defun fun (u32) ((u32 arg1) (u32 arg2))\n"
-    "                  (let ((x (+ arg1 arg2)) (y (* arg1 arg2) )) (- y x)))";
+const char *e1 = "(defun fun (u32) ((u32 arg1) (u32 arg2))\n"
+                 "                  (let ((u32 x (+ arg1 arg2))\n"
+                 "                        (u32 y (* arg1 arg2))) (- y x)))";
 
 void world(void *arg) {
     std::list<lunar::ptr_ir_defun> defuns;

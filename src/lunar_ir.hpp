@@ -124,7 +124,13 @@ struct ir_let : public ir_expr {
     ir_let() {}
     virtual ~ir_let() {}
 
-    std::vector<std::unique_ptr<std::pair<std::string, ptr_ir_expr>>> m_def;
+    struct var {
+        ptr_ir_type m_type;
+        std::string m_id;
+        ptr_ir_expr m_expr;
+    };
+
+    std::vector<std::unique_ptr<var>> m_def;
     ptr_ir_expr m_expr;
 
     llvm::Value *

@@ -38,7 +38,7 @@ $SCALAR := bool | u64 | s64 | u32 | s32 | fp64 | fp32
 ## Let
 
 ```
-$LET := (let (($TYPE $ID)+ $EXPR)+ $EXPR)
+$LET := (let (($TYPE $ID $EXPR)+) $EXPR)
 ```
 
 ## Function Definition

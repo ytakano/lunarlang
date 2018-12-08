@@ -416,6 +416,16 @@ ptr_ir_let ir::parse_let() {
             return nullptr;
         }
 
+        auto type = parse_type();
+        if (m_parsec.is_fail())
+            return nullptr;
+
+        m_parsec.space();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected whitespace");
+            return nullptr;
+        }
+
         auto id = parse_id();
         if (m_parsec.is_fail()) {
             SYNTAXERR("expected identifier");
@@ -439,8 +449,10 @@ ptr_ir_let ir::parse_let() {
             return nullptr;
         }
 
-        auto p = std::make_unique<std::pair<std::string, ptr_ir_expr>>(
-            id, std::move(e));
+        auto p = std::make_unique<ir_let::var>();
+        p->m_type = std::move(type);
+        p->m_id = id;
+        p->m_expr = std::move(e);
         let->m_def.push_back(std::move(p));
 
         char tmp;
@@ -581,14 +593,14 @@ llvm::Value *ir_let::codegen(
     ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
 
     for (auto &p : m_def) {
-        auto v = p->second->codegen(ref, vals);
-        vals[p->first].push_back(v);
+        auto v = p->m_expr->codegen(ref, vals);
+        vals[p->m_id].push_back(v);
     }
 
     auto e = m_expr->codegen(ref, vals);
 
     for (auto &p : m_def) {
-        auto it = vals.find(p->first);
+        auto it = vals.find(p->m_id);
         it->second.pop_back();
         if (it->second.size() == 0) {
             vals.erase(it);
@@ -719,9 +731,11 @@ void ir_let::print() {
     for (auto &p : m_def) {
         if (n > 0)
             std::cout << ",";
-        std::cout << "[\"" << p->first << "\",";
-        p->second->print();
-        std::cout << "]";
+        std::cout << "{\"type\":";
+        p->m_type->print();
+        std::cout << ",\"id\":\"" << p->m_id << "\",\"expr\":";
+        p->m_expr->print();
+        std::cout << "}";
         n++;
     }
 
