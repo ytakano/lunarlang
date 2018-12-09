@@ -92,10 +92,7 @@ struct ir_expr : public ir_ast {
     EXPRTYPE m_expr_type;
 
     virtual shared_type check_type(const ir &ref, id2type &vars) = 0;
-
-    virtual llvm::Value *codegen(
-        ir &ref,
-        std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) = 0;
+    virtual llvm::Value *codegen(ir &ref, id2val &vals) = 0;
 
     std::shared_ptr<ir_type> m_type;
 };
@@ -108,9 +105,7 @@ struct ir_id : public ir_expr {
     shared_type check_type(const ir &ref, id2type &vars);
     void print() { std::cout << "{\"id\":\"" << m_id << "\"}"; }
 
-    llvm::Value *
-    codegen(ir &ref,
-            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
+    llvm::Value *codegen(ir &ref, id2val &vals);
 };
 
 struct ir_apply : public ir_expr {
@@ -118,13 +113,14 @@ struct ir_apply : public ir_expr {
     virtual ~ir_apply() {}
 
     shared_type check_type(const ir &ref, id2type &vars);
+    llvm::Value *codegen(ir &ref, id2val &vals);
     void print();
 
     std::vector<ptr_ir_expr> m_expr;
 
-    llvm::Value *
-    codegen(ir &ref,
-            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
+  private:
+    shared_type check_ifexpr(const ir &ref, id2type &vars);
+    llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
 };
 
 typedef std::unique_ptr<ir_apply> ptr_ir_apply;
@@ -134,13 +130,10 @@ struct ir_decimal : public ir_expr {
     virtual ~ir_decimal() {}
 
     shared_type check_type(const ir &ref, id2type &vars);
+    llvm::Value *codegen(ir &ref, id2val &vals);
     void print();
 
     std::string m_num;
-
-    llvm::Value *
-    codegen(ir &ref,
-            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 };
 
 typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
@@ -155,14 +148,11 @@ struct ir_let : public ir_expr {
     };
 
     shared_type check_type(const ir &ref, id2type &vars);
+    llvm::Value *codegen(ir &ref, id2val &vals);
     void print();
 
     std::vector<std::unique_ptr<var>> m_def;
     ptr_ir_expr m_expr;
-
-    llvm::Value *
-    codegen(ir &ref,
-            std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 };
 
 typedef std::unique_ptr<ir_let> ptr_ir_let;

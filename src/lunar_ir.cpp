@@ -699,6 +699,7 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
                     SEMANTICERR(ref, this,
                                 "%s requires more than or equal to 2 arguments",
                                 id->m_id.c_str());
+                    return nullptr;
                 }
 
                 if (!m_expr[1]->check_type(ref, vars))
@@ -708,8 +709,14 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
                     if (!m_expr[i]->check_type(ref, vars))
                         return nullptr;
 
-                    if (!unify_type(m_expr[i - 1].get(), m_expr[i].get()))
+                    if (!unify_type(m_expr[i - 1].get(), m_expr[i].get())) {
+                        TYPEERR(ref, m_expr[i].get(), "unexpected type",
+                                "    expected: %s\n"
+                                "    actual: %s",
+                                m_expr[i - 1]->m_type->str().c_str(),
+                                m_expr[i]->m_type->str().c_str());
                         return nullptr;
+                    }
                 }
 
                 m_type = m_expr[1]->m_type;
@@ -717,10 +724,50 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
             default:
                 return nullptr;
             }
+        } else if (id->m_id == "if") {
+            return check_ifexpr(ref, vars);
         }
     }
 
     return nullptr;
+}
+
+ir_expr::shared_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
+    if (m_expr.size() != 4) {
+        auto id = (ir_id *)(m_expr[0].get());
+        SEMANTICERR(ref, this, "\"if\" requires exactly 3 arguments");
+        return nullptr;
+    }
+
+    if (!m_expr[1]->check_type(ref, vars))
+        return nullptr;
+
+    if (m_expr[1]->m_type->m_irtype != ir_type::IRTYPE_SCALAR ||
+        ((ir_scalar *)(m_expr[1]->m_type.get()))->m_type != TYPE_BOOL) {
+        TYPEERR(ref, m_expr[1].get(), "unexpected type",
+                "    expected: bool\n"
+                "    actual: %s",
+                m_expr[1]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    if (!m_expr[2]->check_type(ref, vars))
+        return nullptr;
+
+    if (!m_expr[3]->check_type(ref, vars))
+        return nullptr;
+
+    if (!unify_type(m_expr[2].get(), m_expr[3].get())) {
+        TYPEERR(ref, m_expr[3].get(), "unexpected type",
+                "    expected: %s\n"
+                "    actual: %s",
+                m_expr[2]->m_type->str().c_str(),
+                m_expr[3]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    m_type = m_expr[2]->m_type;
+    return m_type;
 }
 
 std::string ir::codegen() {
@@ -777,7 +824,7 @@ llvm::Function *ir_defun::codegen(ir &ref) {
                                       m_name, &ref.get_llvm_module());
 
     // bind variables
-    std::unordered_map<std::string, std::deque<llvm::Value *>> vars;
+    ir_expr::id2val vars;
     unsigned i = 0;
     for (auto &arg : fun->args()) {
         auto s = m_args[i]->m_id;
@@ -803,8 +850,7 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     return nullptr;
 }
 
-llvm::Value *ir_id::codegen(
-    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+llvm::Value *ir_id::codegen(ir &ref, ir_expr::id2val &vals) {
     auto it = vals.find(m_id);
     if (it != vals.end()) {
         return it->second.back();
@@ -813,8 +859,7 @@ llvm::Value *ir_id::codegen(
     return nullptr;
 }
 
-llvm::Value *ir_let::codegen(
-    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
 
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
@@ -834,8 +879,7 @@ llvm::Value *ir_let::codegen(
     return e;
 }
 
-llvm::Value *ir_decimal::codegen(
-    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
+llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
     return nullptr;
 }
 
@@ -874,9 +918,7 @@ llvm::Value *ir_decimal::codegen(
         return e1;                                                             \
     } while (0)
 
-llvm::Value *ir_apply::codegen(
-    ir &ref, std::unordered_map<std::string, std::deque<llvm::Value *>> &vals) {
-
+llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
     auto first = m_expr.begin();
     if (first == m_expr.end())
         return nullptr;
@@ -896,10 +938,74 @@ llvm::Value *ir_apply::codegen(
             default:
                 return nullptr;
             }
+        } else if (id->m_id == "if") {
+            return codegen_ifexpr(ref, vals);
         }
     }
 
     return nullptr;
+}
+
+llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
+    llvm::Value *condv = m_expr[1]->codegen(ref, vals);
+    if (!condv)
+        return nullptr;
+
+    auto &builder = ref.get_llvm_builder();
+
+    // Convert condition to a bool by comparing non-equal to 0.0.
+    condv = builder.CreateICmpEQ(
+        condv,
+        llvm::ConstantInt::get(ref.get_llvm_ctx(),
+                               llvm::APInt(/*nbits*/ 1, 1, /*bool*/ false)),
+        "ifcond");
+
+    llvm::Function *func = builder.GetInsertBlock()->getParent();
+
+    // Create blocks for the then and else cases.  Insert the 'then' block at
+    // the end of the function.
+    llvm::BasicBlock *then_bb =
+        llvm::BasicBlock::Create(ref.get_llvm_ctx(), "then", func);
+    llvm::BasicBlock *else_bb =
+        llvm::BasicBlock::Create(ref.get_llvm_ctx(), "else");
+    llvm::BasicBlock *merge_bb =
+        llvm::BasicBlock::Create(ref.get_llvm_ctx(), "ifcont");
+
+    builder.CreateCondBr(condv, then_bb, else_bb);
+
+    // Emit then value.
+    builder.SetInsertPoint(then_bb);
+
+    llvm::Value *thenv = m_expr[2]->codegen(ref, vals);
+    if (!thenv)
+        return nullptr;
+
+    builder.CreateBr(merge_bb);
+    // Codegen of 'Then' can change the current block, update ThenBB for the
+    // PHI.
+    then_bb = builder.GetInsertBlock();
+
+    // Emit else block.
+    func->getBasicBlockList().push_back(else_bb);
+    builder.SetInsertPoint(else_bb);
+
+    llvm::Value *elsev = m_expr[3]->codegen(ref, vals);
+    if (!elsev)
+        return nullptr;
+
+    builder.CreateBr(merge_bb);
+    // Codegen of 'Else' can change the current block, update ElseBB for the
+    // PHI.
+    else_bb = builder.GetInsertBlock();
+
+    // Emit merge block.
+    func->getBasicBlockList().push_back(merge_bb);
+    builder.SetInsertPoint(merge_bb);
+    llvm::PHINode *pn = builder.CreatePHI(elsev->getType(), 2, "iftmp");
+
+    pn->addIncoming(thenv, then_bb);
+    pn->addIncoming(elsev, else_bb);
+    return pn;
 }
 
 void ir::print_err(std::size_t line, std::size_t column) const {
