@@ -138,6 +138,19 @@ struct ir_decimal : public ir_expr {
 
 typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
 
+struct ir_bool : public ir_expr {
+    ir_bool() {}
+    virtual ~ir_bool() {}
+
+    shared_type check_type(const ir &ref, id2type &vars);
+    llvm::Value *codegen(ir &ref, id2val &vals);
+    void print();
+
+    bool m_bool;
+};
+
+typedef std::unique_ptr<ir_bool> ptr_ir_bool;
+
 struct ir_let : public ir_expr {
     ir_let() {}
     virtual ~ir_let() {}

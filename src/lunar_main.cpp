@@ -54,8 +54,8 @@ const char *e3 = "(defun fun u32 ((u64 arg1) (bool arg2)) (+ arg1 arg2))";
 
 const char *e4 = "(defun fun u32 ((bool arg1) (u32 arg2) (u32 arg3))\n"
                  "    (if arg1\n"
-                 "        (+ arg2 arg3)\n"
-                 "        (* arg2 arg3)))";
+                 "        (+ arg2 arg3 1)\n"
+                 "        (* arg2 arg3 2)))";
 
 void world(void *arg) {
     std::string s = e4;

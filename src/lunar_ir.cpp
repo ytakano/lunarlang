@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 
 #define SYNTAXERR(M)                                                           \
     do {                                                                       \
@@ -265,6 +266,21 @@ ptr_ir_expr ir::parse_expr() {
             apply->m_expr.push_back(std::move(e));
         }
     } else {
+        // BOOL
+        if (id == "true") {
+            auto b = std::make_unique<ir_bool>();
+            b->m_bool = true;
+            b->m_line = line;
+            b->m_column = column;
+            return b;
+        } else if (id == "false") {
+            auto b = std::make_unique<ir_bool>();
+            b->m_bool = true;
+            b->m_line = line;
+            b->m_column = column;
+            return b;
+        }
+
         // IDENTIFIER
         auto e = std::make_unique<ir_id>();
         e->m_id = id;
@@ -650,6 +666,15 @@ ir_expr::shared_type ir_decimal::check_type(const ir &ref, id2type &vars) {
     return m_type;
 }
 
+ir_expr::shared_type ir_bool::check_type(const ir &ref, id2type &vars) {
+    auto p = new ir_scalar;
+    p->m_type = TYPE_BOOL;
+
+    m_type = shared_type(p);
+
+    return m_type;
+}
+
 ir_expr::shared_type ir_let::check_type(const ir &ref, id2type &vars) {
     for (auto &p : m_def) {
         if (!p->m_expr->check_type(ref, vars))
@@ -880,6 +905,35 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
 }
 
 llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
+    auto t = (ir_scalar *)m_type.get();
+    auto &ctx = ref.get_llvm_ctx();
+    switch (t->m_type) {
+    case TYPE_U64:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(64, boost::lexical_cast<uint64_t>(m_num), false));
+    case TYPE_S64:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(64, boost::lexical_cast<int64_t>(m_num), true));
+    case TYPE_U32:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(32, boost::lexical_cast<uint32_t>(m_num), false));
+    case TYPE_S32:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(32, boost::lexical_cast<int32_t>(m_num), true));
+    default:
+        return nullptr;
+    }
+    return nullptr;
+}
+
+llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
+    if (m_bool)
+        return llvm::ConstantInt::get(ref.get_llvm_ctx(),
+                                      llvm::APInt(1, 1, false));
+    else
+        return llvm::ConstantInt::get(ref.get_llvm_ctx(),
+                                      llvm::APInt(1, 0, false));
+
     return nullptr;
 }
 
@@ -952,24 +1006,18 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
         return nullptr;
 
     auto &builder = ref.get_llvm_builder();
+    auto &ctx = ref.get_llvm_ctx();
 
-    // Convert condition to a bool by comparing non-equal to 0.0.
     condv = builder.CreateICmpEQ(
-        condv,
-        llvm::ConstantInt::get(ref.get_llvm_ctx(),
-                               llvm::APInt(/*nbits*/ 1, 1, /*bool*/ false)),
-        "ifcond");
+        condv, llvm::ConstantInt::get(ctx, llvm::APInt(1, 1, false)), "ifcond");
 
     llvm::Function *func = builder.GetInsertBlock()->getParent();
 
     // Create blocks for the then and else cases.  Insert the 'then' block at
     // the end of the function.
-    llvm::BasicBlock *then_bb =
-        llvm::BasicBlock::Create(ref.get_llvm_ctx(), "then", func);
-    llvm::BasicBlock *else_bb =
-        llvm::BasicBlock::Create(ref.get_llvm_ctx(), "else");
-    llvm::BasicBlock *merge_bb =
-        llvm::BasicBlock::Create(ref.get_llvm_ctx(), "ifcont");
+    llvm::BasicBlock *then_bb = llvm::BasicBlock::Create(ctx, "then", func);
+    llvm::BasicBlock *else_bb = llvm::BasicBlock::Create(ctx, "else");
+    llvm::BasicBlock *merge_bb = llvm::BasicBlock::Create(ctx, "ifcont");
 
     builder.CreateCondBr(condv, then_bb, else_bb);
 
@@ -1059,6 +1107,10 @@ void ir_apply::print() {
         n++;
     }
     std::cout << "]}";
+}
+
+void ir_bool::print() {
+    std::cout << "{\"bool\":" << (m_bool ? "true" : "false") << "}";
 }
 
 void ir_decimal::print() { std::cout << "{\"decimal\":" << m_num << "}"; }
