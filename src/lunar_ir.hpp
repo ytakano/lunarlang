@@ -35,6 +35,8 @@ struct ir_type : public ir_ast {
 
     virtual llvm::Type *codegen(ir &ref) = 0;
     virtual ir_type *clone() = 0;
+    virtual std::string str() = 0;
+
     IRTYPE m_irtype;
 };
 
@@ -45,6 +47,7 @@ struct ir_scalar : public ir_type {
 
     void print();
     ir_type *clone() { return (new ir_scalar(*this)); };
+    virtual std::string str();
     llvm::Type *codegen(ir &ref);
 
     type_spec m_type;
@@ -56,7 +59,9 @@ struct ir_statement : public ir_ast {
 };
 
 struct ir_expr;
+struct ir_id;
 typedef std::unique_ptr<ir_expr> ptr_ir_expr;
+typedef std::unique_ptr<ir_id> ptr_ir_id;
 
 struct ir_defun : public ir_statement {
     ir_defun() {}
@@ -68,7 +73,7 @@ struct ir_defun : public ir_statement {
 
     std::string m_name;
     std::vector<ptr_ir_type> m_ret;
-    std::vector<std::unique_ptr<std::pair<ptr_ir_type, std::string>>> m_args;
+    std::vector<ptr_ir_id> m_args;
     ptr_ir_expr m_expr;
 };
 
@@ -108,8 +113,6 @@ struct ir_id : public ir_expr {
             std::unordered_map<std::string, std::deque<llvm::Value *>> &vals);
 };
 
-typedef std::unique_ptr<ir_id> ptr_ir_id;
-
 struct ir_apply : public ir_expr {
     ir_apply() {}
     virtual ~ir_apply() {}
@@ -147,8 +150,7 @@ struct ir_let : public ir_expr {
     virtual ~ir_let() {}
 
     struct var {
-        ptr_ir_type m_type;
-        std::string m_id;
+        ptr_ir_id m_id;
         ptr_ir_expr m_expr;
     };
 
@@ -170,8 +172,10 @@ class ir {
     ir(const std::string &filename, const std::string &str);
     virtual ~ir() {}
 
-    bool parse(std::list<ptr_ir_defun> &defuns);
-    std::string codegen(std::list<ptr_ir_defun> &defuns);
+    bool parse();
+    bool check_type();
+    std::string codegen();
+    void print();
 
     llvm::LLVMContext &get_llvm_ctx() { return m_llvm_ctx; }
     llvm::Module &get_llvm_module() { return m_llvm_module; }
@@ -189,6 +193,7 @@ class ir {
     llvm::LLVMContext m_llvm_ctx;
     llvm::IRBuilder<> m_llvm_builder;
     llvm::Module m_llvm_module;
+    std::list<ptr_ir_defun> m_defuns;
 
     ptr_ir_expr parse_expr();
     ptr_ir_defun parse_defun();

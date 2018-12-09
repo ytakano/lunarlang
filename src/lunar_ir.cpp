@@ -11,19 +11,52 @@
             (IR).get_filename().c_str(), (AST)->m_line + 1,                    \
             (AST)->m_column + 1, ##__VA_ARGS__)
 
+#define TYPEERR(IR, AST, M, ...)                                               \
+    fprintf(stderr, "%s:%lu:%lu: type error: " M "\n",                         \
+            (IR).get_filename().c_str(), (AST)->m_line + 1,                    \
+            (AST)->m_column + 1, ##__VA_ARGS__)
+
 namespace lunar {
 
-static bool eq_type(const ir_type *lhs, const ir_type *rhs) {
-    if (lhs->m_irtype != rhs->m_irtype)
+static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
+    if (lhs->m_type->m_irtype != rhs->m_type->m_irtype)
         return false;
 
-    if (lhs->m_irtype == ir_type::IRTYPE_SCALAR) {
-        auto s1 = (const ir_scalar *)lhs;
-        auto s2 = (const ir_scalar *)rhs;
-        return s1->m_type == s2->m_type;
+    // unify int type
+    if (lhs->m_type->m_irtype == ir_type::IRTYPE_SCALAR) {
+        auto s1 = (const ir_scalar *)(lhs->m_type.get());
+        auto s2 = (const ir_scalar *)(rhs->m_type.get());
+        if (s1->m_type == TYPE_INT) {
+            switch (s2->m_type) {
+            case TYPE_BOOL:
+            case TYPE_FP32:
+            case TYPE_FP64:
+                return false;
+            default:
+                lhs->m_type = rhs->m_type;
+                return true;
+            }
+        } else if (s2->m_type == TYPE_INT) {
+            switch (s1->m_type) {
+            case TYPE_BOOL:
+            case TYPE_FP32:
+            case TYPE_FP64:
+                return false;
+            default:
+                rhs->m_type = lhs->m_type;
+                return true;
+            }
+        } else {
+            if (s1->m_type == s2->m_type) {
+                lhs->m_type = rhs->m_type;
+                return true;
+            } else {
+                return false;
+            }
+        }
     }
 
-    return false;
+    return false; // TODO: struct, union
 }
 
 ir::ir(const std::string &filename, const std::string &str)
@@ -88,7 +121,7 @@ ir::ir(const std::string &filename, const std::string &str)
     m_1to9.insert('9');
 }
 
-bool ir::parse(std::list<ptr_ir_defun> &defuns) {
+bool ir::parse() {
     for (;;) {
         m_parsec.spaces();
         char c;
@@ -119,7 +152,7 @@ bool ir::parse(std::list<ptr_ir_defun> &defuns) {
 
             defun->m_line = line;
             defun->m_column = column;
-            defuns.push_back(std::move(defun));
+            m_defuns.push_back(std::move(defun));
         } else {
             SYNTAXERR("expected defun");
             return false;
@@ -389,8 +422,9 @@ ptr_ir_defun ir::parse_defun() {
                 return nullptr;
             }
 
-            auto p = std::make_unique<std::pair<ptr_ir_type, std::string>>(
-                std::move(t), id);
+            auto p = std::make_unique<ir_id>();
+            p->m_id = id;
+            p->m_type = std::move(t);
             defun->m_args.push_back(std::move(p));
 
             m_parsec.spaces();
@@ -514,8 +548,9 @@ ptr_ir_let ir::parse_let() {
         }
 
         auto p = std::make_unique<ir_let::var>();
-        p->m_type = std::move(type);
-        p->m_id = id;
+        p->m_id = std::make_unique<ir_id>();
+        p->m_id->m_id = id;
+        p->m_id->m_type = std::shared_ptr<ir_type>(type->clone());
         p->m_expr = std::move(e);
         let->m_def.push_back(std::move(p));
 
@@ -552,133 +587,59 @@ ptr_ir_let ir::parse_let() {
 }
 
 bool ir_defun::check_type(const ir &ref) {
-    /*
-    std::unordered_map<std::string, std::deque<ir_type *>> vals;
-    for (auto &p : m_args)
-        vals[p->second].push_back(p->first.get());
+    ir_expr::id2type vars;
 
-    auto t = m_expr->get_type(ref, vals);
+    for (auto &p : m_args) {
+        vars[p->m_id].push_back(p->m_type);
+    }
 
-    if (!t)
+    if (!m_expr->check_type(ref, vars))
         return false;
 
-    if (!eqt(m_ret.begin()->get(), t.get())) {
-        SEMANTICERR(ref.get_filename().c_str(), m_line, m_column,
-                    "the type of the return value of the function \"%s\" "
-                    "is different from the type of the value returned by "
-                    "the expression",
-                    m_name.c_str());
+    auto ret = std::make_unique<ir_id>();
+    ret->m_type = std::shared_ptr<ir_type>((*m_ret.begin())->clone());
+
+    if (!unify_type(ret.get(), m_expr.get())) {
+        TYPEERR(ref, m_expr,
+                "unexpected type\n"
+                "    expected: %s\n"
+                "    actual: %s",
+                ret->m_type->str().c_str(), m_expr->m_type->str().c_str());
         return false;
     }
-*/
+
     return true;
 }
-/*
-ptr_ir_type ir_decimal::get_type(
-    ir &ref, std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
-    auto t = std::make_unique<ir_scalar>();
 
-    t->m_type = TYPE_INT;
-
-    return t;
+std::string ir_scalar::str() {
+    switch (m_type) {
+    case TYPE_BOOL:
+        return "bool";
+    case TYPE_FP64:
+        return "fp64";
+    case TYPE_FP32:
+        return "fp32";
+    case TYPE_U64:
+        return "u64";
+    case TYPE_S64:
+        return "s64";
+    case TYPE_U32:
+        return "u32";
+    case TYPE_S32:
+        return "s32";
+    case TYPE_INT:
+        return "int";
+    }
 }
 
-ptr_ir_type
-ir_let::get_type(ir &ref,
-                 std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
-    for (auto &p : m_def) {
-        auto t = p->m_expr->get_type(ref, vals);
-        if (!t)
-            return nullptr;
-
-        if (!eqt(p->m_type.get(), t.get())) {
-            SEMANTICERR(ref.get_filename().c_str(), p->m_type->m_line,
-                        p->m_type->m_column,
-                        "the type of the \"%s\" is different from the type "
-                        "of the value returned by the expression",
-                        p->m_id.c_str());
-            return nullptr;
-        }
-
-        vals[p->m_id].push_back(p->m_type.get());
+bool ir::check_type() {
+    for (auto &p : m_defuns) {
+        if (!p->check_type(*this))
+            return false;
     }
 
-    auto e = m_expr->get_type(ref, vals);
-
-    for (auto &p : m_def)
-        vals[p->m_id].pop_back();
-
-    return e;
+    return true;
 }
-
-ptr_ir_type
-ir_id::get_type(ir &ref,
-                std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
-    auto it = vals.find(m_id);
-    if (it == vals.end())
-        return nullptr;
-
-    return it->second.back()->clone();
-}
-
-ptr_ir_type ir_apply::get_type(
-    ir &ref, std::unordered_map<std::string, std::deque<ir_type *>> &vals) {
-
-    auto first = m_expr.begin();
-    if (first == m_expr.end())
-        return nullptr;
-
-    if ((*first)->m_expr_type == ir_expr::EXPRID) {
-        auto id = (ir_id *)(first->get());
-        if (id->m_id == "+" || id->m_id == "-" || id->m_id == "*") {
-            if (m_expr.size() < 3) {
-                SEMANTICERR(ref.get_filename().c_str(), m_line, m_column,
-                            "%s requires more than or equal to 2 arguments",
-                            id->m_id.c_str());
-            }
-
-            auto t1 = m_expr[1]->get_type(ref, vals);
-            if (t1 == nullptr)
-                return nullptr;
-
-            if (t1->m_irtype != ir_type::IRTYPE_SCALAR) {
-                SEMANTICERR(ref.get_filename().c_str(), m_expr[1]->m_line,
-                            m_expr[1]->m_column, "value is not scalar type");
-                return nullptr;
-            }
-
-            for (auto i = 2; i < m_expr.size(); i++) {
-                auto t2 = m_expr[i]->get_type(ref, vals);
-                if (t2 == nullptr)
-                    return nullptr;
-
-                if (t2->m_irtype != ir_type::IRTYPE_SCALAR) {
-                    SEMANTICERR(ref.get_filename().c_str(), m_expr[i]->m_line,
-                                m_expr[i]->m_column,
-                                "value is not scalar type");
-                    return nullptr;
-                }
-
-                auto s1 = (ir_scalar *)t1.get();
-                auto s2 = (ir_scalar *)t2.get();
-
-                if (s1->m_type == TYPE_INT) {
-                    s1->m_type = s2->m_type;
-                } else if (s2->m_type == TYPE_INT) {
-                    continue;
-                } else if (s1->m_type != s2->m_type) {
-                    SEMANTICERR(ref.get_filename().c_str(), m_expr[i]->m_line,
-                                m_expr[i]->m_column, "unexpected type");
-                    return nullptr;
-                }
-            }
-            return t1;
-        }
-    }
-
-    return nullptr;
-}
-*/
 
 ir_expr::shared_type ir_id::check_type(const ir &ref, id2type &vars) {
     auto it = vars.find(m_id);
@@ -703,15 +664,81 @@ ir_expr::shared_type ir_decimal::check_type(const ir &ref, id2type &vars) {
 }
 
 ir_expr::shared_type ir_let::check_type(const ir &ref, id2type &vars) {
-    return nullptr;
+    for (auto &p : m_def) {
+        if (!p->m_expr->check_type(ref, vars))
+            return nullptr;
+
+        if (!unify_type(p->m_id.get(), p->m_expr.get())) {
+            TYPEERR(ref, p->m_expr,
+                    "unexpected type\n"
+                    "    expected: %s\n"
+                    "    actual: %s",
+                    p->m_id->m_type->str().c_str(),
+                    p->m_expr->m_type->str().c_str());
+            return nullptr;
+        }
+
+        vars[p->m_id->m_id].push_back(p->m_id->m_type);
+    }
+
+    auto t = m_expr->check_type(ref, vars);
+
+    if (!t)
+        return nullptr;
+
+    for (auto &p : m_def) {
+        auto it = vars.find(p->m_id->m_id);
+        it->second.pop_back();
+    }
+
+    m_type = t;
+
+    return t;
 }
 
 ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
+    auto first = m_expr.begin();
+    if (first == m_expr.end())
+        return nullptr;
+
+    if ((*first)->m_expr_type == ir_expr::EXPRID) {
+        auto id = (ir_id *)(first->get());
+        if (id->m_id.size() == 1) {
+            switch (id->m_id[0]) {
+            case '+':
+            case '-':
+            case '*':
+            case '/':
+                if (m_expr.size() < 3) {
+                    SEMANTICERR(ref, this,
+                                "%s requires more than or equal to 2 arguments",
+                                id->m_id.c_str());
+                }
+
+                if (!m_expr[1]->check_type(ref, vars))
+                    return nullptr;
+
+                for (int i = 2; i < m_expr.size(); i++) {
+                    if (!m_expr[i]->check_type(ref, vars))
+                        return nullptr;
+
+                    if (!unify_type(m_expr[i - 1].get(), m_expr[i].get()))
+                        return nullptr;
+                }
+
+                m_type = m_expr[1]->m_type;
+                return m_type;
+            default:
+                return nullptr;
+            }
+        }
+    }
+
     return nullptr;
 }
 
-std::string ir::codegen(std::list<ptr_ir_defun> &defuns) {
-    for (auto &p : defuns) {
+std::string ir::codegen() {
+    for (auto &p : m_defuns) {
         p->codegen(*this);
     }
 
@@ -768,7 +795,7 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     // type of arguments
     std::vector<llvm::Type *> args;
     for (auto &q : m_args) {
-        auto t = q->first->codegen(ref);
+        llvm::Type *t = q->m_type->codegen(ref);
         if (t == nullptr)
             return nullptr;
         args.push_back(t);
@@ -778,11 +805,11 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     auto fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
                                       m_name, &ref.get_llvm_module());
 
-    // bind name to the arguments and
+    // bind variables
     std::unordered_map<std::string, std::deque<llvm::Value *>> vars;
     unsigned i = 0;
     for (auto &arg : fun->args()) {
-        auto s = m_args[i]->second;
+        auto s = m_args[i]->m_id;
         arg.setName(s);
         vars[s].push_back(&arg);
         i++;
@@ -820,13 +847,13 @@ llvm::Value *ir_let::codegen(
 
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
-        vals[p->m_id].push_back(v);
+        vals[p->m_id->m_id].push_back(v);
     }
 
     auto e = m_expr->codegen(ref, vals);
 
     for (auto &p : m_def) {
-        auto it = vals.find(p->m_id);
+        auto it = vals.find(p->m_id->m_id);
         it->second.pop_back();
         if (it->second.size() == 0) {
             vals.erase(it);
@@ -882,36 +909,13 @@ llvm::Value *ir_apply::codegen(
     return nullptr;
 }
 
-void ir_scalar::print() {
-    std::cout << "\"";
-    switch (m_type) {
-    case TYPE_BOOL:
-        std::cout << "bool";
-        break;
-    case TYPE_FP64:
-        std::cout << "fp64";
-        break;
-    case TYPE_FP32:
-        std::cout << "fp32";
-        break;
-    case TYPE_U64:
-        std::cout << "u64";
-        break;
-    case TYPE_S64:
-        std::cout << "s64";
-        break;
-    case TYPE_U32:
-        std::cout << "u32";
-        break;
-    case TYPE_S32:
-        std::cout << "s32";
-        break;
-    case TYPE_INT:
-        std::cout << "int";
-        break;
+void ir::print() {
+    for (auto &p : m_defuns) {
+        p->print();
     }
-    std::cout << "\"";
 }
+
+void ir_scalar::print() { std::cout << "\"" << str() << "\""; }
 
 void ir_defun::print() {
     std::cout << "{\"defun\":{\"id\":\"" << m_name << "\","
@@ -928,8 +932,8 @@ void ir_defun::print() {
     n = m_args.size();
     for (auto &q : m_args) {
         std::cout << "{\"type\":";
-        q->first->print();
-        std::cout << ",\"id\":\"" << q->second << "\"}";
+        q->m_type->print();
+        std::cout << ",\"id\":\"" << q->m_id << "\"}";
         n--;
         if (n > 0) {
             std::cout << ",";
@@ -961,8 +965,8 @@ void ir_let::print() {
         if (n > 0)
             std::cout << ",";
         std::cout << "{\"type\":";
-        p->m_type->print();
-        std::cout << ",\"id\":\"" << p->m_id << "\",\"expr\":";
+        p->m_id->m_type->print();
+        std::cout << ",\"id\":\"" << p->m_id->m_id << "\",\"expr\":";
         p->m_expr->print();
         std::cout << "}";
         n++;
