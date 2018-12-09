@@ -44,12 +44,14 @@ static std::string escapeJsonString(const std::string &input) {
     return ss.str();
 }
 
-const char *e1 = "(defun fun (u32) ((u32 arg1) (u32 arg2))\n"
-                 "                  (let ((u32 x (+ arg1 arg2))\n"
-                 "                        (u32 y (* arg1 arg2))) (- y x)))";
+const char *e1 = "(defun fun u32 ((u32 arg1) (u32 arg2))\n"
+                 "    (let ((u32 x (+ arg1 arg2))\n"
+                 "         (u32 y (* arg1 arg2))) (/ (- y x) arg1)))";
+
+const char *e2 = "(defun fun u32 ((u64 arg)) arg)";
 
 void world(void *arg) {
-    std::string s = e1;
+    std::string s = e2;
 
     lunar::ir ir("test.ir", s);
 

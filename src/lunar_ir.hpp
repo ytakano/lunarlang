@@ -72,7 +72,7 @@ struct ir_defun : public ir_statement {
     llvm::Function *codegen(ir &ref);
 
     std::string m_name;
-    std::vector<ptr_ir_type> m_ret;
+    ptr_ir_type m_ret;
     std::vector<ptr_ir_id> m_args;
     ptr_ir_expr m_expr;
 };
@@ -176,6 +176,7 @@ class ir {
     bool check_type();
     std::string codegen();
     void print();
+    void print_err(std::size_t line, std::size_t column) const;
 
     llvm::LLVMContext &get_llvm_ctx() { return m_llvm_ctx; }
     llvm::Module &get_llvm_module() { return m_llvm_module; }

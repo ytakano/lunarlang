@@ -53,7 +53,7 @@ namespace lunar {
 class parsec {
   public:
     parsec(const std::string &str)
-        : m_str(str), m_pos(0), m_line(0), m_column(0), m_fail(false) {
+        : m_str(str), m_pos(0), m_line(1), m_column(1), m_fail(false) {
         m_spaces.insert(' ');
         m_spaces.insert('\t');
         m_spaces.insert('\r');
@@ -161,6 +161,7 @@ class parsec {
     bool is_eof() { return m_pos == m_str.size(); }
     std::size_t get_line() { return m_line; }
     std::size_t get_column() { return m_column; }
+    const std::string &get_str() const { return m_str; }
 
   private:
     std::string m_str;

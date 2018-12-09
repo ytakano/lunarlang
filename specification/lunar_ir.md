@@ -44,13 +44,20 @@ $LET := (let (($TYPE $ID $EXPR)+) $EXPR)
 ## Function Definition
 
 ```
-$DEFUN := (defun $ID? ($TYPE*) (($TYPE $ID)*) $EXPR)
+$DEFUN := (defun $ID $TYPE (($TYPE $ID)*) $EXPR)
 ```
 
 ## Function Apply
 
 ```
 $APPLY := ($EXPR*)
+```
+
+### Basic Binary Operations
+
+```
+$OPS := ($OP $EXPR $EXPR+)
+$OP := + | - | * | /
 ```
 
 ### Yield

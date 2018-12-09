@@ -2,19 +2,31 @@
 
 #include <iostream>
 
-#define SYNTAXERR(M, ...)                                                      \
-    fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n", m_filename.c_str(),   \
-            m_parsec.get_line(), m_parsec.get_column(), ##__VA_ARGS__)
+#include <boost/algorithm/string.hpp>
+
+#define SYNTAXERR(M)                                                           \
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n",                   \
+                m_filename.c_str(), m_parsec.get_line(),                       \
+                m_parsec.get_column());                                        \
+        print_err(m_parsec.get_line(), m_parsec.get_column());                 \
+    } while (0)
 
 #define SEMANTICERR(IR, AST, M, ...)                                           \
-    fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n",                     \
-            (IR).get_filename().c_str(), (AST)->m_line + 1,                    \
-            (AST)->m_column + 1, ##__VA_ARGS__)
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n",                 \
+                (IR).get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
+                ##__VA_ARGS__);                                                \
+        (IR).print_err((AST)->m_line, (AST)->m_column);                        \
+    } while (0)
 
-#define TYPEERR(IR, AST, M, ...)                                               \
-    fprintf(stderr, "%s:%lu:%lu: type error: " M "\n",                         \
-            (IR).get_filename().c_str(), (AST)->m_line + 1,                    \
-            (AST)->m_column + 1, ##__VA_ARGS__)
+#define TYPEERR(IR, AST, M1, M2, ...)                                          \
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu: type error: " M1 "\n",                    \
+                (IR).get_filename().c_str(), (AST)->m_line, (AST)->m_column);  \
+        (IR).print_err((AST)->m_line, (AST)->m_column);                        \
+        fprintf(stderr, M2 "\n", ##__VA_ARGS__);                               \
+    } while (0)
 
 namespace lunar {
 
@@ -338,44 +350,20 @@ ptr_ir_defun ir::parse_defun() {
 
     m_parsec.space();
     if (m_parsec.is_fail()) {
-        SYNTAXERR("expected space");
+        SYNTAXERR("expected whitespace");
         return nullptr;
     }
 
     m_parsec.spaces();
 
     // parse return types
-    m_parsec.character('(');
-    if (m_parsec.is_fail()) {
-        // print
-        SYNTAXERR("expected (");
-        return nullptr;
-    }
-
-    m_parsec.spaces();
-
     auto t = parse_type();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected type or identifier");
+    if (!t) {
+        SYNTAXERR("expected a type specifier");
         return nullptr;
     }
-    defun->m_ret.push_back(std::move(t));
 
-    for (;;) {
-        char tmp;
-        m_parsec.spaces();
-        PTRY(m_parsec, tmp, m_parsec.character(')'));
-        if (!m_parsec.is_fail())
-            break;
-
-        auto t2 = parse_type();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected type or identifier");
-            return nullptr;
-        }
-
-        defun->m_ret.push_back(std::move(t2));
-    }
+    defun->m_ret = std::move(t);
 
     m_parsec.space();
     if (m_parsec.is_fail()) {
@@ -406,7 +394,7 @@ ptr_ir_defun ir::parse_defun() {
 
             auto t = parse_type();
             if (!t) {
-                SYNTAXERR("expected type");
+                SYNTAXERR("expected a type specifier");
                 return nullptr;
             }
 
@@ -597,11 +585,10 @@ bool ir_defun::check_type(const ir &ref) {
         return false;
 
     auto ret = std::make_unique<ir_id>();
-    ret->m_type = std::shared_ptr<ir_type>((*m_ret.begin())->clone());
+    ret->m_type = std::shared_ptr<ir_type>(m_ret->clone());
 
     if (!unify_type(ret.get(), m_expr.get())) {
-        TYPEERR(ref, m_expr,
-                "unexpected type\n"
+        TYPEERR(ref, m_expr, "unexpected type",
                 "    expected: %s\n"
                 "    actual: %s",
                 ret->m_type->str().c_str(), m_expr->m_type->str().c_str());
@@ -669,8 +656,7 @@ ir_expr::shared_type ir_let::check_type(const ir &ref, id2type &vars) {
             return nullptr;
 
         if (!unify_type(p->m_id.get(), p->m_expr.get())) {
-            TYPEERR(ref, p->m_expr,
-                    "unexpected type\n"
+            TYPEERR(ref, p->m_expr, "unexpected type",
                     "    expected: %s\n"
                     "    actual: %s",
                     p->m_id->m_type->str().c_str(),
@@ -739,7 +725,8 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
 
 std::string ir::codegen() {
     for (auto &p : m_defuns) {
-        p->codegen(*this);
+        if (!p->codegen(*this))
+            return "";
     }
 
     std::string s;
@@ -772,25 +759,9 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
 
 llvm::Function *ir_defun::codegen(ir &ref) {
     // type of return values
-    llvm::Type *type;
-    if (m_ret.size() == 1) {
-        type = (*m_ret.begin())->codegen(ref);
-        if (type == nullptr)
-            return nullptr;
-    } else {
-        std::vector<llvm::Type *> types;
-
-        for (auto &p : m_ret) {
-            auto t = p->codegen(ref);
-            if (t == nullptr)
-                return nullptr;
-            types.push_back(t);
-        }
-
-        type = llvm::StructType::get(ref.get_llvm_ctx(), types);
-        if (type == nullptr)
-            return nullptr;
-    }
+    llvm::Type *type = m_ret->codegen(ref);
+    if (type == nullptr)
+        return nullptr;
 
     // type of arguments
     std::vector<llvm::Type *> args;
@@ -868,7 +839,7 @@ llvm::Value *ir_decimal::codegen(
     return nullptr;
 }
 
-#define BINARYOP(INTOP, FOP, OP, NAME)                                         \
+#define BINARYOP(UIOP, SIOP, FOP, OP, NAME)                                    \
     do {                                                                       \
         if (m_expr.size() < 3) {                                               \
             SEMANTICERR(ref, this,                                             \
@@ -880,10 +851,25 @@ llvm::Value *ir_decimal::codegen(
                                                                                \
         for (auto i = 2; i < m_expr.size(); i++) {                             \
             auto e2 = m_expr[i]->codegen(ref, vals);                           \
+            ir_scalar *s = (ir_scalar *)m_expr[i]->m_type.get();               \
             if (e2 == nullptr)                                                 \
                 return nullptr;                                                \
                                                                                \
-            e1 = ref.get_llvm_builder().INTOP(e1, e2, NAME);                   \
+            switch (s->m_type) {                                               \
+            case TYPE_U64:                                                     \
+            case TYPE_U32:                                                     \
+                e1 = ref.get_llvm_builder().UIOP(e1, e2, NAME);                \
+                break;                                                         \
+            case TYPE_S64:                                                     \
+            case TYPE_S32:                                                     \
+                e1 = ref.get_llvm_builder().SIOP(e1, e2, NAME);                \
+                break;                                                         \
+            case TYPE_FP64:                                                    \
+            case TYPE_FP32:                                                    \
+                e1 = ref.get_llvm_builder().FOP(e1, e2, NAME);                 \
+            default:                                                           \
+                return nullptr;                                                \
+            }                                                                  \
         }                                                                      \
         return e1;                                                             \
     } while (0)
@@ -897,16 +883,36 @@ llvm::Value *ir_apply::codegen(
 
     if ((*first)->m_expr_type == ir_expr::EXPRID) {
         auto id = (ir_id *)(first->get());
-        if (id->m_id == "+") {
-            BINARYOP(CreateAdd, CreateFAdd, "+", "addtmp");
-        } else if (id->m_id == "-") {
-            BINARYOP(CreateSub, CreateFSub, "-", "subtmp");
-        } else if (id->m_id == "*") {
-            BINARYOP(CreateMul, CreateFMul, "*", "multmp");
+        if (id->m_id.size() == 1) {
+            switch (id->m_id[0]) {
+            case '+':
+                BINARYOP(CreateAdd, CreateAdd, CreateFAdd, "+", "addtmp");
+            case '-':
+                BINARYOP(CreateSub, CreateSub, CreateFSub, "-", "subtmp");
+            case '*':
+                BINARYOP(CreateMul, CreateMul, CreateFMul, "*", "multmp");
+            case '/':
+                BINARYOP(CreateUDiv, CreateSDiv, CreateFDiv, "/", "divtmp");
+            default:
+                return nullptr;
+            }
         }
     }
 
     return nullptr;
+}
+
+void ir::print_err(std::size_t line, std::size_t column) const {
+    std::vector<std::string> lines;
+
+    boost::split(lines, m_parsec.get_str(), boost::is_any_of("\n"));
+
+    std::cerr << lines[line - 1] << std::endl;
+
+    for (auto i = 0; i < column - 1; i++) {
+        std::cerr << " ";
+    }
+    std::cerr << "^" << std::endl;
 }
 
 void ir::print() {
@@ -919,17 +925,10 @@ void ir_scalar::print() { std::cout << "\"" << str() << "\""; }
 
 void ir_defun::print() {
     std::cout << "{\"defun\":{\"id\":\"" << m_name << "\","
-              << "\"ret\":[";
-    auto n = m_ret.size();
-    for (auto &p : m_ret) {
-        p->print();
-        n--;
-        if (n > 0) {
-            std::cout << ",";
-        }
-    }
-    std::cout << "],\"args\":[";
-    n = m_args.size();
+              << "\"ret\":";
+    m_ret->print();
+    std::cout << ",\"args\":[";
+    auto n = m_args.size();
     for (auto &q : m_args) {
         std::cout << "{\"type\":";
         q->m_type->print();
