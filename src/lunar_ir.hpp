@@ -120,6 +120,9 @@ struct ir_apply : public ir_expr {
 
   private:
     shared_type check_ifexpr(const ir &ref, id2type &vars);
+    shared_type check_magnitude(const ir &ref, id2type &vars,
+                                const std::string &id);
+    shared_type check_eq(const ir &ref, id2type &vars);
     llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
 };
 

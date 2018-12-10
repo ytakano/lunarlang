@@ -712,8 +712,8 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
     if (first == m_expr.end())
         return nullptr;
 
+    auto id = (ir_id *)(first->get());
     if ((*first)->m_expr_type == ir_expr::EXPRID) {
-        auto id = (ir_id *)(first->get());
         if (id->m_id.size() == 1) {
             switch (id->m_id[0]) {
             case '+':
@@ -746,15 +746,114 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
 
                 m_type = m_expr[1]->m_type;
                 return m_type;
+            case '<':
+            case '>':
+                return check_magnitude(ref, vars, id->m_id);
+            case '=':
+                return check_eq(ref, vars);
             default:
                 return nullptr;
             }
         } else if (id->m_id == "if") {
             return check_ifexpr(ref, vars);
+        } else if (id->m_id == ">=" || id->m_id == "<=") {
+            return check_magnitude(ref, vars, id->m_id);
+        } else if (id->m_id == "!=") {
+            return check_eq(ref, vars);
         }
     }
 
     return nullptr;
+}
+
+ir_expr::shared_type ir_apply::check_eq(const ir &ref, id2type &vars) {
+    if (m_expr.size() != 3) {
+        SEMANTICERR(ref, this, "= requires exactly 2 arguments");
+        return nullptr;
+    }
+
+    if (!m_expr[1]->check_type(ref, vars))
+        return nullptr;
+
+    if (m_expr[1]->m_type->m_irtype != ir_type::IRTYPE_SCALAR) {
+        TYPEERR(ref, m_expr[1].get(), "unexpected type",
+                "    expected: boolean, interger or floating point type\n"
+                "    actual: %s",
+                m_expr[1]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    if (!m_expr[2]->check_type(ref, vars))
+        return nullptr;
+
+    if (m_expr[2]->m_type->m_irtype != ir_type::IRTYPE_SCALAR) {
+        TYPEERR(ref, m_expr[2].get(), "unexpected type",
+                "    expected: boolean, interger or floating point type\n"
+                "    actual: %s",
+                m_expr[1]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    if (!unify_type(m_expr[1].get(), m_expr[2].get())) {
+        TYPEERR(ref, m_expr[2].get(), "unexpected type",
+                "    expected: %s\n"
+                "    actual: %s",
+                m_expr[1]->m_type->str().c_str(),
+                m_expr[2]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    auto t = std::make_shared<ir_scalar>();
+    t->m_type = TYPE_BOOL;
+    m_type = t;
+
+    return m_type;
+}
+
+ir_expr::shared_type ir_apply::check_magnitude(const ir &ref, id2type &vars,
+                                               const std::string &id) {
+    if (m_expr.size() != 3) {
+        SEMANTICERR(ref, this, "%s requires exactly 2 arguments", id.c_str());
+        return nullptr;
+    }
+    if (!m_expr[1]->check_type(ref, vars))
+        return nullptr;
+
+    if (m_expr[1]->m_type->m_irtype != ir_type::IRTYPE_SCALAR ||
+        ((ir_scalar *)m_expr[1]->m_type.get())->m_type == TYPE_BOOL) {
+        TYPEERR(ref, m_expr[1].get(), "unexpected type",
+                "    expected: interger or floating point type\n"
+                "    actual: %s",
+                m_expr[1]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    if (!m_expr[2]->check_type(ref, vars))
+        return nullptr;
+
+    if (m_expr[2]->m_type->m_irtype != ir_type::IRTYPE_SCALAR ||
+        ((ir_scalar *)m_expr[2]->m_type.get())->m_type == TYPE_BOOL) {
+        TYPEERR(ref, m_expr[2].get(), "unexpected type",
+                "    expected: interger or floating point type\n"
+                "    actual: %s",
+                m_expr[2]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    if (!unify_type(m_expr[1].get(), m_expr[2].get())) {
+        TYPEERR(ref, m_expr[2].get(), "unexpected type",
+                "    expected: %s\n"
+                "    actual: %s",
+                m_expr[1]->m_type->str().c_str(),
+                m_expr[2]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    auto t = std::make_shared<ir_scalar>();
+    t->m_type = TYPE_BOOL;
+    m_type = t;
+
+    return m_type;
 }
 
 ir_expr::shared_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
@@ -848,6 +947,8 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     auto fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
                                       m_name, &ref.get_llvm_module());
 
+    // fun->setCallingConv(llvm::CallingConv::Fast);
+
     // bind variables
     ir_expr::id2val vars;
     unsigned i = 0;
@@ -937,7 +1038,7 @@ llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
     return nullptr;
 }
 
-#define BINARYOP(UIOP, SIOP, FOP, OP, NAME)                                    \
+#define ARITHMETIC(UIOP, SIOP, FOP, OP, NAME)                                  \
     do {                                                                       \
         if (m_expr.size() < 3) {                                               \
             SEMANTICERR(ref, this,                                             \
@@ -972,6 +1073,45 @@ llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
         return e1;                                                             \
     } while (0)
 
+#define BINOP(UIOP, SIOP, FOP, OP, NAME)                                       \
+    do {                                                                       \
+        if (m_expr.size() != 3) {                                              \
+            SEMANTICERR(ref, this, OP " requires exactly 2 arguments");        \
+        }                                                                      \
+        auto e1 = m_expr[1]->codegen(ref, vals);                               \
+        if (e1 == nullptr)                                                     \
+            return nullptr;                                                    \
+                                                                               \
+        auto e2 = m_expr[2]->codegen(ref, vals);                               \
+        if (e2 == nullptr)                                                     \
+            return nullptr;                                                    \
+                                                                               \
+        switch (((ir_scalar *)m_expr[1]->m_type.get())->m_type) {              \
+        case TYPE_U64:                                                         \
+        case TYPE_U32:                                                         \
+            e1 = ref.get_llvm_builder().UIOP(e1, e2, NAME);                    \
+            break;                                                             \
+        case TYPE_S64:                                                         \
+        case TYPE_S32:                                                         \
+            e1 = ref.get_llvm_builder().SIOP(e1, e2, NAME);                    \
+            break;                                                             \
+        case TYPE_FP64:                                                        \
+        case TYPE_FP32:                                                        \
+            e1 = ref.get_llvm_builder().FOP(e1, e2, NAME);                     \
+        case TYPE_INT: {                                                       \
+            auto d1 = (ir_decimal *)m_expr[1].get();                           \
+            auto d2 = (ir_decimal *)m_expr[1].get();                           \
+            if (d1->m_num[0] == '-' || d2->m_num[0] == '-')                    \
+                e1 = ref.get_llvm_builder().UIOP(e1, e2, NAME);                \
+            else                                                               \
+                e1 = ref.get_llvm_builder().SIOP(e1, e2, NAME);                \
+        }                                                                      \
+        default:                                                               \
+            return nullptr;                                                    \
+        }                                                                      \
+        return e1;                                                             \
+    } while (0)
+
 llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
     auto first = m_expr.begin();
     if (first == m_expr.end())
@@ -982,18 +1122,32 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
         if (id->m_id.size() == 1) {
             switch (id->m_id[0]) {
             case '+':
-                BINARYOP(CreateAdd, CreateAdd, CreateFAdd, "+", "addtmp");
+                ARITHMETIC(CreateAdd, CreateAdd, CreateFAdd, "+", "addtmp");
             case '-':
-                BINARYOP(CreateSub, CreateSub, CreateFSub, "-", "subtmp");
+                ARITHMETIC(CreateSub, CreateSub, CreateFSub, "-", "subtmp");
             case '*':
-                BINARYOP(CreateMul, CreateMul, CreateFMul, "*", "multmp");
+                ARITHMETIC(CreateMul, CreateMul, CreateFMul, "*", "multmp");
             case '/':
-                BINARYOP(CreateUDiv, CreateSDiv, CreateFDiv, "/", "divtmp");
+                ARITHMETIC(CreateUDiv, CreateSDiv, CreateFDiv, "/", "divtmp");
+            case '<':
+                BINOP(CreateICmpULT, CreateICmpSLT, CreateFCmpOLT, "<",
+                      "lttmp");
+            case '>':
+                BINOP(CreateICmpUGT, CreateICmpSGT, CreateFCmpOGT, ">",
+                      "gttmp");
+            case '=':
+                BINOP(CreateICmpEQ, CreateICmpEQ, CreateFCmpOEQ, "=", "eqtmp");
             default:
                 return nullptr;
             }
         } else if (id->m_id == "if") {
             return codegen_ifexpr(ref, vals);
+        } else if (id->m_id == ">=") {
+            BINOP(CreateICmpUGE, CreateICmpSGE, CreateFCmpOGE, "<", "getmp");
+        } else if (id->m_id == "<=") {
+            BINOP(CreateICmpULE, CreateICmpSLE, CreateFCmpOLE, "<", "letmp");
+        } else if (id->m_id == "!=") {
+            BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "=", "netmp");
         }
     }
 
