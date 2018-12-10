@@ -59,8 +59,20 @@ const char *e4 = "(defun fun u32 ((bool arg1) (u32 arg2) (u32 arg3))\n"
 
 const char *e5 = "(defun fun bool ((u64 arg1) (u64 arg2)) (!= arg1 arg2))";
 
+const char *e6 = "(defun fun bool ((u32 arg1)) (fun arg1))";
+
+const char *e7 = "(defun fact u64 ((u64 num))\n"
+                 "    (if (= num 0)\n"
+                 "     1\n"
+                 "     (* num (fact (- num 1)))))\n";
+
+const char *e8 = "(defun fun u64 ((u64 num))\n"
+                 "    (if (= num 0)\n"
+                 "     1\n"
+                 "     (fun (- num 1))))\n";
+
 void world(void *arg) {
-    std::string s = e5;
+    std::string s = e8;
 
     lunar::ir ir("test.ir", s);
 

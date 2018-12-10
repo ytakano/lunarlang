@@ -31,6 +31,35 @@
 
 namespace lunar {
 
+static bool eq_type(ir_type *lhs, ir_type *rhs) {
+    if (lhs->m_irtype != rhs->m_irtype)
+        return false;
+
+    switch (lhs->m_irtype) {
+    case ir_type::IRTYPE_SCALAR: {
+        auto t1 = (const ir_scalar *)lhs;
+        auto t2 = (const ir_scalar *)rhs;
+        return t1 == t2;
+    }
+    case ir_type::IRTYPE_FUN: {
+        auto t1 = (const ir_funtype *)lhs;
+        auto t2 = (const ir_funtype *)rhs;
+        if (t1->m_args.size() != t2->m_args.size())
+            return false;
+
+        if (!eq_type(t1->m_ret.get(), t2->m_ret.get()))
+            return false;
+
+        for (int i = 0; i < t1->m_args.size(); i++) {
+            if (!eq_type(t1->m_args[i].get(), t2->m_args[i].get()))
+                return false;
+        }
+
+        return true;
+    }
+    }
+}
+
 static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
     if (lhs->m_type->m_irtype != rhs->m_type->m_irtype)
         return false;
@@ -67,6 +96,8 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
                 return false;
             }
         }
+    } else if (lhs->m_type->m_irtype == ir_type::IRTYPE_FUN) {
+        return eq_type(lhs->m_type.get(), rhs->m_type.get());
     }
 
     return false; // TODO: struct, union
@@ -206,6 +237,15 @@ ptr_ir_expr ir::parse_expr() {
                 return dec;
             }
 
+            m_parsec.character('0');
+            if (!m_parsec.is_fail()) {
+                dec = std::make_unique<ir_decimal>();
+                dec->m_num = "0";
+                dec->m_line = line;
+                dec->m_column = column;
+                return dec;
+            }
+
             SYNTAXERR("could not parse expression");
 
             return nullptr;
@@ -255,8 +295,6 @@ ptr_ir_expr ir::parse_expr() {
             }
             m_parsec.spaces();
 
-            line = m_parsec.get_line();
-            column = m_parsec.get_column();
             auto e = parse_expr();
             if (!e)
                 return nullptr;
@@ -614,6 +652,17 @@ bool ir_defun::check_type(const ir &ref) {
     return true;
 }
 
+ir_type *ir_defun::get_type() {
+    auto ret = new ir_funtype;
+    ret->m_ret = shared_ir_type(m_ret->clone());
+
+    for (auto &p : m_args) {
+        ret->m_args.push_back(shared_ir_type(p->m_type->clone()));
+    }
+
+    return ret;
+}
+
 std::string ir_scalar::str() {
     switch (m_type) {
     case TYPE_BOOL:
@@ -635,7 +684,32 @@ std::string ir_scalar::str() {
     }
 }
 
+std::string ir_funtype::str() {
+    std::string ret;
+    int n = 0;
+    for (auto &p : m_args) {
+        if (n > 0)
+            ret += ",";
+        ret += p->str();
+    }
+
+    ret += " -> ";
+    ret += m_ret->str();
+
+    return ret;
+}
+
 bool ir::check_type() {
+    for (auto &p : m_defuns) {
+        auto it = m_funs.find(p->m_name);
+        if (it != m_funs.end()) {
+            SEMANTICERR(*this, p.get(), "%s is multiply defined",
+                        p->m_name.c_str());
+            return false;
+        }
+        m_funs[p->m_name] = ptr_ir_funtype((ir_funtype *)p->get_type());
+    }
+
     for (auto &p : m_defuns) {
         if (!p->check_type(*this))
             return false;
@@ -644,7 +718,7 @@ bool ir::check_type() {
     return true;
 }
 
-ir_expr::shared_type ir_id::check_type(const ir &ref, id2type &vars) {
+shared_ir_type ir_id::check_type(const ir &ref, id2type &vars) {
     auto it = vars.find(m_id);
     if (it == vars.end()) {
         SEMANTICERR(ref, this, "%s is undefined", m_id.c_str());
@@ -657,25 +731,25 @@ ir_expr::shared_type ir_id::check_type(const ir &ref, id2type &vars) {
     return m_type;
 }
 
-ir_expr::shared_type ir_decimal::check_type(const ir &ref, id2type &vars) {
+shared_ir_type ir_decimal::check_type(const ir &ref, id2type &vars) {
     auto p = new ir_scalar;
     p->m_type = TYPE_INT;
 
-    m_type = shared_type(p);
+    m_type = shared_ir_type(p);
 
     return m_type;
 }
 
-ir_expr::shared_type ir_bool::check_type(const ir &ref, id2type &vars) {
+shared_ir_type ir_bool::check_type(const ir &ref, id2type &vars) {
     auto p = new ir_scalar;
     p->m_type = TYPE_BOOL;
 
-    m_type = shared_type(p);
+    m_type = shared_ir_type(p);
 
     return m_type;
 }
 
-ir_expr::shared_type ir_let::check_type(const ir &ref, id2type &vars) {
+shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
     for (auto &p : m_def) {
         if (!p->m_expr->check_type(ref, vars))
             return nullptr;
@@ -707,7 +781,7 @@ ir_expr::shared_type ir_let::check_type(const ir &ref, id2type &vars) {
     return t;
 }
 
-ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
+shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
     auto first = m_expr.begin();
     if (first == m_expr.end())
         return nullptr;
@@ -762,6 +836,7 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
             return check_eq(ref, vars);
         } else {
             // function call
+            return check_call(ref, vars, id->m_id);
         }
     }
 
@@ -770,7 +845,37 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
     return nullptr;
 }
 
-ir_expr::shared_type ir_apply::check_eq(const ir &ref, id2type &vars) {
+shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
+                                    const std::string &id) {
+    auto fun = ref.get_funs().find(id);
+    if (fun == ref.get_funs().end()) {
+        SEMANTICERR(ref, this, "%s is undefined", id.c_str());
+        return nullptr;
+    }
+
+    if (m_expr.size() - 1 != fun->second->m_args.size()) {
+        SEMANTICERR(
+            ref, this,
+            "%s requres %lu arguments, but %lu arguments are actually passed",
+            id.c_str(), fun->second->m_args.size(), m_expr.size() - 1);
+        return nullptr;
+    }
+
+    int n = 0;
+    for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
+        (*it)->check_type(ref, vars);
+        ir_id tmp;
+        tmp.m_type = shared_ir_type(fun->second->m_args[n]->clone());
+        if (!unify_type(&tmp, it->get())) {
+            return nullptr;
+        }
+    }
+
+    m_type = shared_ir_type(fun->second->m_ret->clone());
+    return m_type;
+}
+
+shared_ir_type ir_apply::check_eq(const ir &ref, id2type &vars) {
     if (m_expr.size() != 3) {
         SEMANTICERR(ref, this, "= requires exactly 2 arguments");
         return nullptr;
@@ -814,8 +919,8 @@ ir_expr::shared_type ir_apply::check_eq(const ir &ref, id2type &vars) {
     return m_type;
 }
 
-ir_expr::shared_type ir_apply::check_magnitude(const ir &ref, id2type &vars,
-                                               const std::string &id) {
+shared_ir_type ir_apply::check_magnitude(const ir &ref, id2type &vars,
+                                         const std::string &id) {
     if (m_expr.size() != 3) {
         SEMANTICERR(ref, this, "%s requires exactly 2 arguments", id.c_str());
         return nullptr;
@@ -860,7 +965,7 @@ ir_expr::shared_type ir_apply::check_magnitude(const ir &ref, id2type &vars,
     return m_type;
 }
 
-ir_expr::shared_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
+shared_ir_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
     if (m_expr.size() != 4) {
         auto id = (ir_id *)(m_expr[0].get());
         SEMANTICERR(ref, this, "\"if\" requires exactly 3 arguments");
@@ -900,6 +1005,13 @@ ir_expr::shared_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
 
 std::string ir::codegen() {
     for (auto &p : m_defuns) {
+        auto fun = p->mkproto(*this);
+        if (!fun)
+            return "";
+        m_funs_prot[p->m_name] = fun;
+    }
+
+    for (auto &p : m_defuns) {
         if (!p->codegen(*this))
             return "";
     }
@@ -933,6 +1045,35 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
 }
 
 llvm::Function *ir_defun::codegen(ir &ref) {
+
+    // bind variables
+    ir_expr::id2val vars;
+    unsigned i = 0;
+    for (auto &arg : m_fun->args()) {
+        auto s = m_args[i]->m_id;
+        arg.setName(s);
+        vars[s].push_back(&arg);
+        i++;
+    }
+
+    auto bb = llvm::BasicBlock::Create(ref.get_llvm_ctx(), "entry", m_fun);
+    auto &builder = ref.get_llvm_builder();
+    builder.SetInsertPoint(bb);
+
+    llvm::Value *retval = m_expr->codegen(ref, vars);
+    if (retval) {
+        builder.CreateRet(retval);
+
+        // Validate the generated code, checking for consistency.
+        // llvm::verifyFunction(fun);
+
+        return m_fun;
+    }
+
+    return nullptr;
+}
+
+llvm::Function *ir_defun::mkproto(ir &ref) {
     // type of return values
     llvm::Type *type = m_ret->codegen(ref);
     if (type == nullptr)
@@ -948,36 +1089,12 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     }
 
     auto ftype = llvm::FunctionType::get(type, args, false);
-    auto fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
-                                      m_name, &ref.get_llvm_module());
+    m_fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
+                                   m_name, &ref.get_llvm_module());
 
-    // fun->setCallingConv(llvm::CallingConv::Fast);
+    // m_fun->setCallingConv(llvm::CallingConv::Fast);
 
-    // bind variables
-    ir_expr::id2val vars;
-    unsigned i = 0;
-    for (auto &arg : fun->args()) {
-        auto s = m_args[i]->m_id;
-        arg.setName(s);
-        vars[s].push_back(&arg);
-        i++;
-    }
-
-    auto bb = llvm::BasicBlock::Create(ref.get_llvm_ctx(), "entry", fun);
-    auto &builder = ref.get_llvm_builder();
-    builder.SetInsertPoint(bb);
-
-    llvm::Value *retval = m_expr->codegen(ref, vars);
-    if (retval) {
-        builder.CreateRet(retval);
-
-        // Validate the generated code, checking for consistency.
-        // llvm::verifyFunction(fun);
-
-        return fun;
-    }
-
-    return nullptr;
+    return m_fun;
 }
 
 llvm::Value *ir_id::codegen(ir &ref, ir_expr::id2val &vals) {
@@ -1152,6 +1269,9 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             BINOP(CreateICmpULE, CreateICmpSLE, CreateFCmpOLE, "<", "letmp");
         } else if (id->m_id == "!=") {
             BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "=", "netmp");
+        } else {
+            // function call
+            return codegen_call(ref, vals, id->m_id);
         }
     }
 
@@ -1214,6 +1334,32 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
     return pn;
 }
 
+llvm::Value *ir_apply::codegen_call(ir &ref, id2val vals,
+                                    const std::string &id) {
+    auto fun = ref.get_function(id);
+    if (!fun) {
+        SEMANTICERR(ref, this, "%s is undefined", id.c_str());
+        return nullptr;
+    }
+
+    std::vector<llvm::Value *> args;
+    for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it) {
+        auto t = (*it)->codegen(ref, vals);
+        if (!t)
+            return nullptr;
+        args.push_back(t);
+    }
+
+    auto ret = ref.get_llvm_builder().CreateCall(fun, args, "calltmp");
+    /*
+    if (ret) {
+        ret->setCallingConv(llvm::CallingConv::Fast);
+        ret->setTailCall();
+    } */
+
+    return ret;
+}
+
 void ir::print_err(std::size_t line, std::size_t column) const {
     std::vector<std::string> lines;
 
@@ -1232,6 +1378,8 @@ void ir::print() {
         p->print();
     }
 }
+
+void ir_funtype::print() {}
 
 void ir_scalar::print() { std::cout << "\"" << str() << "\""; }
 

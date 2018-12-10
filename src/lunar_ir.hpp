@@ -42,24 +42,32 @@ struct ir_type : public ir_ast {
 };
 
 typedef std::unique_ptr<ir_type> ptr_ir_type;
+typedef std::shared_ptr<ir_type> shared_ir_type;
 
 struct ir_scalar : public ir_type {
     ir_scalar() { m_irtype = IRTYPE_SCALAR; }
 
     void print();
     ir_type *clone() { return (new ir_scalar(*this)); };
-    virtual std::string str();
+    std::string str();
     llvm::Type *codegen(ir &ref);
 
     type_spec m_type;
 };
 
 struct ir_funtype : public ir_type {
-    ir_funtype() { m_irtype = IRTYPE_SCALAR; }
+    ir_funtype() { m_irtype = IRTYPE_FUN; }
 
-    ptr_ir_type m_ret;
-    std::vector<ptr_ir_type> m_args;
+    void print();
+    ir_type *clone() { return (new ir_funtype(*this)); }
+    std::string str();
+    llvm::Type *codegen(ir &ref) { return nullptr; };
+
+    shared_ir_type m_ret;
+    std::vector<shared_ir_type> m_args;
 };
+
+typedef std::unique_ptr<ir_funtype> ptr_ir_funtype;
 
 struct ir_statement : public ir_ast {
     ir_statement() {}
@@ -75,14 +83,20 @@ struct ir_defun : public ir_statement {
     ir_defun() {}
     virtual ~ir_defun() {}
 
+    ir_type *get_type();
+
     void print();
     bool check_type(const ir &ref);
+    llvm::Function *mkproto(ir &ref);
     llvm::Function *codegen(ir &ref);
+
+    ir_funtype m_funtype;
 
     std::string m_name;
     ptr_ir_type m_ret;
     std::vector<ptr_ir_id> m_args;
     ptr_ir_expr m_expr;
+    llvm::Function *m_fun;
 };
 
 typedef std::unique_ptr<ir_defun> ptr_ir_defun;
@@ -93,13 +107,12 @@ struct ir_expr : public ir_ast {
 
     enum EXPRTYPE { EXPRNOP, EXPRID, EXPRVAL };
 
-    typedef std::shared_ptr<ir_type> shared_type;
-    typedef std::unordered_map<std::string, std::deque<shared_type>> id2type;
+    typedef std::unordered_map<std::string, std::deque<shared_ir_type>> id2type;
     typedef std::unordered_map<std::string, std::deque<llvm::Value *>> id2val;
 
     EXPRTYPE m_expr_type;
 
-    virtual shared_type check_type(const ir &ref, id2type &vars) = 0;
+    virtual shared_ir_type check_type(const ir &ref, id2type &vars) = 0;
     virtual llvm::Value *codegen(ir &ref, id2val &vals) = 0;
 
     std::shared_ptr<ir_type> m_type;
@@ -110,7 +123,7 @@ struct ir_id : public ir_expr {
 
     std::string m_id;
 
-    shared_type check_type(const ir &ref, id2type &vars);
+    shared_ir_type check_type(const ir &ref, id2type &vars);
     void print() { std::cout << "{\"id\":\"" << m_id << "\"}"; }
 
     llvm::Value *codegen(ir &ref, id2val &vals);
@@ -120,18 +133,21 @@ struct ir_apply : public ir_expr {
     ir_apply() {}
     virtual ~ir_apply() {}
 
-    shared_type check_type(const ir &ref, id2type &vars);
+    shared_ir_type check_type(const ir &ref, id2type &vars);
     llvm::Value *codegen(ir &ref, id2val &vals);
     void print();
 
     std::vector<ptr_ir_expr> m_expr;
 
   private:
-    shared_type check_ifexpr(const ir &ref, id2type &vars);
-    shared_type check_magnitude(const ir &ref, id2type &vars,
-                                const std::string &id);
-    shared_type check_eq(const ir &ref, id2type &vars);
+    shared_ir_type check_ifexpr(const ir &ref, id2type &vars);
+    shared_ir_type check_magnitude(const ir &ref, id2type &vars,
+                                   const std::string &id);
+    shared_ir_type check_eq(const ir &ref, id2type &vars);
+    shared_ir_type check_call(const ir &ref, id2type &vars,
+                              const std::string &id);
     llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
+    llvm::Value *codegen_call(ir &ref, id2val vals, const std::string &id);
 };
 
 typedef std::unique_ptr<ir_apply> ptr_ir_apply;
@@ -140,7 +156,7 @@ struct ir_decimal : public ir_expr {
     ir_decimal() {}
     virtual ~ir_decimal() {}
 
-    shared_type check_type(const ir &ref, id2type &vars);
+    shared_ir_type check_type(const ir &ref, id2type &vars);
     llvm::Value *codegen(ir &ref, id2val &vals);
     void print();
 
@@ -153,7 +169,7 @@ struct ir_bool : public ir_expr {
     ir_bool() {}
     virtual ~ir_bool() {}
 
-    shared_type check_type(const ir &ref, id2type &vars);
+    shared_ir_type check_type(const ir &ref, id2type &vars);
     llvm::Value *codegen(ir &ref, id2val &vals);
     void print();
 
@@ -171,7 +187,7 @@ struct ir_let : public ir_expr {
         ptr_ir_expr m_expr;
     };
 
-    shared_type check_type(const ir &ref, id2type &vars);
+    shared_ir_type check_type(const ir &ref, id2type &vars);
     llvm::Value *codegen(ir &ref, id2val &vals);
     void print();
 
@@ -197,6 +213,16 @@ class ir {
     llvm::IRBuilder<> &get_llvm_builder() { return m_llvm_builder; }
 
     std::string get_filename() const { return m_filename; }
+    const std::unordered_map<std::string, ptr_ir_funtype> &get_funs() const {
+        return m_funs;
+    }
+    llvm::Function *get_function(const std::string &name) {
+        auto it = m_funs_prot.find(name);
+        if (it == m_funs_prot.end())
+            return nullptr;
+
+        return it->second;
+    }
 
   private:
     parsec m_parsec;
@@ -205,6 +231,8 @@ class ir {
     std::unordered_set<char> m_no_id_char;
     std::unordered_set<char> m_0to9;
     std::unordered_set<char> m_1to9;
+    std::unordered_map<std::string, ptr_ir_funtype> m_funs;
+    std::unordered_map<std::string, llvm::Function *> m_funs_prot;
     llvm::LLVMContext m_llvm_ctx;
     llvm::IRBuilder<> m_llvm_builder;
     llvm::Module m_llvm_module;
