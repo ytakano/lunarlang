@@ -28,6 +28,7 @@ struct ir_ast {
 struct ir_type : public ir_ast {
     enum IRTYPE {
         IRTYPE_SCALAR,
+        IRTYPE_FUN,
     };
 
     ir_type() {}
@@ -51,6 +52,13 @@ struct ir_scalar : public ir_type {
     llvm::Type *codegen(ir &ref);
 
     type_spec m_type;
+};
+
+struct ir_funtype : public ir_type {
+    ir_funtype() { m_irtype = IRTYPE_SCALAR; }
+
+    ptr_ir_type m_ret;
+    std::vector<ptr_ir_type> m_args;
 };
 
 struct ir_statement : public ir_ast {

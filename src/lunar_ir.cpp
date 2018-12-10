@@ -760,8 +760,12 @@ ir_expr::shared_type ir_apply::check_type(const ir &ref, id2type &vars) {
             return check_magnitude(ref, vars, id->m_id);
         } else if (id->m_id == "!=") {
             return check_eq(ref, vars);
+        } else {
+            // function call
         }
     }
+
+    // lambda or higher order function
 
     return nullptr;
 }
