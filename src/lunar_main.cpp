@@ -79,7 +79,7 @@ const char *e9 =
     "     (* num (fact (- num 1)))))\n";
 
 const char *e10 =
-    "(struct mystruct (foo u64) (bar u32))\n"
+    "(struct mystruct (u64 foo) (u32 bar))\n"
     "(defun fun u64 (((struct u64 u32 bool) arg)) (mystruct 10 20))";
 
 void world(void *arg) {

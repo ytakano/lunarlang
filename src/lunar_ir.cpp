@@ -273,19 +273,19 @@ ptr_ir_struct ir::parse_defstruct() {
         auto line = m_parsec.get_line();
         auto column = m_parsec.get_column();
 
-        auto id = parse_id();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected identifier");
+        auto t = parse_type();
+        if (!t)
             return nullptr;
-        }
 
         m_parsec.space();
         if (m_parsec.is_fail())
             return nullptr;
 
-        auto t = parse_type();
-        if (!t)
+        auto id = parse_id();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected identifier");
             return nullptr;
+        }
 
         m_parsec.spaces();
         m_parsec.character(')');

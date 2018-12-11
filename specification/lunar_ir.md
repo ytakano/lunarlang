@@ -44,7 +44,7 @@ $LET := (let (($TYPE $ID $EXPR)+) $EXPR)
 ## Struct Definition
 
 ```
-$DEFSTRUCT := (struct $ID ($ID $TYPE)+)
+$DEFSTRUCT := (struct $ID ($TYPE $ID)+)
 ```
 
 ## Function Definition
