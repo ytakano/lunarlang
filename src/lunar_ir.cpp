@@ -463,6 +463,11 @@ ptr_ir_type ir::parse_type() {
             ref->m_line = line;
             ref->m_column = column;
             return ref;
+        } else if (id == "struct") {
+            auto st = parse_struct();
+            st->m_line = line;
+            st->m_column = column;
+            return st;
         }
 
         return nullptr;
@@ -548,6 +553,44 @@ ptr_ir_type ir::parse_type() {
     }
 
     return nullptr;
+}
+
+ptr_ir_struct ir::parse_struct() {
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+    m_parsec.spaces();
+
+    auto st = std::make_unique<ir_struct>();
+
+    for (;;) {
+        auto t = parse_type();
+        if (!t)
+            return nullptr;
+
+        st->m_member.push_back(std::move(t));
+
+        char tmp;
+        PTRY(m_parsec, tmp, [](parsec &p) {
+            p.spaces();
+            return p.character(')');
+        }(m_parsec));
+
+        if (!m_parsec.is_fail())
+            return st;
+
+        m_parsec.space();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected whitespace");
+            return nullptr;
+        }
+        m_parsec.spaces();
+    }
+
+    assert(false);
+    return nullptr; // never reach hare
 }
 
 ptr_ir_type ir::parse_ref() {
