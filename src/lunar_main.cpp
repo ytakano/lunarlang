@@ -80,7 +80,9 @@ const char *e9 =
 
 const char *e10 =
     "(struct mystruct (u64 foo) (u32 bar))\n"
-    "(defun fun mystruct (((struct u64 u32 bool) arg)) (mystruct 10 20))";
+    "(struct mystruct2 (mystruct foo) (u32 buz))\n"
+    "(defun fun (struct mystruct u32) (((struct u64 u32 bool) arg))\n"
+    "    (mystruct2 (mystruct 10 20) 30))";
 
 const char *e11 = "(struct mystruct (u64 foo) (mystruct2 bar))\n"
                   "(struct mystruct2 (u64 foo) (mystruct bar))";
@@ -88,7 +90,7 @@ const char *e11 = "(struct mystruct (u64 foo) (mystruct2 bar))\n"
 const char *e12 = "(defun fun (ref u32) (((ref u32) foo)) foo)";
 
 void world(void *arg) {
-    std::string s = e12;
+    std::string s = e10;
 
     lunar::ir ir("test.ir", s);
 

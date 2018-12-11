@@ -124,12 +124,17 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
     case ir_type::IRTYPE_FUN:
     case ir_type::IRTYPE_REF:
     case ir_type::IRTYPE_STRUCT:
-        return eq_type(lhs->m_type.get(), rhs->m_type.get());
+        if (!eq_type(lhs->m_type.get(), rhs->m_type.get()))
+            return false;
+
+        lhs->m_type = rhs->m_type;
+        return true;
     case ir_type::IRTYPE_USER:
         return false;
     }
 
-    return false; // TODO: struct, union
+    assert(false);
+    return false;
 }
 
 ir::ir(const std::string &filename, const std::string &str)
@@ -894,6 +899,8 @@ bool ir_defun::check_type(const ir &ref) {
         ret->m_type = std::shared_ptr<ir_type>(it->second->clone());
     } else {
         ret->m_type = std::shared_ptr<ir_type>(m_ret->clone());
+        ret->m_type->print();
+        std::cout << std::endl;
     }
 
     if (!unify_type(ret.get(), m_expr.get())) {
@@ -1006,8 +1013,14 @@ bool ir::check_type() {
     }
 
     for (auto &p : m_defuns) {
-        if (!p->check_type(*this))
+        if (p->m_ret->m_irtype == ir_type::IRTYPE_STRUCT) {
+            std::unordered_set<std::string> used;
+            check_recursive((ir_struct *)p->m_ret.get(), used);
+        }
+
+        if (!p->check_type(*this)) {
             return false;
+        }
     }
 
     return true;
@@ -1029,6 +1042,8 @@ bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
                             u->m_name.c_str());
                 return false;
             }
+
+            q = std::shared_ptr<ir_type>(it->second->clone());
             if (!check_recursive(it->second.get(), used))
                 return false;
         }
@@ -1214,6 +1229,16 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
         for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
             if (!(*it)->check_type(ref, vars))
                 return nullptr;
+
+            auto &member = s->second->m_member[n];
+
+            if (member->m_irtype == ir_type::IRTYPE_USER) {
+                auto user = (ir_usertype *)member.get();
+                auto it = ref.get_id2struct().find(user->m_name);
+                assert(it != ref.get_id2struct().end());
+                s->second->m_member[n] =
+                    std::shared_ptr<ir_type>(it->second->clone());
+            }
 
             ir_id tmp;
             tmp.m_type = shared_ir_type(s->second->m_member[n]->clone());
