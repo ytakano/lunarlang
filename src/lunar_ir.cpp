@@ -548,7 +548,6 @@ ptr_ir_type ir::parse_type() {
         user->m_name = s;
         user->m_line = line;
         user->m_column = column;
-        std::cout << "user: " << s << std::endl;
         return user;
     }
 
