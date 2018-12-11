@@ -38,8 +38,8 @@ struct ir_type : public ir_ast {
     virtual ~ir_type() {}
 
     virtual llvm::Type *codegen(ir &ref) = 0;
-    virtual ir_type *clone() = 0;
-    virtual std::string str() = 0;
+    virtual ir_type *clone() const = 0;
+    virtual std::string str() const = 0;
 
     IRTYPE m_irtype;
 };
@@ -51,8 +51,8 @@ struct ir_scalar : public ir_type {
     ir_scalar() { m_irtype = IRTYPE_SCALAR; }
 
     void print();
-    ir_type *clone() { return (new ir_scalar(*this)); };
-    std::string str();
+    ir_type *clone() const { return (new ir_scalar(*this)); };
+    std::string str() const;
     llvm::Type *codegen(ir &ref);
 
     type_spec m_type;
@@ -62,8 +62,8 @@ struct ir_funtype : public ir_type {
     ir_funtype() { m_irtype = IRTYPE_FUN; }
 
     void print();
-    ir_type *clone() { return (new ir_funtype(*this)); }
-    std::string str();
+    ir_type *clone() const { return (new ir_funtype(*this)); }
+    std::string str() const;
     llvm::Type *codegen(ir &ref) { return nullptr; };
 
     shared_ir_type m_ret;
@@ -76,8 +76,8 @@ struct ir_struct : public ir_type {
     ir_struct() { m_irtype = IRTYPE_STRUCT; }
 
     void print();
-    ir_type *clone() { return (new ir_struct(*this)); }
-    std::string str();
+    ir_type *clone() const { return (new ir_struct(*this)); }
+    std::string str() const;
     llvm::Type *codegen(ir &ref) { return nullptr; };
 
     std::string m_name;
@@ -91,8 +91,8 @@ struct ir_usertype : public ir_type {
     ir_usertype() { m_irtype = IRTYPE_USER; }
 
     void print();
-    ir_type *clone() { return (new ir_usertype(*this)); }
-    std::string str() { return ""; }
+    ir_type *clone() const { return (new ir_usertype(*this)); }
+    std::string str() const { return m_name; }
     llvm::Type *codegen(ir &ref) { return nullptr; };
 
     std::string m_name;
@@ -105,8 +105,8 @@ struct ir_ref : public ir_type {
     ir_ref() { m_irtype = IRTYPE_REF; }
 
     void print();
-    ir_type *clone() { return (new ir_ref(*this)); }
-    std::string str();
+    ir_type *clone() const { return (new ir_ref(*this)); }
+    std::string str() const;
     llvm::Type *codegen(ir &ref);
 
     shared_ir_type m_type;
@@ -261,6 +261,10 @@ class ir {
     const std::unordered_map<std::string, ptr_ir_funtype> &get_funs() const {
         return m_funs;
     }
+    const std::unordered_map<std::string, ptr_ir_struct> &
+    get_id2struct() const {
+        return m_id2struct;
+    }
     llvm::Function *get_function(const std::string &name) {
         auto it = m_funs_prot.find(name);
         if (it == m_funs_prot.end())
@@ -277,6 +281,7 @@ class ir {
     std::unordered_set<char> m_0to9;
     std::unordered_set<char> m_1to9;
     std::unordered_map<std::string, ptr_ir_funtype> m_funs;
+    std::unordered_map<std::string, ptr_ir_struct> m_id2struct;
     std::unordered_map<std::string, llvm::Function *> m_funs_prot;
     llvm::LLVMContext m_llvm_ctx;
     llvm::IRBuilder<> m_llvm_builder;
@@ -292,6 +297,7 @@ class ir {
     ptr_ir_type parse_ref();
     ptr_ir_decimal parse_decimal();
     ptr_ir_let parse_let();
+    bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);
     std::string parse_id();
 };
 } // namespace lunar

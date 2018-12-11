@@ -80,14 +80,19 @@ const char *e9 =
 
 const char *e10 =
     "(struct mystruct (u64 foo) (u32 bar))\n"
-    "(defun fun u64 (((struct u64 u32 bool) arg)) (mystruct 10 20))";
+    "(defun fun mystruct (((struct u64 u32 bool) arg)) (mystruct 10 20))";
+
+const char *e11 = "(struct mystruct (u64 foo) (mystruct2 bar))\n"
+                  "(struct mystruct2 (u64 foo) (mystruct bar))";
+
+const char *e12 = "(defun fun (ref u32) (((ref u32) foo)) foo)";
 
 void world(void *arg) {
-    std::string s = e10;
+    std::string s = e12;
 
     lunar::ir ir("test.ir", s);
 
-    if (ir.parse() /*&& ir.check_type()*/) {
+    if (ir.parse() && ir.check_type()) {
         std::cout << "{\"input\":\"" << escapeJsonString(s) << "\",\"AST\":";
         ir.print();
         std::cout << ",\"LLVM\":\""

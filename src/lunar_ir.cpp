@@ -23,8 +23,9 @@
 
 #define TYPEERR(IR, AST, M1, M2, ...)                                          \
     do {                                                                       \
-        fprintf(stderr, "%s:%lu:%lu: type error: " M1 "\n",                    \
-                (IR).get_filename().c_str(), (AST)->m_line, (AST)->m_column);  \
+        fprintf(stderr, "%s:%lu:%lu:(%d) type error: " M1 "\n",                \
+                (IR).get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
+                __LINE__);                                                     \
         (IR).print_err((AST)->m_line, (AST)->m_column);                        \
         fprintf(stderr, M2 "\n", ##__VA_ARGS__);                               \
     } while (0)
@@ -39,7 +40,7 @@ static bool eq_type(ir_type *lhs, ir_type *rhs) {
     case ir_type::IRTYPE_SCALAR: {
         auto t1 = (const ir_scalar *)lhs;
         auto t2 = (const ir_scalar *)rhs;
-        return t1 == t2;
+        return t1->m_type == t2->m_type;
     }
     case ir_type::IRTYPE_FUN: {
         auto t1 = (const ir_funtype *)lhs;
@@ -87,7 +88,8 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
         return false;
 
     // unify int type
-    if (lhs->m_type->m_irtype == ir_type::IRTYPE_SCALAR) {
+    switch (lhs->m_type->m_irtype) {
+    case ir_type::IRTYPE_SCALAR: {
         auto s1 = (const ir_scalar *)(lhs->m_type.get());
         auto s2 = (const ir_scalar *)(rhs->m_type.get());
         if (s1->m_type == TYPE_INT) {
@@ -118,8 +120,13 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
                 return false;
             }
         }
-    } else if (lhs->m_type->m_irtype == ir_type::IRTYPE_FUN) {
+    }
+    case ir_type::IRTYPE_FUN:
+    case ir_type::IRTYPE_REF:
+    case ir_type::IRTYPE_STRUCT:
         return eq_type(lhs->m_type.get(), rhs->m_type.get());
+    case ir_type::IRTYPE_USER:
+        return false;
     }
 
     return false; // TODO: struct, union
@@ -878,7 +885,16 @@ bool ir_defun::check_type(const ir &ref) {
         return false;
 
     auto ret = std::make_unique<ir_id>();
-    ret->m_type = std::shared_ptr<ir_type>(m_ret->clone());
+
+    if (m_ret->m_irtype == ir_type::IRTYPE_USER) {
+        auto user = ((ir_usertype *)m_ret.get());
+        auto &id2struct = ref.get_id2struct();
+        auto it = id2struct.find(user->m_name);
+        assert(it != id2struct.end());
+        ret->m_type = std::shared_ptr<ir_type>(it->second->clone());
+    } else {
+        ret->m_type = std::shared_ptr<ir_type>(m_ret->clone());
+    }
 
     if (!unify_type(ret.get(), m_expr.get())) {
         TYPEERR(ref, m_expr, "unexpected type",
@@ -902,9 +918,17 @@ ir_type *ir_defun::get_type() {
     return ret;
 }
 
-std::string ir_struct::str() { return ""; }
+std::string ir_struct::str() const {
+    std::string s = "(struct";
+    for (auto &p : m_member) {
+        s += " ";
+        s += p->str();
+    }
+    s += ")";
+    return s;
+}
 
-std::string ir_scalar::str() {
+std::string ir_scalar::str() const {
     switch (m_type) {
     case TYPE_BOOL:
         return "bool";
@@ -937,7 +961,7 @@ std::string ir_scalar::str() {
     }
 }
 
-std::string ir_funtype::str() {
+std::string ir_funtype::str() const {
     std::string ret;
     int n = 0;
     for (auto &p : m_args) {
@@ -952,12 +976,28 @@ std::string ir_funtype::str() {
     return ret;
 }
 
-std::string ir_ref::str() { return "ret " + m_type->str(); }
+std::string ir_ref::str() const { return "(ref " + m_type->str() + ")"; }
 
 bool ir::check_type() {
+    for (auto &s : m_struct) {
+        if (HASKEY(m_id2struct, s->m_name)) {
+            SEMANTICERR(*this, s.get(), "%s is multiply defined",
+                        s->m_name.c_str());
+            return false;
+        }
+        m_id2struct[s->m_name] =
+            std::unique_ptr<ir_struct>((ir_struct *)s->clone());
+    }
+
+    for (auto &s : m_struct) {
+        std::unordered_set<std::string> used;
+        used.insert(s->m_name);
+        if (!check_recursive(s.get(), used))
+            return false;
+    }
+
     for (auto &p : m_defuns) {
-        auto it = m_funs.find(p->m_name);
-        if (it != m_funs.end()) {
+        if (HASKEY(m_funs, p->m_name) || HASKEY(m_id2struct, p->m_name)) {
             SEMANTICERR(*this, p.get(), "%s is multiply defined",
                         p->m_name.c_str());
             return false;
@@ -968,6 +1008,30 @@ bool ir::check_type() {
     for (auto &p : m_defuns) {
         if (!p->check_type(*this))
             return false;
+    }
+
+    return true;
+}
+
+bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
+    for (auto &q : p->m_member) {
+        if (q->m_irtype == ir_type::IRTYPE_USER) {
+            auto u = (ir_usertype *)q.get();
+            if (HASKEY(used, u->m_name)) {
+                SEMANTICERR(*this, q.get(), "%s is recusively defined",
+                            u->m_name.c_str());
+                return false;
+            }
+            used.insert(u->m_name);
+            auto it = m_id2struct.find(u->m_name);
+            if (it == m_id2struct.end()) {
+                SEMANTICERR(*this, q.get(), "%s is undefined",
+                            u->m_name.c_str());
+                return false;
+            }
+            if (!check_recursive(it->second.get(), used))
+                return false;
+        }
     }
 
     return true;
@@ -1103,31 +1167,64 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
 shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
                                     const std::string &id) {
     auto fun = ref.get_funs().find(id);
-    if (fun == ref.get_funs().end()) {
+    auto s = ref.get_id2struct().find(id);
+
+    if (fun == ref.get_funs().end() && s == ref.get_id2struct().end()) {
         SEMANTICERR(ref, this, "%s is undefined", id.c_str());
         return nullptr;
     }
 
-    if (m_expr.size() - 1 != fun->second->m_args.size()) {
-        SEMANTICERR(
-            ref, this,
-            "%s requres %lu arguments, but %lu arguments are actually passed",
-            id.c_str(), fun->second->m_args.size(), m_expr.size() - 1);
-        return nullptr;
-    }
-
-    int n = 0;
-    for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
-        (*it)->check_type(ref, vars);
-        ir_id tmp;
-        tmp.m_type = shared_ir_type(fun->second->m_args[n]->clone());
-        if (!unify_type(&tmp, it->get())) {
+    if (fun != ref.get_funs().end()) {
+        // function call
+        if (m_expr.size() - 1 != fun->second->m_args.size()) {
+            SEMANTICERR(ref, this,
+                        "%s requres %lu arguments, but %lu arguments are "
+                        "actually passed",
+                        id.c_str(), fun->second->m_args.size(),
+                        m_expr.size() - 1);
             return nullptr;
         }
-    }
 
-    m_type = shared_ir_type(fun->second->m_ret->clone());
-    return m_type;
+        int n = 0;
+        for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
+            if (!(*it)->check_type(ref, vars))
+                return nullptr;
+
+            ir_id tmp;
+            tmp.m_type = shared_ir_type(fun->second->m_args[n]->clone());
+            if (!unify_type(&tmp, it->get())) {
+                return nullptr;
+            }
+        }
+
+        m_type = shared_ir_type(fun->second->m_ret->clone());
+        return m_type;
+    } else {
+        // structure construction
+        if (m_expr.size() - 1 != s->second->m_member.size()) {
+            SEMANTICERR(ref, this,
+                        "%s requres %lu arguments, but %lu arguments are "
+                        "actually passed",
+                        id.c_str(), s->second->m_member.size(),
+                        m_expr.size() - 1);
+            return nullptr;
+        }
+
+        int n = 0;
+        for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
+            if (!(*it)->check_type(ref, vars))
+                return nullptr;
+
+            ir_id tmp;
+            tmp.m_type = shared_ir_type(s->second->m_member[n]->clone());
+            if (!unify_type(&tmp, it->get())) {
+                return nullptr;
+            }
+        }
+
+        m_type = shared_ir_type(s->second->clone());
+        return m_type;
+    }
 }
 
 shared_ir_type ir_apply::check_eq(const ir &ref, id2type &vars) {
