@@ -78,16 +78,19 @@ const char *e9 =
     "     1\n"
     "     (* num (fact (- num 1)))))\n";
 
+const char *e10 = "(struct mystruct (foo u64) (bar u32))\n"
+                  "(defun fun u64 () (mystruct 10 20))";
+
 void world(void *arg) {
-    std::string s = e9;
+    std::string s = e10;
 
     lunar::ir ir("test.ir", s);
 
-    if (ir.parse() && ir.check_type()) {
+    if (ir.parse() /*&& ir.check_type()*/) {
         std::cout << "{\"input\":\"" << escapeJsonString(s) << "\",\"AST\":";
         ir.print();
-        std::cout << ",\"LLVM\":\"" << escapeJsonString(ir.codegen()) << "\"}"
-                  << std::endl;
+        std::cout << ",\"LLVM\":\""
+                  << /*escapeJsonString(ir.codegen()) << */ "\"}" << std::endl;
     } else {
         std::cout << "false" << std::endl;
     }

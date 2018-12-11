@@ -62,6 +62,23 @@ static bool eq_type(ir_type *lhs, ir_type *rhs) {
         auto t2 = (const ir_ref *)rhs;
         return eq_type(t1->m_type.get(), t2->m_type.get());
     }
+    case ir_type::IRTYPE_STRUCT: {
+        auto t1 = (const ir_struct *)lhs;
+        auto t2 = (const ir_struct *)rhs;
+
+        if (t1->m_member.size() != t2->m_member.size())
+            return false;
+
+        for (int i = 0; i < t1->m_member.size(); i++) {
+            if (!eq_type(t1->m_member[i].get(), t2->m_member[i].get()))
+                return false;
+        }
+
+        return true;
+    }
+    case ir_type::IRTYPE_USER: {
+        return false;
+    }
     }
 }
 
@@ -202,20 +219,112 @@ bool ir::parse() {
             defun->m_line = line;
             defun->m_column = column;
             m_defuns.push_back(std::move(defun));
+        } else if (id == "struct") {
+            auto st = parse_defstruct();
+            if (!st)
+                return false;
+
+            st->m_line = line;
+            st->m_column = column;
+            m_struct.push_back(std::move(st));
         } else {
-            SYNTAXERR("expected defun");
+            SYNTAXERR("expected defun or struct");
             return false;
         }
+    }
+
+    assert(false);
+    return false; // never reach here
+}
+
+ptr_ir_struct ir::parse_defstruct() {
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+
+    auto name = parse_id();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected identifier");
+        return nullptr;
+    }
+
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+    m_parsec.spaces();
+
+    auto st = std::make_unique<ir_struct>();
+
+    st->m_name = name;
+
+    int n = 0;
+    for (;;) {
+        m_parsec.character('(');
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected (");
+            return nullptr;
+        }
+        m_parsec.spaces();
+
+        auto line = m_parsec.get_line();
+        auto column = m_parsec.get_column();
+
+        auto id = parse_id();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected identifier");
+            return nullptr;
+        }
+
+        m_parsec.space();
+        if (m_parsec.is_fail())
+            return nullptr;
+
+        auto t = parse_type();
+        if (!t)
+            return nullptr;
 
         m_parsec.spaces();
         m_parsec.character(')');
         if (m_parsec.is_fail()) {
             SYNTAXERR("expected )");
-            return false;
+            return nullptr;
         }
+
+        if (HASKEY(st->m_id2idx, id)) {
+            ir_id i;
+            i.m_line = line;
+            i.m_column = column;
+            SEMANTICERR(*this, &i, "%s is multiply defined", id.c_str());
+            return nullptr;
+        }
+
+        st->m_id2idx[id] = n;
+        st->m_member.push_back(std::move(t));
+        n++;
+
+        char tmp;
+        PTRY(m_parsec, tmp, [](parsec &p) {
+            p.spaces();
+            return p.character(')');
+        }(m_parsec));
+
+        if (!m_parsec.is_fail())
+            return st;
+
+        m_parsec.space();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected whitespace");
+            return nullptr;
+        }
+        m_parsec.spaces();
     }
 
-    return false; // never reach here
+    assert(false);
+    return nullptr; // never reach hare
 }
 
 ptr_ir_expr ir::parse_expr() {
@@ -343,31 +452,20 @@ ptr_ir_type ir::parse_type() {
     PTRY(m_parsec, tmp, m_parsec.character('('));
     if (!m_parsec.is_fail()) {
         m_parsec.spaces();
-        m_parsec.str("ref");
+        auto id = parse_id();
         if (m_parsec.is_fail()) {
-            SYNTAXERR("expected ref");
+            SYNTAXERR("expected identifier");
             return nullptr;
         }
 
-        m_parsec.space();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected whitespace");
-            return nullptr;
+        if (id == "ref") {
+            auto ref = parse_ref();
+            ref->m_line = line;
+            ref->m_column = column;
+            return ref;
         }
-        m_parsec.spaces();
 
-        auto t = parse_type();
-        if (!t)
-            return nullptr;
-
-        m_parsec.spaces();
-        m_parsec.character(')');
-
-        auto ref = std::make_unique<ir_ref>();
-        ref->m_line = line;
-        ref->m_column = column;
-        ref->m_type = std::move(t);
-        return ref;
+        return nullptr;
     }
 
     std::string s = parse_id();
@@ -440,9 +538,41 @@ ptr_ir_type ir::parse_type() {
         t->m_line = line;
         t->m_column = column;
         return ptr_ir_type((ir_type *)t);
+    } else {
+        auto user = std::make_unique<ir_usertype>();
+        user->m_name = s;
+        user->m_line = line;
+        user->m_column = column;
+        std::cout << "user: " << s << std::endl;
+        return user;
     }
 
     return nullptr;
+}
+
+ptr_ir_type ir::parse_ref() {
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+    m_parsec.spaces();
+
+    auto t = parse_type();
+    if (!t)
+        return nullptr;
+
+    m_parsec.spaces();
+    m_parsec.character(')');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected )");
+        return nullptr;
+    }
+
+    auto ref = std::make_unique<ir_ref>();
+    ref->m_type = std::move(t);
+
+    return ref;
 }
 
 ptr_ir_defun ir::parse_defun() {
@@ -550,6 +680,13 @@ ptr_ir_defun ir::parse_defun() {
     auto expr = parse_expr();
     if (!expr)
         return nullptr;
+
+    m_parsec.spaces();
+    m_parsec.character(')');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected )");
+        return nullptr;
+    }
 
     defun->m_expr = std::move(expr);
 
@@ -723,6 +860,8 @@ ir_type *ir_defun::get_type() {
     return ret;
 }
 
+std::string ir_struct::str() { return ""; }
+
 std::string ir_scalar::str() {
     switch (m_type) {
     case TYPE_BOOL:
@@ -750,6 +889,8 @@ std::string ir_scalar::str() {
     case TYPE_INT:
         return "int";
     case TYPE_REF:
+    case TYPE_STRUCT:
+        assert(m_type != TYPE_REF && m_type != TYPE_STRUCT);
         return "";
     }
 }
@@ -1117,10 +1258,11 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
         return llvm::Type::getInt8Ty(ref.get_llvm_ctx());
     case TYPE_INT:
     case TYPE_REF:
+    case TYPE_STRUCT:
+        assert(m_type != TYPE_INT && m_type != TYPE_REF &&
+               m_type != TYPE_STRUCT);
         return nullptr;
     }
-
-    return nullptr;
 }
 
 llvm::Type *ir_ref::codegen(ir &ref) {
@@ -1375,8 +1517,8 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
 
     llvm::Function *func = builder.GetInsertBlock()->getParent();
 
-    // Create blocks for the then and else cases.  Insert the 'then' block at
-    // the end of the function.
+    // Create blocks for the then and else cases.  Insert the 'then' block
+    // at the end of the function.
     llvm::BasicBlock *then_bb = llvm::BasicBlock::Create(ctx, "then", func);
     llvm::BasicBlock *else_bb = llvm::BasicBlock::Create(ctx, "else");
     llvm::BasicBlock *merge_bb = llvm::BasicBlock::Create(ctx, "ifcont");
@@ -1458,18 +1600,42 @@ void ir::print_err(std::size_t line, std::size_t column) const {
 }
 
 void ir::print() {
-    std::cout << "[";
+    std::cout << "{\"structure definition\":[";
     int n = 0;
+    for (auto &p : m_struct) {
+        if (n > 0)
+            std::cout << ",";
+        p->print();
+        n++;
+    }
+    std::cout << "],\"function definition\":[";
+    n = 0;
     for (auto &p : m_defuns) {
         if (n > 0)
             std::cout << ",";
         p->print();
         n++;
     }
-    std::cout << "]";
+    std::cout << "]}";
 }
 
 void ir_funtype::print() {}
+
+void ir_struct::print() {
+    std::cout << "{\"struct\":{\"name\":\"" << m_name << "\",\"member\":[";
+    int n = 0;
+    for (auto &p : m_member) {
+        if (n > 0)
+            std::cout << ",";
+        p->print();
+        n++;
+    }
+    std::cout << "]}}";
+}
+
+void ir_usertype::print() {
+    std::cout << "{\"usertype\":\"" << m_name << "\"}";
+}
 
 void ir_ref::print() {
     std::cout << "{\"ref\":";

@@ -1,6 +1,6 @@
 
 ```
-$TOP := $DEFUN*
+$TOP := ($DEFUN | $DEFSTRUCT)*
 $EXPR := $LET | $ID | DECIMAL | $APPLY
 ```
 
@@ -26,7 +26,7 @@ $DECIMAL := [1-9][0-9]*
 ## Type
 
 ```
-$TYPE := $SCALAR | (ref $TYPE) | (struct $TYPE+)
+$TYPE := $SCALAR | (ref $TYPE) | (struct $TYPE+) | $ID
 ```
 
 ### Scalar Type
@@ -39,6 +39,12 @@ $SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32
 
 ```
 $LET := (let (($TYPE $ID $EXPR)+) $EXPR)
+```
+
+## Struct Definition
+
+```
+$DEFSTRUCT := (struct $ID ($ID $TYPE)+)
 ```
 
 ## Function Definition

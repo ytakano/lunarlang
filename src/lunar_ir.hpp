@@ -30,6 +30,8 @@ struct ir_type : public ir_ast {
         IRTYPE_SCALAR,
         IRTYPE_REF,
         IRTYPE_FUN,
+        IRTYPE_STRUCT,
+        IRTYPE_USER,
     };
 
     ir_type() {}
@@ -69,6 +71,35 @@ struct ir_funtype : public ir_type {
 };
 
 typedef std::unique_ptr<ir_funtype> ptr_ir_funtype;
+
+struct ir_struct : public ir_type {
+    ir_struct() { m_irtype = IRTYPE_STRUCT; }
+
+    void print();
+    ir_type *clone() { return (new ir_struct(*this)); }
+    std::string str();
+    llvm::Type *codegen(ir &ref) { return nullptr; };
+
+    std::string m_name;
+    std::unordered_map<std::string, int> m_id2idx;
+    std::vector<shared_ir_type> m_member;
+};
+
+typedef std::unique_ptr<ir_struct> ptr_ir_struct;
+
+struct ir_usertype : public ir_type {
+    ir_usertype() { m_irtype = IRTYPE_USER; }
+
+    void print();
+    ir_type *clone() { return (new ir_usertype(*this)); }
+    std::string str() { return ""; }
+    llvm::Type *codegen(ir &ref) { return nullptr; };
+
+    std::string m_name;
+    shared_ir_type m_type;
+};
+
+typedef std::unique_ptr<ir_usertype> ptr_ir_usertype;
 
 struct ir_ref : public ir_type {
     ir_ref() { m_irtype = IRTYPE_REF; }
@@ -250,11 +281,14 @@ class ir {
     llvm::LLVMContext m_llvm_ctx;
     llvm::IRBuilder<> m_llvm_builder;
     llvm::Module m_llvm_module;
-    std::list<ptr_ir_defun> m_defuns;
+    std::vector<ptr_ir_defun> m_defuns;
+    std::vector<ptr_ir_struct> m_struct;
 
     ptr_ir_expr parse_expr();
+    ptr_ir_struct parse_defstruct();
     ptr_ir_defun parse_defun();
     ptr_ir_type parse_type();
+    ptr_ir_type parse_ref();
     ptr_ir_decimal parse_decimal();
     ptr_ir_let parse_let();
     std::string parse_id();

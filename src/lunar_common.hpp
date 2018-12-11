@@ -20,6 +20,7 @@ enum CH_RESULT {
 
 enum type_spec {
     TYPE_REF,
+    TYPE_STRUCT,
     TYPE_BOOL,
     TYPE_FP64, // double
     TYPE_FP32, // float
