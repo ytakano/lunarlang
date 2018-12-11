@@ -57,6 +57,11 @@ static bool eq_type(ir_type *lhs, ir_type *rhs) {
 
         return true;
     }
+    case ir_type::IRTYPE_REF: {
+        auto t1 = (const ir_ref *)lhs;
+        auto t2 = (const ir_ref *)rhs;
+        return eq_type(t1->m_type.get(), t2->m_type.get());
+    }
     }
 }
 
@@ -334,6 +339,37 @@ ptr_ir_type ir::parse_type() {
     auto line = m_parsec.get_line();
     auto column = m_parsec.get_column();
 
+    char tmp;
+    PTRY(m_parsec, tmp, m_parsec.character('('));
+    if (!m_parsec.is_fail()) {
+        m_parsec.spaces();
+        m_parsec.str("ref");
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected ref");
+            return nullptr;
+        }
+
+        m_parsec.space();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected whitespace");
+            return nullptr;
+        }
+        m_parsec.spaces();
+
+        auto t = parse_type();
+        if (!t)
+            return nullptr;
+
+        m_parsec.spaces();
+        m_parsec.character(')');
+
+        auto ref = std::make_unique<ir_ref>();
+        ref->m_line = line;
+        ref->m_column = column;
+        ref->m_type = std::move(t);
+        return ref;
+    }
+
     std::string s = parse_id();
     if (m_parsec.is_fail())
         return nullptr;
@@ -359,6 +395,30 @@ ptr_ir_type ir::parse_type() {
     } else if (s == "s32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_S32;
+        t->m_line = line;
+        t->m_column = column;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "u16") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_U16;
+        t->m_line = line;
+        t->m_column = column;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "s16") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_S16;
+        t->m_line = line;
+        t->m_column = column;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "u8") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_U8;
+        t->m_line = line;
+        t->m_column = column;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "s8") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_S8;
         t->m_line = line;
         t->m_column = column;
         return ptr_ir_type((ir_type *)t);
@@ -679,8 +739,18 @@ std::string ir_scalar::str() {
         return "u32";
     case TYPE_S32:
         return "s32";
+    case TYPE_U16:
+        return "u16";
+    case TYPE_S16:
+        return "s16";
+    case TYPE_U8:
+        return "u8";
+    case TYPE_S8:
+        return "s8";
     case TYPE_INT:
         return "int";
+    case TYPE_REF:
+        return "";
     }
 }
 
@@ -698,6 +768,8 @@ std::string ir_funtype::str() {
 
     return ret;
 }
+
+std::string ir_ref::str() { return "ret " + m_type->str(); }
 
 bool ir::check_type() {
     for (auto &p : m_defuns) {
@@ -1037,11 +1109,23 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
     case TYPE_U32:
     case TYPE_S32:
         return llvm::Type::getInt32Ty(ref.get_llvm_ctx());
+    case TYPE_U16:
+    case TYPE_S16:
+        return llvm::Type::getInt16Ty(ref.get_llvm_ctx());
+    case TYPE_U8:
+    case TYPE_S8:
+        return llvm::Type::getInt8Ty(ref.get_llvm_ctx());
     case TYPE_INT:
+    case TYPE_REF:
         return nullptr;
     }
 
     return nullptr;
+}
+
+llvm::Type *ir_ref::codegen(ir &ref) {
+    auto t = m_type->codegen(ref);
+    return llvm::PointerType::getUnqual(t);
 }
 
 llvm::Function *ir_defun::codegen(ir &ref) {
@@ -1374,12 +1458,24 @@ void ir::print_err(std::size_t line, std::size_t column) const {
 }
 
 void ir::print() {
+    std::cout << "[";
+    int n = 0;
     for (auto &p : m_defuns) {
+        if (n > 0)
+            std::cout << ",";
         p->print();
+        n++;
     }
+    std::cout << "]";
 }
 
 void ir_funtype::print() {}
+
+void ir_ref::print() {
+    std::cout << "{\"ref\":";
+    m_type->print();
+    std::cout << "}";
+}
 
 void ir_scalar::print() { std::cout << "\"" << str() << "\""; }
 

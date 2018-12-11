@@ -28,6 +28,7 @@ struct ir_ast {
 struct ir_type : public ir_ast {
     enum IRTYPE {
         IRTYPE_SCALAR,
+        IRTYPE_REF,
         IRTYPE_FUN,
     };
 
@@ -68,6 +69,19 @@ struct ir_funtype : public ir_type {
 };
 
 typedef std::unique_ptr<ir_funtype> ptr_ir_funtype;
+
+struct ir_ref : public ir_type {
+    ir_ref() { m_irtype = IRTYPE_REF; }
+
+    void print();
+    ir_type *clone() { return (new ir_ref(*this)); }
+    std::string str();
+    llvm::Type *codegen(ir &ref);
+
+    shared_ir_type m_type;
+};
+
+typedef std::unique_ptr<ir_ref> ptr_ir_ref;
 
 struct ir_statement : public ir_ast {
     ir_statement() {}

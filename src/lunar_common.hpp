@@ -19,6 +19,7 @@ enum CH_RESULT {
 };
 
 enum type_spec {
+    TYPE_REF,
     TYPE_BOOL,
     TYPE_FP64, // double
     TYPE_FP32, // float
@@ -27,6 +28,10 @@ enum type_spec {
     TYPE_S64,
     TYPE_U32,
     TYPE_S32,
+    TYPE_U16,
+    TYPE_S16,
+    TYPE_U8,
+    TYPE_S8,
 };
 
 } // namespace lunar

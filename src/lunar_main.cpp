@@ -71,8 +71,15 @@ const char *e8 = "(defun fun u64 ((u64 num))\n"
                  "     1\n"
                  "     (fun (- num 1))))\n";
 
+const char *e9 =
+    "(defun main s64 ((s64 argc) ((ref (ref s8)) argv)) (fact 5))\n"
+    "(defun fact s64 ((s64 num))\n"
+    "    (if (= num 0)\n"
+    "     1\n"
+    "     (* num (fact (- num 1)))))\n";
+
 void world(void *arg) {
-    std::string s = e8;
+    std::string s = e9;
 
     lunar::ir ir("test.ir", s);
 

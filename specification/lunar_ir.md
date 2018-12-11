@@ -26,13 +26,13 @@ $DECIMAL := [1-9][0-9]*
 ## Type
 
 ```
-$TYPE := $SCALAR
+$TYPE := $SCALAR | (ref $TYPE) | (struct $TYPE+)
 ```
 
 ### Scalar Type
 
 ```
-$SCALAR := bool | u64 | s64 | u32 | s32 | fp64 | fp32
+$SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32
 ```
 
 ## Let
@@ -57,7 +57,7 @@ $APPLY := ($EXPR*)
 
 ```
 $OPS := ($OP $EXPR $EXPR+)
-$OP := + | - | * | /
+$OP := + | - | * | / | < | > | <= | >= | =
 ```
 
 ### Yield
