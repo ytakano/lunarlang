@@ -297,6 +297,7 @@ class ir {
     ptr_ir_type parse_ref();
     ptr_ir_decimal parse_decimal();
     ptr_ir_let parse_let();
+    bool resolve_type();
     bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);
     std::string parse_id();
 };

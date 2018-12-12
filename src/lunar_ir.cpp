@@ -879,41 +879,6 @@ ptr_ir_let ir::parse_let() {
     return let;
 }
 
-bool ir_defun::check_type(const ir &ref) {
-    ir_expr::id2type vars;
-
-    for (auto &p : m_args) {
-        vars[p->m_id].push_back(p->m_type);
-    }
-
-    if (!m_expr->check_type(ref, vars))
-        return false;
-
-    auto ret = std::make_unique<ir_id>();
-
-    if (m_ret->m_irtype == ir_type::IRTYPE_USER) {
-        auto user = ((ir_usertype *)m_ret.get());
-        auto &id2struct = ref.get_id2struct();
-        auto it = id2struct.find(user->m_name);
-        assert(it != id2struct.end());
-        ret->m_type = std::shared_ptr<ir_type>(it->second->clone());
-    } else {
-        ret->m_type = std::shared_ptr<ir_type>(m_ret->clone());
-        ret->m_type->print();
-        std::cout << std::endl;
-    }
-
-    if (!unify_type(ret.get(), m_expr.get())) {
-        TYPEERR(ref, m_expr, "unexpected type",
-                "    expected: %s\n"
-                "    actual: %s",
-                ret->m_type->str().c_str(), m_expr->m_type->str().c_str());
-        return false;
-    }
-
-    return true;
-}
-
 ir_type *ir_defun::get_type() {
     auto ret = new ir_funtype;
     ret->m_ret = shared_ir_type(m_ret->clone());
@@ -1026,6 +991,8 @@ bool ir::check_type() {
     return true;
 }
 
+bool ir::resolve_type() { return false; }
+
 bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
     for (auto &q : p->m_member) {
         if (q->m_irtype == ir_type::IRTYPE_USER) {
@@ -1043,10 +1010,46 @@ bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
                 return false;
             }
 
-            q = std::shared_ptr<ir_type>(it->second->clone());
             if (!check_recursive(it->second.get(), used))
                 return false;
+
+            q = std::shared_ptr<ir_type>(it->second->clone());
         }
+    }
+
+    return true;
+}
+
+bool ir_defun::check_type(const ir &ref) {
+    ir_expr::id2type vars;
+
+    for (auto &p : m_args) {
+        vars[p->m_id].push_back(p->m_type);
+    }
+
+    if (!m_expr->check_type(ref, vars))
+        return false;
+
+    auto ret = std::make_unique<ir_id>();
+
+    if (m_ret->m_irtype == ir_type::IRTYPE_USER) {
+        auto user = ((ir_usertype *)m_ret.get());
+        auto &id2struct = ref.get_id2struct();
+        auto it = id2struct.find(user->m_name);
+        assert(it != id2struct.end());
+        ret->m_type = std::shared_ptr<ir_type>(it->second->clone());
+    } else {
+        ret->m_type = std::shared_ptr<ir_type>(m_ret->clone());
+        ret->m_type->print();
+        std::cout << std::endl;
+    }
+
+    if (!unify_type(ret.get(), m_expr.get())) {
+        TYPEERR(ref, m_expr, "unexpected type",
+                "    expected: %s\n"
+                "    actual: %s",
+                ret->m_type->str().c_str(), m_expr->m_type->str().c_str());
+        return false;
     }
 
     return true;
