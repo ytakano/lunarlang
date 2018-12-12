@@ -89,8 +89,12 @@ const char *e11 = "(struct mystruct (u64 foo) (mystruct2 bar))\n"
 
 const char *e12 = "(defun fun (ref u32) (((ref u32) foo)) foo)";
 
+const char *e13 = "(struct mystruct (u64 foo) (u32 bar))\n"
+                  "(defun fun mystruct ((u32 foo))\n"
+                  "    (let ((mystruct x (mystruct 10 foo))) x))";
+
 void world(void *arg) {
-    std::string s = e10;
+    std::string s = e13;
 
     lunar::ir ir("test.ir", s);
 

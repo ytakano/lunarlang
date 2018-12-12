@@ -7,9 +7,9 @@
 
 #define SYNTAXERR(M)                                                           \
     do {                                                                       \
-        fprintf(stderr, "%s:%lu:%lu: syntax error: " M "\n",                   \
+        fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
                 m_filename.c_str(), m_parsec.get_line(),                       \
-                m_parsec.get_column());                                        \
+                m_parsec.get_column(), __LINE__);                              \
         print_err(m_parsec.get_line(), m_parsec.get_column());                 \
     } while (0)
 
@@ -1141,6 +1141,10 @@ shared_ir_type ir_bool::check_type(const ir &ref, id2type &vars) {
 
 shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
     for (auto &p : m_def) {
+        p->m_id->m_type = ref.resolve_type(p->m_id->m_type);
+        if (!p->m_id->m_type)
+            return nullptr;
+
         if (!p->m_expr->check_type(ref, vars))
             return nullptr;
 
