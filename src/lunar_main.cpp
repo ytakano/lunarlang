@@ -89,9 +89,13 @@ const char *e11 = "(struct mystruct (u64 foo) (mystruct2 bar))\n"
 
 const char *e12 = "(defun fun (ref u32) (((ref u32) foo)) foo)";
 
-const char *e13 = "(struct mystruct (u64 foo) (u32 bar))\n"
-                  "(defun fun mystruct ((u32 foo))\n"
-                  "    (let ((mystruct x (mystruct 10 foo))) x))";
+const char *e13 =
+    "(struct mystruct (u64 hoge))\n"
+    "(struct mystruct2 (mystruct m) (u64 foo) (u32 bar))\n"
+    "(defun fun u32 ((u32 foo))\n"
+    "    (let ((mystruct2 x (mystruct2 (mystruct 20) 10 foo))) 10))";
+
+const char *e14 = "(defun fun u32 () (let ((u32 x 20)) 10))";
 
 void world(void *arg) {
     std::string s = e13;
@@ -101,8 +105,8 @@ void world(void *arg) {
     if (ir.parse() && ir.check_type()) {
         std::cout << "{\"input\":\"" << escapeJsonString(s) << "\",\"AST\":";
         ir.print();
-        std::cout << ",\"LLVM\":\""
-                  << /*escapeJsonString(ir.codegen()) << */ "\"}" << std::endl;
+        std::cout << ",\"LLVM\":\"" << escapeJsonString(ir.codegen()) << "\"}"
+                  << std::endl;
     } else {
         std::cout << "false" << std::endl;
     }

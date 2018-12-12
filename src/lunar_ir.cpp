@@ -90,8 +90,8 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
     // unify int type
     switch (lhs->m_type->m_irtype) {
     case ir_type::IRTYPE_SCALAR: {
-        auto s1 = (const ir_scalar *)(lhs->m_type.get());
-        auto s2 = (const ir_scalar *)(rhs->m_type.get());
+        auto s1 = (ir_scalar *)(lhs->m_type.get());
+        auto s2 = (ir_scalar *)(rhs->m_type.get());
         if (s1->m_type == TYPE_INT) {
             switch (s2->m_type) {
             case TYPE_BOOL:
@@ -99,7 +99,7 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
             case TYPE_FP64:
                 return false;
             default:
-                lhs->m_type = rhs->m_type;
+                s1->m_type = s2->m_type;
                 return true;
             }
         } else if (s2->m_type == TYPE_INT) {
@@ -109,7 +109,7 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
             case TYPE_FP64:
                 return false;
             default:
-                rhs->m_type = lhs->m_type;
+                s2->m_type = s1->m_type;
                 return true;
             }
         } else {
@@ -946,8 +946,6 @@ bool ir::check_type() {
                         s->m_name.c_str());
             return false;
         }
-        m_id2struct[s->m_name] =
-            std::unique_ptr<ir_struct>((ir_struct *)s->clone());
     }
 
     for (auto &s : m_struct) {
@@ -955,6 +953,9 @@ bool ir::check_type() {
         used.insert(s->m_name);
         if (!check_recursive(s.get(), used))
             return false;
+
+        m_id2struct[s->m_name] =
+            std::unique_ptr<ir_struct>((ir_struct *)s->clone());
     }
 
     for (auto &p : m_defuns) {
@@ -1441,6 +1442,13 @@ shared_ir_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
 }
 
 std::string ir::codegen() {
+    for (auto &p : m_id2struct) {
+        auto struc = p.second->codegen(*this);
+        if (!struc)
+            return "";
+        m_struct_prot[p.second->m_name] = (llvm::StructType *)struc;
+    }
+
     for (auto &p : m_defuns) {
         auto fun = p->mkproto(*this);
         if (!fun)
@@ -1521,6 +1529,28 @@ llvm::Function *ir_defun::codegen(ir &ref) {
     }
 
     return nullptr;
+}
+
+llvm::Type *ir_struct::codegen(ir &ref) {
+    std::vector<llvm::Type *> member;
+    for (auto &p : m_member) {
+        member.push_back(p->codegen(ref));
+    }
+
+    auto ret = llvm::StructType::get(ref.get_llvm_ctx(), member);
+
+    if (ret)
+        ret->setName(m_name);
+
+    return ret;
+}
+
+llvm::Type *ir_usertype::codegen(ir &ref) {
+    auto it = ref.get_struct_proto().find(m_name);
+    if (it == ref.get_struct_proto().end())
+        return nullptr;
+
+    return it->second;
 }
 
 llvm::Function *ir_defun::mkproto(ir &ref) {
@@ -1721,11 +1751,34 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "=", "netmp");
         } else {
             // function call
+            auto it = ref.get_struct_proto().find(id->m_id);
+            if (it != ref.get_struct_proto().end()) {
+                return struct_gen(ref, vals, it->second);
+            }
             return codegen_call(ref, vals, id->m_id);
         }
     }
 
     return nullptr;
+}
+
+llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
+                                  llvm::StructType *type) {
+    // TODO: debug
+    auto &builder = ref.get_llvm_builder();
+    auto alloc = builder.CreateAlloca(type);
+
+    auto n = 0;
+    for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
+        auto t = (*it)->codegen(ref, vals);
+        if (!t)
+            return nullptr;
+
+        auto gep = builder.CreateStructGEP(alloc, n);
+        builder.CreateStore(t, gep);
+    }
+
+    return alloc;
 }
 
 llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {

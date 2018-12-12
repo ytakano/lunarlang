@@ -78,7 +78,7 @@ struct ir_struct : public ir_type {
     void print();
     ir_type *clone() const { return (new ir_struct(*this)); }
     std::string str() const;
-    llvm::Type *codegen(ir &ref) { return nullptr; };
+    llvm::Type *codegen(ir &ref);
 
     std::string m_name;
     std::unordered_map<std::string, int> m_id2idx;
@@ -93,7 +93,7 @@ struct ir_usertype : public ir_type {
     void print();
     ir_type *clone() const { return (new ir_usertype(*this)); }
     std::string str() const { return m_name; }
-    llvm::Type *codegen(ir &ref) { return nullptr; };
+    llvm::Type *codegen(ir &ref);
 
     std::string m_name;
     shared_ir_type m_type;
@@ -192,6 +192,7 @@ struct ir_apply : public ir_expr {
     shared_ir_type check_eq(const ir &ref, id2type &vars);
     shared_ir_type check_call(const ir &ref, id2type &vars,
                               const std::string &id);
+    llvm::Value *struct_gen(ir &ref, id2val vals, llvm::StructType *type);
     llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
     llvm::Value *codegen_call(ir &ref, id2val vals, const std::string &id);
 };
@@ -268,6 +269,10 @@ class ir {
     get_id2struct() const {
         return m_id2struct;
     }
+    const std::unordered_map<std::string, llvm::StructType *> &
+    get_struct_proto() const {
+        return m_struct_prot;
+    }
     llvm::Function *get_function(const std::string &name) {
         auto it = m_funs_prot.find(name);
         if (it == m_funs_prot.end())
@@ -286,6 +291,7 @@ class ir {
     std::unordered_map<std::string, std::shared_ptr<ir_funtype>> m_id2fun;
     std::unordered_map<std::string, ptr_ir_struct> m_id2struct;
     std::unordered_map<std::string, llvm::Function *> m_funs_prot;
+    std::unordered_map<std::string, llvm::StructType *> m_struct_prot;
     llvm::LLVMContext m_llvm_ctx;
     llvm::IRBuilder<> m_llvm_builder;
     llvm::Module m_llvm_module;
