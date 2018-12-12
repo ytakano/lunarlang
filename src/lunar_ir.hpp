@@ -128,20 +128,21 @@ struct ir_defun : public ir_statement {
     ir_defun() {}
     virtual ~ir_defun() {}
 
-    ir_type *get_type();
-
     void print();
     bool check_type(const ir &ref);
     llvm::Function *mkproto(ir &ref);
     llvm::Function *codegen(ir &ref);
 
-    ir_funtype m_funtype;
+    std::shared_ptr<ir_funtype> m_funtype;
 
     std::string m_name;
     ptr_ir_type m_ret;
     std::vector<ptr_ir_id> m_args;
     ptr_ir_expr m_expr;
     llvm::Function *m_fun;
+
+  private:
+    void resolve_funtype();
 };
 
 typedef std::unique_ptr<ir_defun> ptr_ir_defun;
@@ -249,6 +250,7 @@ class ir {
 
     bool parse();
     bool check_type();
+    shared_ir_type resolve_type(shared_ir_type type) const;
     std::string codegen();
     void print();
     void print_err(std::size_t line, std::size_t column) const;
@@ -258,8 +260,9 @@ class ir {
     llvm::IRBuilder<> &get_llvm_builder() { return m_llvm_builder; }
 
     std::string get_filename() const { return m_filename; }
-    const std::unordered_map<std::string, ptr_ir_funtype> &get_funs() const {
-        return m_funs;
+    const std::unordered_map<std::string, std::shared_ptr<ir_funtype>> &
+    get_funs() const {
+        return m_id2fun;
     }
     const std::unordered_map<std::string, ptr_ir_struct> &
     get_id2struct() const {
@@ -280,7 +283,7 @@ class ir {
     std::unordered_set<char> m_no_id_char;
     std::unordered_set<char> m_0to9;
     std::unordered_set<char> m_1to9;
-    std::unordered_map<std::string, ptr_ir_funtype> m_funs;
+    std::unordered_map<std::string, std::shared_ptr<ir_funtype>> m_id2fun;
     std::unordered_map<std::string, ptr_ir_struct> m_id2struct;
     std::unordered_map<std::string, llvm::Function *> m_funs_prot;
     llvm::LLVMContext m_llvm_ctx;
@@ -297,7 +300,6 @@ class ir {
     ptr_ir_type parse_ref();
     ptr_ir_decimal parse_decimal();
     ptr_ir_let parse_let();
-    bool resolve_type();
     bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);
     std::string parse_id();
 };

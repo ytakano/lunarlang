@@ -879,17 +879,6 @@ ptr_ir_let ir::parse_let() {
     return let;
 }
 
-ir_type *ir_defun::get_type() {
-    auto ret = new ir_funtype;
-    ret->m_ret = shared_ir_type(m_ret->clone());
-
-    for (auto &p : m_args) {
-        ret->m_args.push_back(shared_ir_type(p->m_type->clone()));
-    }
-
-    return ret;
-}
-
 std::string ir_struct::str() const {
     std::string s = "(struct";
     for (auto &p : m_member) {
@@ -969,12 +958,12 @@ bool ir::check_type() {
     }
 
     for (auto &p : m_defuns) {
-        if (HASKEY(m_funs, p->m_name) || HASKEY(m_id2struct, p->m_name)) {
+        if (HASKEY(m_id2fun, p->m_name) || HASKEY(m_id2struct, p->m_name)) {
             SEMANTICERR(*this, p.get(), "%s is multiply defined",
                         p->m_name.c_str());
             return false;
         }
-        m_funs[p->m_name] = ptr_ir_funtype((ir_funtype *)p->get_type());
+        m_id2fun[p->m_name] = p->m_funtype;
     }
 
     for (auto &p : m_defuns) {
@@ -991,7 +980,73 @@ bool ir::check_type() {
     return true;
 }
 
-bool ir::resolve_type() { return false; }
+shared_ir_type ir::resolve_type(shared_ir_type type) const {
+    switch (type->m_irtype) {
+    case ir_type::IRTYPE_SCALAR:
+        return type;
+    case ir_type::IRTYPE_STRUCT: {
+        auto p = (ir_struct *)type.get();
+        for (auto &q : p->m_member) {
+            auto t = resolve_type(q);
+            if (t)
+                q = t;
+            else
+                return nullptr;
+        }
+
+        return type;
+    }
+    case ir_type::IRTYPE_REF: {
+        auto p = (ir_ref *)type.get();
+        if (p->m_type->m_irtype == ir_type::IRTYPE_USER) {
+            auto t = resolve_type(p->m_type);
+            if (t)
+                p->m_type = t;
+            else
+                return nullptr;
+        }
+        return type;
+    }
+    case ir_type::IRTYPE_USER: {
+        auto p = (ir_usertype *)type.get();
+        auto it = m_id2struct.find(p->m_name);
+        if (it == m_id2struct.end()) {
+            SEMANTICERR(*this, type, "%s is undefined", p->m_name.c_str());
+            return nullptr;
+        }
+        return shared_ir_type(it->second->clone());
+    }
+    case ir_type::IRTYPE_FUN: {
+        auto p = (ir_funtype *)type.get();
+        auto t = resolve_type(p->m_ret);
+        if (t)
+            p->m_ret = t;
+        else
+            return nullptr;
+
+        for (auto &q : p->m_args) {
+            auto u = resolve_type(q);
+            if (u)
+                q = u;
+            else
+                return nullptr;
+        }
+
+        return type;
+    }
+    }
+
+    return nullptr;
+}
+
+void ir_defun::resolve_funtype() {
+    m_funtype = std::make_shared<ir_funtype>();
+    m_funtype->m_ret = shared_ir_type(m_ret->clone());
+
+    for (auto &q : m_args) {
+        m_funtype->m_args.push_back(shared_ir_type(q->m_type->clone()));
+    }
+}
 
 bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
     for (auto &q : p->m_member) {
@@ -1023,26 +1078,24 @@ bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
 bool ir_defun::check_type(const ir &ref) {
     ir_expr::id2type vars;
 
+    resolve_funtype();
+
+    m_funtype =
+        std::static_pointer_cast<ir_funtype>(ref.resolve_type(m_funtype));
+    if (!m_funtype)
+        return false;
+
+    int n = 0;
     for (auto &p : m_args) {
-        vars[p->m_id].push_back(p->m_type);
+        vars[p->m_id].push_back(m_funtype->m_args[n]);
+        n++;
     }
 
     if (!m_expr->check_type(ref, vars))
         return false;
 
     auto ret = std::make_unique<ir_id>();
-
-    if (m_ret->m_irtype == ir_type::IRTYPE_USER) {
-        auto user = ((ir_usertype *)m_ret.get());
-        auto &id2struct = ref.get_id2struct();
-        auto it = id2struct.find(user->m_name);
-        assert(it != id2struct.end());
-        ret->m_type = std::shared_ptr<ir_type>(it->second->clone());
-    } else {
-        ret->m_type = std::shared_ptr<ir_type>(m_ret->clone());
-        ret->m_type->print();
-        std::cout << std::endl;
-    }
+    ret->m_type = m_funtype->m_ret;
 
     if (!unify_type(ret.get(), m_expr.get())) {
         TYPEERR(ref, m_expr, "unexpected type",
