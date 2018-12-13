@@ -1600,9 +1600,38 @@ llvm::Value *ir_id::codegen(ir &ref, ir_expr::id2val &vals) {
 }
 
 llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
+    auto &builder = ref.get_llvm_builder();
+    auto &ctx = ref.get_llvm_ctx();
+    auto &layout = ref.get_llvm_datalayout();
 
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
+        if (p->m_expr->m_type->m_irtype == ir_type::IRTYPE_STRUCT &&
+            p->m_expr->m_expr_type == EXPRAPPLY) {
+            auto apply = (ir_apply *)p->m_expr.get();
+            if (apply->m_expr.size() > 0 &&
+                apply->m_expr[0]->m_expr_type == EXPRID) {
+                auto id = (ir_id *)apply->m_expr[0].get();
+                if (HASKEY(ref.get_id2struct(), id->m_id)) {
+                    // deep copy
+                    auto type = p->m_expr->m_type->codegen(ref);
+                    auto ptr =
+                        builder.CreateAlloca(p->m_expr->m_type->codegen(ref));
+                    std::vector<llvm::Value *> args;
+                    auto i8ptr = llvm::PointerType::getUnqual(
+                        llvm::IntegerType::get(ctx, 8));
+                    args.push_back(builder.CreateBitCast(ptr, i8ptr));
+                    args.push_back(builder.CreateBitCast(v, i8ptr));
+                    args.push_back(llvm::ConstantInt::get(
+                        ctx,
+                        llvm::APInt(64, layout.getTypeAllocSize(type), false)));
+                    args.push_back(llvm::ConstantInt::get(
+                        ref.get_llvm_ctx(), llvm::APInt(1, 0, false)));
+                    builder.CreateCall(ref.get_llvm_memcpy(), args,
+                                       "memcpytmp");
+                }
+            }
+        }
         vals[p->m_id->m_id].push_back(v);
     }
 
@@ -1825,8 +1854,8 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
 
     llvm::Function *func = builder.GetInsertBlock()->getParent();
 
-    // Create blocks for the then and else cases.  Insert the 'then' block
-    // at the end of the function.
+    // Create blocks for the then and else cases.  Insert the 'then'
+    // block at the end of the function.
     llvm::BasicBlock *then_bb = llvm::BasicBlock::Create(ctx, "then", func);
     llvm::BasicBlock *else_bb = llvm::BasicBlock::Create(ctx, "else");
     llvm::BasicBlock *merge_bb = llvm::BasicBlock::Create(ctx, "ifcont");
@@ -1841,8 +1870,8 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
         return nullptr;
 
     builder.CreateBr(merge_bb);
-    // Codegen of 'Then' can change the current block, update ThenBB for the
-    // PHI.
+    // Codegen of 'Then' can change the current block, update ThenBB for
+    // the PHI.
     then_bb = builder.GetInsertBlock();
 
     // Emit else block.
@@ -1854,8 +1883,8 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
         return nullptr;
 
     builder.CreateBr(merge_bb);
-    // Codegen of 'Else' can change the current block, update ElseBB for the
-    // PHI.
+    // Codegen of 'Else' can change the current block, update ElseBB for
+    // the PHI.
     else_bb = builder.GetInsertBlock();
 
     // Emit merge block.
