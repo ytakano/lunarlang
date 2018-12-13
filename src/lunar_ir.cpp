@@ -139,7 +139,7 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
 
 ir::ir(const std::string &filename, const std::string &str)
     : m_filename(filename), m_parsec(str), m_llvm_builder(m_llvm_ctx),
-      m_llvm_module(filename, m_llvm_ctx) {
+      m_llvm_module(filename, m_llvm_ctx), m_llvm_datalayout(&m_llvm_module) {
 
     m_no_id_char.insert(' ');
     m_no_id_char.insert('\r');
@@ -1456,6 +1456,19 @@ std::string ir::codegen() {
         m_funs_prot[p->m_name] = fun;
     }
 
+    // Declare the memcpy
+    std::vector<llvm::Type *> vec;
+    auto i8ptr =
+        llvm::PointerType::getUnqual(llvm::IntegerType::get(m_llvm_ctx, 8));
+    vec.push_back(i8ptr); /* i8 */
+    vec.push_back(i8ptr); /* i8 */
+    vec.push_back(llvm::IntegerType::get(m_llvm_ctx, 64));
+    vec.push_back(llvm::IntegerType::get(m_llvm_ctx, 1));
+    m_memcpy = llvm::Intrinsic::getDeclaration(&m_llvm_module,
+                                               llvm::Intrinsic::memcpy, vec);
+
+    assert(m_memcpy != nullptr);
+
     for (auto &p : m_defuns) {
         if (!p->codegen(*this))
             return "";
@@ -1744,11 +1757,11 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
         } else if (id->m_id == "if") {
             return codegen_ifexpr(ref, vals);
         } else if (id->m_id == ">=") {
-            BINOP(CreateICmpUGE, CreateICmpSGE, CreateFCmpOGE, "<", "getmp");
+            BINOP(CreateICmpUGE, CreateICmpSGE, CreateFCmpOGE, ">=", "getmp");
         } else if (id->m_id == "<=") {
-            BINOP(CreateICmpULE, CreateICmpSLE, CreateFCmpOLE, "<", "letmp");
+            BINOP(CreateICmpULE, CreateICmpSLE, CreateFCmpOLE, "<=", "letmp");
         } else if (id->m_id == "!=") {
-            BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "=", "netmp");
+            BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "!=", "netmp");
         } else {
             // function call
             auto it = ref.get_struct_proto().find(id->m_id);
@@ -1764,21 +1777,39 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
                                   llvm::StructType *type) {
-    // TODO: debug
     auto &builder = ref.get_llvm_builder();
     auto alloc = builder.CreateAlloca(type);
 
-    auto n = 0;
-    for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
-        auto t = (*it)->codegen(ref, vals);
-        if (!t)
-            return nullptr;
-
-        auto gep = builder.CreateStructGEP(alloc, n);
-        builder.CreateStore(t, gep);
-    }
+    struct_gen2(ref, vals, type, m_expr, alloc);
 
     return alloc;
+}
+
+void ir_apply::struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
+                           std::vector<ptr_ir_expr> &exprs, llvm::Value *gep) {
+    auto &builder = ref.get_llvm_builder();
+
+    int n = 0;
+    for (auto it = exprs.begin() + 1; it != exprs.end(); ++it, n++) {
+        auto ptr = builder.CreateStructGEP(type, gep, n);
+
+        if ((*it)->m_expr_type == EXPRAPPLY) {
+            auto apply = (ir_apply *)it->get();
+            if (apply->m_expr.size() > 0 &&
+                apply->m_expr[0]->m_expr_type == EXPRID) {
+                auto id = (ir_id *)apply->m_expr[0].get();
+                if (HASKEY(ref.get_id2struct(), id->m_id)) {
+                    struct_gen2(ref, vals,
+                                (llvm::StructType *)apply->m_type->codegen(ref),
+                                apply->m_expr, ptr);
+                    continue;
+                }
+            }
+        }
+
+        auto t = (*it)->codegen(ref, vals);
+        builder.CreateStore(t, ptr);
+    }
 }
 
 llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {

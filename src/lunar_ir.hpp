@@ -151,7 +151,15 @@ struct ir_expr : public ir_ast {
     ir_expr() : m_expr_type(EXPRVAL) {}
     virtual ~ir_expr() {}
 
-    enum EXPRTYPE { EXPRNOP, EXPRID, EXPRVAL };
+    enum EXPRTYPE {
+        EXPRNOP,
+        EXPRID,
+        EXPRVAL,
+        EXPRAPPLY,
+        EXPRDECIMAL,
+        EXPRBOOL,
+        EXPRLET
+    };
 
     typedef std::unordered_map<std::string, std::deque<shared_ir_type>> id2type;
     typedef std::unordered_map<std::string, std::deque<llvm::Value *>> id2val;
@@ -176,7 +184,7 @@ struct ir_id : public ir_expr {
 };
 
 struct ir_apply : public ir_expr {
-    ir_apply() {}
+    ir_apply() { m_expr_type = EXPRAPPLY; }
     virtual ~ir_apply() {}
 
     shared_ir_type check_type(const ir &ref, id2type &vars);
@@ -193,6 +201,8 @@ struct ir_apply : public ir_expr {
     shared_ir_type check_call(const ir &ref, id2type &vars,
                               const std::string &id);
     llvm::Value *struct_gen(ir &ref, id2val vals, llvm::StructType *type);
+    void struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
+                     std::vector<ptr_ir_expr> &exprs, llvm::Value *gep);
     llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
     llvm::Value *codegen_call(ir &ref, id2val vals, const std::string &id);
 };
@@ -200,7 +210,7 @@ struct ir_apply : public ir_expr {
 typedef std::unique_ptr<ir_apply> ptr_ir_apply;
 
 struct ir_decimal : public ir_expr {
-    ir_decimal() {}
+    ir_decimal() { m_expr_type = EXPRDECIMAL; }
     virtual ~ir_decimal() {}
 
     shared_ir_type check_type(const ir &ref, id2type &vars);
@@ -213,7 +223,7 @@ struct ir_decimal : public ir_expr {
 typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
 
 struct ir_bool : public ir_expr {
-    ir_bool() {}
+    ir_bool() { m_expr_type = EXPRBOOL; }
     virtual ~ir_bool() {}
 
     shared_ir_type check_type(const ir &ref, id2type &vars);
@@ -226,7 +236,7 @@ struct ir_bool : public ir_expr {
 typedef std::unique_ptr<ir_bool> ptr_ir_bool;
 
 struct ir_let : public ir_expr {
-    ir_let() {}
+    ir_let() { m_expr_type = EXPRLET; }
     virtual ~ir_let() {}
 
     struct var {
@@ -259,6 +269,8 @@ class ir {
     llvm::LLVMContext &get_llvm_ctx() { return m_llvm_ctx; }
     llvm::Module &get_llvm_module() { return m_llvm_module; }
     llvm::IRBuilder<> &get_llvm_builder() { return m_llvm_builder; }
+    llvm::DataLayout &get_llvm_datalayout() { return m_llvm_datalayout; }
+    llvm::Function *get_llvm_memcpy() { return m_memcpy; }
 
     std::string get_filename() const { return m_filename; }
     const std::unordered_map<std::string, std::shared_ptr<ir_funtype>> &
@@ -295,6 +307,8 @@ class ir {
     llvm::LLVMContext m_llvm_ctx;
     llvm::IRBuilder<> m_llvm_builder;
     llvm::Module m_llvm_module;
+    llvm::DataLayout m_llvm_datalayout;
+    llvm::Function *m_memcpy;
     std::vector<ptr_ir_defun> m_defuns;
     std::vector<ptr_ir_struct> m_struct;
 
