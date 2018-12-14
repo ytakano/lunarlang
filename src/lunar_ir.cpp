@@ -1441,6 +1441,21 @@ shared_ir_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
     return m_type;
 }
 
+bool ir::is_structgen(ir_expr *expr) {
+    if (expr->m_expr_type == ir_expr::EXPRAPPLY) {
+        auto apply = (ir_apply *)expr;
+        if (apply->m_expr.size() > 0 &&
+            apply->m_expr[0]->m_expr_type == ir_expr::EXPRID) {
+            auto id = (ir_id *)apply->m_expr[0].get();
+            if (HASKEY(m_id2struct, id->m_id)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 std::string ir::codegen() {
     for (auto &p : m_id2struct) {
         auto struc = p.second->codegen(*this);
@@ -1606,32 +1621,22 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
 
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
-        if (p->m_expr->m_type->m_irtype == ir_type::IRTYPE_STRUCT &&
-            p->m_expr->m_expr_type == EXPRAPPLY) {
-            auto apply = (ir_apply *)p->m_expr.get();
-            if (apply->m_expr.size() > 0 &&
-                apply->m_expr[0]->m_expr_type == EXPRID) {
-                auto id = (ir_id *)apply->m_expr[0].get();
-                if (HASKEY(ref.get_id2struct(), id->m_id)) {
-                    // deep copy
-                    auto type = p->m_expr->m_type->codegen(ref);
-                    auto ptr =
-                        builder.CreateAlloca(p->m_expr->m_type->codegen(ref));
-                    std::vector<llvm::Value *> args;
-                    auto i8ptr = llvm::PointerType::getUnqual(
-                        llvm::IntegerType::get(ctx, 8));
-                    args.push_back(builder.CreateBitCast(ptr, i8ptr));
-                    args.push_back(builder.CreateBitCast(v, i8ptr));
-                    args.push_back(llvm::ConstantInt::get(
-                        ctx,
-                        llvm::APInt(64, layout.getTypeAllocSize(type), false)));
-                    args.push_back(llvm::ConstantInt::get(
-                        ref.get_llvm_ctx(), llvm::APInt(1, 0, false)));
-                    builder.CreateCall(ref.get_llvm_memcpy(), args,
-                                       "memcpytmp");
-                }
-            }
+        if (!ref.is_structgen(p->m_expr.get())) {
+            // deep copy
+            auto type = p->m_expr->m_type->codegen(ref);
+            auto ptr = builder.CreateAlloca(p->m_expr->m_type->codegen(ref));
+            std::vector<llvm::Value *> args;
+            auto i8ptr =
+                llvm::PointerType::getUnqual(llvm::IntegerType::get(ctx, 8));
+            args.push_back(builder.CreateBitCast(ptr, i8ptr));
+            args.push_back(builder.CreateBitCast(v, i8ptr));
+            args.push_back(llvm::ConstantInt::get(
+                ctx, llvm::APInt(64, layout.getTypeAllocSize(type), false)));
+            args.push_back(llvm::ConstantInt::get(ref.get_llvm_ctx(),
+                                                  llvm::APInt(1, 0, false)));
+            builder.CreateCall(ref.get_llvm_memcpy(), args, "memcpytmp");
         }
+
         vals[p->m_id->m_id].push_back(v);
     }
 
@@ -1822,18 +1827,12 @@ void ir_apply::struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
     for (auto it = exprs.begin() + 1; it != exprs.end(); ++it, n++) {
         auto ptr = builder.CreateStructGEP(type, gep, n);
 
-        if ((*it)->m_expr_type == EXPRAPPLY) {
+        if (ref.is_structgen(it->get())) {
             auto apply = (ir_apply *)it->get();
-            if (apply->m_expr.size() > 0 &&
-                apply->m_expr[0]->m_expr_type == EXPRID) {
-                auto id = (ir_id *)apply->m_expr[0].get();
-                if (HASKEY(ref.get_id2struct(), id->m_id)) {
-                    struct_gen2(ref, vals,
-                                (llvm::StructType *)apply->m_type->codegen(ref),
-                                apply->m_expr, ptr);
-                    continue;
-                }
-            }
+            struct_gen2(ref, vals,
+                        (llvm::StructType *)apply->m_type->codegen(ref),
+                        apply->m_expr, ptr);
+            continue;
         }
 
         auto t = (*it)->codegen(ref, vals);

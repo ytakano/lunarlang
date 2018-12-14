@@ -292,6 +292,7 @@ class ir {
 
         return it->second;
     }
+    bool is_structgen(ir_expr *expr);
 
   private:
     parsec m_parsec;
