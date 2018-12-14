@@ -15,9 +15,9 @@
 
 #define SEMANTICERR(IR, AST, M, ...)                                           \
     do {                                                                       \
-        fprintf(stderr, "%s:%lu:%lu: semantic error: " M "\n",                 \
+        fprintf(stderr, "%s:%lu:%lu:(%d) semantic error: " M "\n",             \
                 (IR).get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
-                ##__VA_ARGS__);                                                \
+                __LINE__, ##__VA_ARGS__);                                      \
         (IR).print_err((AST)->m_line, (AST)->m_column);                        \
     } while (0)
 
@@ -1456,6 +1456,19 @@ bool ir::is_structgen(ir_expr *expr) {
     return false;
 }
 
+void ir::llvm_memcpy(llvm::Value *dst, llvm::Value *src, size_t size) {
+    std::vector<llvm::Value *> args;
+    auto i8ptr =
+        llvm::PointerType::getUnqual(llvm::IntegerType::get(m_llvm_ctx, 8));
+    args.push_back(m_llvm_builder.CreateBitCast(dst, i8ptr));
+    args.push_back(m_llvm_builder.CreateBitCast(src, i8ptr));
+    args.push_back(
+        llvm::ConstantInt::get(m_llvm_ctx, llvm::APInt(64, size, false)));
+    args.push_back(
+        llvm::ConstantInt::get(m_llvm_ctx, llvm::APInt(1, 0, false)));
+    m_llvm_builder.CreateCall(m_memcpy, args, "memcpytmp");
+}
+
 std::string ir::codegen() {
     for (auto &p : m_id2struct) {
         auto struc = p.second->codegen(*this);
@@ -1625,16 +1638,7 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
             // deep copy
             auto type = p->m_expr->m_type->codegen(ref);
             auto ptr = builder.CreateAlloca(p->m_expr->m_type->codegen(ref));
-            std::vector<llvm::Value *> args;
-            auto i8ptr =
-                llvm::PointerType::getUnqual(llvm::IntegerType::get(ctx, 8));
-            args.push_back(builder.CreateBitCast(ptr, i8ptr));
-            args.push_back(builder.CreateBitCast(v, i8ptr));
-            args.push_back(llvm::ConstantInt::get(
-                ctx, llvm::APInt(64, layout.getTypeAllocSize(type), false)));
-            args.push_back(llvm::ConstantInt::get(ref.get_llvm_ctx(),
-                                                  llvm::APInt(1, 0, false)));
-            builder.CreateCall(ref.get_llvm_memcpy(), args, "memcpytmp");
+            ref.llvm_memcpy(ptr, v, layout.getTypeAllocSize(type));
         }
 
         vals[p->m_id->m_id].push_back(v);

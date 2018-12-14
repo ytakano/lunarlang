@@ -293,6 +293,7 @@ class ir {
         return it->second;
     }
     bool is_structgen(ir_expr *expr);
+    void llvm_memcpy(llvm::Value *dst, llvm::Value *src, size_t size);
 
   private:
     parsec m_parsec;
