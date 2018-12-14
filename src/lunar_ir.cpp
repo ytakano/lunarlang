@@ -1229,6 +1229,8 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
             return check_magnitude(ref, vars, id->m_id);
         } else if (id->m_id == "!=") {
             return check_eq(ref, vars);
+        } else if (id->m_id == "ref") {
+            return check_ref(ref, vars);
         } else {
             // function call
             return check_call(ref, vars, id->m_id);
@@ -1238,6 +1240,31 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
     // lambda or higher order function
 
     return nullptr;
+}
+
+shared_ir_type ir_apply::check_ref(const ir &ref, id2type &vars) {
+    if (m_expr.size() != 2) {
+        SEMANTICERR(ref, this, "ref requires exactly 1 arguments");
+        return nullptr;
+    }
+
+    auto type = m_expr[1]->check_type(ref, vars);
+    if (!type)
+        return nullptr;
+
+    if (type->m_irtype != ir_type::IRTYPE_STRUCT &&
+        type->m_irtype != ir_type::IRTYPE_REF) {
+        SEMANTICERR(
+            ref, this,
+            "ref requires an argument whose type is structure or reference");
+        return nullptr;
+    }
+
+    auto ret = std::make_shared<ir_ref>();
+    ret->m_type = type;
+    m_type = ret;
+
+    return ret;
 }
 
 shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
@@ -1800,6 +1827,8 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             BINOP(CreateICmpULE, CreateICmpSLE, CreateFCmpOLE, "<=", "letmp");
         } else if (id->m_id == "!=") {
             BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "!=", "netmp");
+        } else if (id->m_id == "ref") {
+            return m_expr[1]->codegen(ref, vals);
         } else {
             // function call
             auto it = ref.get_struct_proto().find(id->m_id);
@@ -1811,6 +1840,11 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
     }
 
     return nullptr;
+}
+
+llvm::Value *ir_apply::codegen_ref(ir &ref, id2val vals) {
+    assert(false);
+    return nullptr; // never reach here
 }
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
