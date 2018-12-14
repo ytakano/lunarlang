@@ -1661,7 +1661,8 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
 
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
-        if (!ref.is_structgen(p->m_expr.get())) {
+        if (p->m_expr->m_type->m_irtype == ir_type::IRTYPE_STRUCT &&
+            !ref.is_structgen(p->m_expr.get())) {
             // deep copy
             auto type = p->m_expr->m_type->codegen(ref);
             auto ptr = builder.CreateAlloca(p->m_expr->m_type->codegen(ref));
