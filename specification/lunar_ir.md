@@ -72,6 +72,8 @@ $OP := + | - | * | / | < | > | <= | >= | =
 $REF := (ref $EXPR)
 ```
 
+$EXPR must be structure type
+
 ### Yield
 
 ```

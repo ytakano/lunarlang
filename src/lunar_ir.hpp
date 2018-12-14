@@ -204,7 +204,6 @@ struct ir_apply : public ir_expr {
     llvm::Value *struct_gen(ir &ref, id2val vals, llvm::StructType *type);
     void struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
                      std::vector<ptr_ir_expr> &exprs, llvm::Value *gep);
-    llvm::Value *codegen_ref(ir &ref, id2val vals);
     llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
     llvm::Value *codegen_call(ir &ref, id2val vals, const std::string &id);
 };

@@ -1252,11 +1252,9 @@ shared_ir_type ir_apply::check_ref(const ir &ref, id2type &vars) {
     if (!type)
         return nullptr;
 
-    if (type->m_irtype != ir_type::IRTYPE_STRUCT &&
-        type->m_irtype != ir_type::IRTYPE_REF) {
-        SEMANTICERR(
-            ref, this,
-            "ref requires an argument whose type is structure or reference");
+    if (type->m_irtype != ir_type::IRTYPE_STRUCT) {
+        SEMANTICERR(ref, this,
+                    "ref requires an argument whose type is structure");
         return nullptr;
     }
 
@@ -1571,7 +1569,6 @@ llvm::Type *ir_ref::codegen(ir &ref) {
 }
 
 llvm::Function *ir_defun::codegen(ir &ref) {
-
     // bind variables
     ir_expr::id2val vars;
     unsigned i = 0;
@@ -1841,11 +1838,6 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
     }
 
     return nullptr;
-}
-
-llvm::Value *ir_apply::codegen_ref(ir &ref, id2val vals) {
-    assert(false);
-    return nullptr; // never reach here
 }
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
