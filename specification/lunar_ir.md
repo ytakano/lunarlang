@@ -26,7 +26,9 @@ $DECIMAL := [1-9][0-9]*
 ## Type
 
 ```
-$TYPE := $SCALAR | (ref $TYPE) | (struct $TYPE+) | $ID
+$TYPE := $SCALAR | (ref $REFTYPE)
+$REFTYPE := (struct $IDTYPE+)
+$IDTYPE := $TYPE | $ID
 ```
 
 ### Scalar Type
@@ -44,7 +46,8 @@ $LET := (let (($TYPE $ID $EXPR)+) $EXPR)
 ## Struct Definition
 
 ```
-$DEFSTRUCT := (struct $ID ($TYPE $ID)+)
+$DEFSTRUCT := (struct $ID ($STRUCTMEM $ID)+)
+$STRUCTMEM := $SCALAR | $ID | (struct $STRUCTMEM) | (ref $STRUCTMEM)
 ```
 
 ## Function Definition
