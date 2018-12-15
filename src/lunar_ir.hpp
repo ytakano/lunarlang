@@ -141,7 +141,6 @@ struct ir_defun : public ir_statement {
     ptr_ir_expr m_expr;
     llvm::Function *m_fun;
 
-  private:
     void resolve_funtype();
 };
 

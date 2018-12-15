@@ -100,7 +100,7 @@ const char *e13 =
 const char *e14 = "(defun fun u32 () (let ((u32 x 20)) 10))";
 
 void world(void *arg) {
-    std::string s = e13;
+    std::string s = e9;
 
     lunar::ir ir("test.ir", s);
 

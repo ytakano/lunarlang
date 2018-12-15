@@ -964,6 +964,8 @@ bool ir::check_type() {
                         p->m_name.c_str());
             return false;
         }
+
+        p->resolve_funtype();
         m_id2fun[p->m_name] = p->m_funtype;
     }
 
@@ -1078,8 +1080,6 @@ bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
 
 bool ir_defun::check_type(const ir &ref) {
     ir_expr::id2type vars;
-
-    resolve_funtype();
 
     m_funtype =
         std::static_pointer_cast<ir_funtype>(ref.resolve_type(m_funtype));
