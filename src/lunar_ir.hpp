@@ -318,6 +318,8 @@ class ir {
     ptr_ir_struct parse_defstruct();
     ptr_ir_defun parse_defun();
     ptr_ir_type parse_type();
+    ptr_ir_type parse_reftype();
+    ptr_ir_type parse_scalartype();
     ptr_ir_struct parse_struct();
     ptr_ir_type parse_ref();
     ptr_ir_decimal parse_decimal();

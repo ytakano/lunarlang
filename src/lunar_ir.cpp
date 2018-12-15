@@ -13,6 +13,13 @@
         print_err(m_parsec.get_line(), m_parsec.get_column());                 \
     } while (0)
 
+#define SYNTAXERR2(M, LINE, COLUMN)                                            \
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
+                m_filename.c_str(), LINE, COLUMN, __LINE__);                   \
+        print_err(m_parsec.get_line(), m_parsec.get_column());                 \
+    } while (0)
+
 #define SEMANTICERR(IR, AST, M, ...)                                           \
     do {                                                                       \
         fprintf(stderr, "%s:%lu:%lu:(%d) semantic error: " M "\n",             \
@@ -285,13 +292,15 @@ ptr_ir_struct ir::parse_defstruct() {
         auto line = m_parsec.get_line();
         auto column = m_parsec.get_column();
 
-        auto t = parse_type();
+        auto t = parse_reftype();
         if (!t)
             return nullptr;
 
         m_parsec.space();
-        if (m_parsec.is_fail())
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected whitespace");
             return nullptr;
+        }
 
         auto id = parse_id();
         if (m_parsec.is_fail()) {
@@ -475,95 +484,85 @@ ptr_ir_type ir::parse_type() {
             ref->m_line = line;
             ref->m_column = column;
             return ref;
-        } else if (id == "struct") {
-            auto st = parse_struct();
-            st->m_line = line;
-            st->m_column = column;
-            return st;
         }
 
+        SYNTAXERR2("expected type specifiler", line, column);
         return nullptr;
     }
 
-    std::string s = parse_id();
-    if (m_parsec.is_fail())
+    auto s = parse_scalartype();
+    if (s->m_irtype == ir_type::IRTYPE_USER) {
+        SYNTAXERR2("unexpected type", line, column);
         return nullptr;
+    }
+
+    if (s) {
+        s->m_line = line;
+        s->m_column = column;
+    }
+
+    return s;
+}
+
+ptr_ir_type ir::parse_scalartype() {
+    std::string s = parse_id();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected identifier");
+        return nullptr;
+    }
 
     if (s == "u64") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U64;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "s64") {
         auto t = new ir_scalar;
         t->m_type = TYPE_S64;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "u32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U32;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "s32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_S32;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "u16") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U16;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "s16") {
         auto t = new ir_scalar;
         t->m_type = TYPE_S16;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "u8") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U8;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "s8") {
         auto t = new ir_scalar;
         t->m_type = TYPE_S8;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "bool") {
         auto t = new ir_scalar;
         t->m_type = TYPE_BOOL;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "fp64") {
         auto t = new ir_scalar;
         t->m_type = TYPE_FP32;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "fp32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_FP32;
-        t->m_line = line;
-        t->m_column = column;
         return ptr_ir_type((ir_type *)t);
     } else {
         auto user = std::make_unique<ir_usertype>();
         user->m_name = s;
-        user->m_line = line;
-        user->m_column = column;
         return user;
     }
 
-    return nullptr;
+    assert(false);
+    return nullptr; // never reach here
 }
 
 ptr_ir_struct ir::parse_struct() {
@@ -577,7 +576,7 @@ ptr_ir_struct ir::parse_struct() {
     auto st = std::make_unique<ir_struct>();
 
     for (;;) {
-        auto t = parse_type();
+        auto t = parse_reftype();
         if (!t)
             return nullptr;
 
@@ -612,7 +611,7 @@ ptr_ir_type ir::parse_ref() {
     }
     m_parsec.spaces();
 
-    auto t = parse_type();
+    auto t = parse_reftype();
     if (!t)
         return nullptr;
 
@@ -627,6 +626,47 @@ ptr_ir_type ir::parse_ref() {
     ref->m_type = std::move(t);
 
     return ref;
+}
+
+ptr_ir_type ir::parse_reftype() {
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
+
+    char tmp;
+    PTRY(m_parsec, tmp, m_parsec.character('('));
+    if (!m_parsec.is_fail()) {
+        m_parsec.spaces();
+        auto id = parse_id();
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected identifier");
+            return nullptr;
+        }
+
+        if (id == "ref") {
+            auto ref = parse_ref();
+            ref->m_line = line;
+            ref->m_column = column;
+            return ref;
+        }
+
+        if (id == "struct") {
+            auto s = parse_struct();
+            s->m_line = line;
+            s->m_column = column;
+            return s;
+        }
+
+        SYNTAXERR2("type specifier", line, column);
+        return nullptr;
+    }
+
+    auto s = parse_scalartype();
+    if (s) {
+        s->m_line = line;
+        s->m_column = column;
+    }
+
+    return s;
 }
 
 ptr_ir_defun ir::parse_defun() {
@@ -656,10 +696,8 @@ ptr_ir_defun ir::parse_defun() {
 
     // parse return types
     auto t = parse_type();
-    if (!t) {
-        SYNTAXERR("expected a type specifier");
+    if (!t)
         return nullptr;
-    }
 
     defun->m_ret = std::move(t);
 
@@ -691,10 +729,8 @@ ptr_ir_defun ir::parse_defun() {
             m_parsec.spaces();
 
             auto t = parse_type();
-            if (!t) {
-                SYNTAXERR("expected a type specifier");
+            if (!t)
                 return nullptr;
-            }
 
             m_parsec.space();
             if (m_parsec.is_fail()) {
@@ -1149,6 +1185,12 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
         if (!p->m_expr->check_type(ref, vars))
             return nullptr;
 
+        if (p->m_expr->m_type->m_irtype == ir_type::IRTYPE_STRUCT) {
+            auto r = std::make_shared<ir_ref>();
+            r->m_type = p->m_expr->m_type;
+            p->m_expr->m_type = r;
+        }
+
         if (!unify_type(p->m_id.get(), p->m_expr.get())) {
             TYPEERR(ref, p->m_expr, "unexpected type",
                     "    expected: %s\n"
@@ -1290,6 +1332,12 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
         for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
             if (!(*it)->check_type(ref, vars))
                 return nullptr;
+
+            if ((*it)->m_type->m_irtype == ir_type::IRTYPE_STRUCT) {
+                auto r = std::make_shared<ir_ref>();
+                r->m_type = (*it)->m_type;
+                (*it)->m_type = r;
+            }
 
             ir_id tmp;
             tmp.m_type = shared_ir_type(fun->second->m_args[n]->clone());

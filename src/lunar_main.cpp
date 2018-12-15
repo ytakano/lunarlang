@@ -99,16 +99,21 @@ const char *e13 =
 
 const char *e14 = "(defun fun u32 () (let ((u32 x 20)) 10))";
 
+const char *e15 = "(struct mystruct (u64 foo))\n"
+                  "(defun fun u32 ((u32 foo))\n"
+                  "    (let (((ref mystruct) x (mystruct 10))) 20))";
+
 void world(void *arg) {
-    std::string s = e9;
+    std::string s = e15;
 
     lunar::ir ir("test.ir", s);
 
     if (ir.parse() && ir.check_type()) {
         std::cout << "{\"input\":\"" << escapeJsonString(s) << "\",\"AST\":";
         ir.print();
-        std::cout << ",\"LLVM\":\"" << escapeJsonString(ir.codegen()) << "\"}"
-                  << std::endl;
+        std::cout
+            << ",\"LLVM\":\"" /*<< escapeJsonString(ir.codegen())*/ << "\"}"
+            << std::endl;
     } else {
         std::cout << "false" << std::endl;
     }
