@@ -17,7 +17,7 @@
     do {                                                                       \
         fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
                 m_filename.c_str(), LINE, COLUMN, __LINE__);                   \
-        print_err(m_parsec.get_line(), m_parsec.get_column());                 \
+        print_err(LINE, COLUMN);                                               \
     } while (0)
 
 #define SEMANTICERR(IR, AST, M, ...)                                           \
@@ -262,6 +262,7 @@ ptr_ir_struct ir::parse_defstruct() {
         SYNTAXERR("expected whitespace");
         return nullptr;
     }
+    m_parsec.spaces();
 
     auto name = parse_id();
     if (m_parsec.is_fail()) {
@@ -301,6 +302,7 @@ ptr_ir_struct ir::parse_defstruct() {
             SYNTAXERR("expected whitespace");
             return nullptr;
         }
+        m_parsec.spaces();
 
         auto id = parse_id();
         if (m_parsec.is_fail()) {
@@ -481,6 +483,9 @@ ptr_ir_type ir::parse_type() {
 
         if (id == "ref") {
             auto ref = parse_ref();
+            if (!ref)
+                return nullptr;
+
             ref->m_line = line;
             ref->m_column = column;
             return ref;
@@ -636,6 +641,9 @@ ptr_ir_type ir::parse_reftype() {
     PTRY(m_parsec, tmp, m_parsec.character('('));
     if (!m_parsec.is_fail()) {
         m_parsec.spaces();
+
+        line = m_parsec.get_line();
+        column = m_parsec.get_column();
         auto id = parse_id();
         if (m_parsec.is_fail()) {
             SYNTAXERR("expected identifier");
@@ -644,6 +652,9 @@ ptr_ir_type ir::parse_reftype() {
 
         if (id == "ref") {
             auto ref = parse_ref();
+            if (!ref)
+                return nullptr;
+
             ref->m_line = line;
             ref->m_column = column;
             return ref;
@@ -651,12 +662,15 @@ ptr_ir_type ir::parse_reftype() {
 
         if (id == "struct") {
             auto s = parse_struct();
+            if (!s)
+                return nullptr;
+
             s->m_line = line;
             s->m_column = column;
             return s;
         }
 
-        SYNTAXERR2("type specifier", line, column);
+        SYNTAXERR2("expected type specifier", line, column);
         return nullptr;
     }
 
@@ -675,6 +689,7 @@ ptr_ir_defun ir::parse_defun() {
         SYNTAXERR("expected (");
         return nullptr;
     }
+    m_parsec.spaces();
 
     // parse function name
     ptr_ir_defun defun(new ir_defun);
@@ -842,9 +857,10 @@ ptr_ir_let ir::parse_let() {
             SYNTAXERR("expected (");
             return nullptr;
         }
+        m_parsec.spaces();
 
         auto type = parse_type();
-        if (m_parsec.is_fail())
+        if (!type)
             return nullptr;
 
         m_parsec.space();
@@ -852,6 +868,7 @@ ptr_ir_let ir::parse_let() {
             SYNTAXERR("expected whitespace");
             return nullptr;
         }
+        m_parsec.spaces();
 
         auto id = parse_id();
         if (m_parsec.is_fail()) {
@@ -864,6 +881,7 @@ ptr_ir_let ir::parse_let() {
             SYNTAXERR("expected whitespace");
             return nullptr;
         }
+        m_parsec.spaces();
 
         auto e = parse_expr();
         if (!e)
@@ -898,6 +916,7 @@ ptr_ir_let ir::parse_let() {
         SYNTAXERR("expected whitespace");
         return nullptr;
     }
+    m_parsec.spaces();
 
     auto e = parse_expr();
     if (!e)
@@ -1037,13 +1056,7 @@ shared_ir_type ir::resolve_type(shared_ir_type type) const {
     }
     case ir_type::IRTYPE_REF: {
         auto p = (ir_ref *)type.get();
-        if (p->m_type->m_irtype == ir_type::IRTYPE_USER) {
-            auto t = resolve_type(p->m_type);
-            if (t)
-                p->m_type = t;
-            else
-                return nullptr;
-        }
+        p->m_type = resolve_type(p->m_type);
         return type;
     }
     case ir_type::IRTYPE_USER: {
@@ -1191,6 +1204,8 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
             p->m_expr->m_type = r;
         }
 
+        p->m_expr->m_type = ref.resolve_type(p->m_expr->m_type);
+
         if (!unify_type(p->m_id.get(), p->m_expr.get())) {
             TYPEERR(ref, p->m_expr, "unexpected type",
                     "    expected: %s\n"
@@ -1271,8 +1286,6 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
             return check_magnitude(ref, vars, id->m_id);
         } else if (id->m_id == "!=") {
             return check_eq(ref, vars);
-        } else if (id->m_id == "ref") {
-            return check_ref(ref, vars);
         } else {
             // function call
             return check_call(ref, vars, id->m_id);
@@ -1282,29 +1295,6 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
     // lambda or higher order function
 
     return nullptr;
-}
-
-shared_ir_type ir_apply::check_ref(const ir &ref, id2type &vars) {
-    if (m_expr.size() != 2) {
-        SEMANTICERR(ref, this, "ref requires exactly 1 arguments");
-        return nullptr;
-    }
-
-    auto type = m_expr[1]->check_type(ref, vars);
-    if (!type)
-        return nullptr;
-
-    if (type->m_irtype != ir_type::IRTYPE_STRUCT) {
-        SEMANTICERR(ref, this,
-                    "ref requires an argument whose type is structure");
-        return nullptr;
-    }
-
-    auto ret = std::make_shared<ir_ref>();
-    ret->m_type = type;
-    m_type = ret;
-
-    return ret;
 }
 
 shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
@@ -1706,14 +1696,6 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
 
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
-        if (p->m_expr->m_type->m_irtype == ir_type::IRTYPE_STRUCT &&
-            !ref.is_structgen(p->m_expr.get())) {
-            // deep copy
-            auto type = p->m_expr->m_type->codegen(ref);
-            auto ptr = builder.CreateAlloca(p->m_expr->m_type->codegen(ref));
-            ref.llvm_memcpy(ptr, v, layout.getTypeAllocSize(type));
-        }
-
         vals[p->m_id->m_id].push_back(v);
     }
 
@@ -1873,8 +1855,6 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             BINOP(CreateICmpULE, CreateICmpSLE, CreateFCmpOLE, "<=", "letmp");
         } else if (id->m_id == "!=") {
             BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "!=", "netmp");
-        } else if (id->m_id == "ref") {
-            return m_expr[1]->codegen(ref, vals);
         } else {
             // function call
             auto it = ref.get_struct_proto().find(id->m_id);

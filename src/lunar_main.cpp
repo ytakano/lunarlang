@@ -89,13 +89,13 @@ const char *e11 = "(struct mystruct (u64 foo) (mystruct2 bar))\n"
 
 const char *e12 = "(defun fun (ref u32) (((ref u32) foo)) foo)";
 
-const char *e13 =
-    "(struct mystruct (u64 hoge) (u64 huga))\n"
-    "(struct mystruct2 (mystruct m) (u64 foo) (u32 bar))\n"
-    "(defun fun (ref mystruct2) ((u32 foo))\n"
-    //                  "    (let ((mystruct x (mystruct 222 333))) 40))";
-    "    (let ((mystruct2 x (mystruct2 (mystruct 222 333) 111 foo))\n"
-    "          ((ref mystruct2) y (ref x))) y))";
+const char *e13 = "(struct mystruct (u64 hoge) (u64 huga))\n"
+                  "(struct mystruct2 (mystruct m) (u64 foo) (u32 bar))\n"
+                  "(defun fun (ref mystruct2) ((u32 foo))\n"
+                  "    (let (((ref (struct mystruct u64 u32)) x\n"
+                  "                (mystruct2 (mystruct 222 333) 111 foo))\n"
+                  "          ((ref mystruct2) y x))"
+                  "        y))";
 
 const char *e14 = "(defun fun u32 () (let ((u32 x 20)) 10))";
 
@@ -104,16 +104,15 @@ const char *e15 = "(struct mystruct (u64 foo))\n"
                   "    (let (((ref mystruct) x (mystruct 10))) 20))";
 
 void world(void *arg) {
-    std::string s = e15;
+    std::string s = e13;
 
     lunar::ir ir("test.ir", s);
 
     if (ir.parse() && ir.check_type()) {
         std::cout << "{\"input\":\"" << escapeJsonString(s) << "\",\"AST\":";
         ir.print();
-        std::cout
-            << ",\"LLVM\":\"" /*<< escapeJsonString(ir.codegen())*/ << "\"}"
-            << std::endl;
+        std::cout << ",\"LLVM\":\"" << escapeJsonString(ir.codegen()) << "\"}"
+                  << std::endl;
     } else {
         std::cout << "false" << std::endl;
     }

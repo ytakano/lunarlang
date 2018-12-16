@@ -197,7 +197,6 @@ struct ir_apply : public ir_expr {
     shared_ir_type check_magnitude(const ir &ref, id2type &vars,
                                    const std::string &id);
     shared_ir_type check_eq(const ir &ref, id2type &vars);
-    shared_ir_type check_ref(const ir &ref, id2type &vars);
     shared_ir_type check_call(const ir &ref, id2type &vars,
                               const std::string &id);
     llvm::Value *struct_gen(ir &ref, id2val vals, llvm::StructType *type);
