@@ -99,9 +99,10 @@ const char *e13 = "(struct mystruct (u64 hoge) (u64 huga))\n"
 
 const char *e14 = "(defun fun u32 () (let ((u32 x 20)) 10))";
 
-const char *e15 = "(struct mystruct (u64 foo))\n"
+const char *e15 = "(struct st (u64 foo))\n"
+                  "(struct mystruct ((ref st) bar)  )\n"
                   "(defun fun u32 ((u32 foo))\n"
-                  "    (let (((ref mystruct) x (mystruct 10))) 20))";
+                  "    (let (((ref mystruct) x (mystruct (st 10)))) 20))";
 
 void world(void *arg) {
     std::string s = e13;

@@ -276,7 +276,7 @@ class ir {
     get_funs() const {
         return m_id2fun;
     }
-    const std::unordered_map<std::string, ptr_ir_struct> &
+    const std::unordered_map<std::string, std::shared_ptr<ir_struct>> &
     get_id2struct() const {
         return m_id2struct;
     }
@@ -302,7 +302,7 @@ class ir {
     std::unordered_set<char> m_0to9;
     std::unordered_set<char> m_1to9;
     std::unordered_map<std::string, std::shared_ptr<ir_funtype>> m_id2fun;
-    std::unordered_map<std::string, ptr_ir_struct> m_id2struct;
+    std::unordered_map<std::string, std::shared_ptr<ir_struct>> m_id2struct;
     std::unordered_map<std::string, llvm::Function *> m_funs_prot;
     std::unordered_map<std::string, llvm::StructType *> m_struct_prot;
     llvm::LLVMContext m_llvm_ctx;

@@ -1001,6 +1001,8 @@ bool ir::check_type() {
                         s->m_name.c_str());
             return false;
         }
+        m_id2struct[s->m_name] =
+            std::shared_ptr<ir_struct>((ir_struct *)s->clone());
     }
 
     for (auto &s : m_struct) {
@@ -1008,10 +1010,10 @@ bool ir::check_type() {
         used.insert(s->m_name);
         if (!check_recursive(s.get(), used))
             return false;
-
-        m_id2struct[s->m_name] =
-            std::unique_ptr<ir_struct>((ir_struct *)s->clone());
     }
+
+    for (auto &s : m_id2struct)
+        s.second = std::static_pointer_cast<ir_struct>(resolve_type(s.second));
 
     for (auto &p : m_defuns) {
         if (HASKEY(m_id2fun, p->m_name) || HASKEY(m_id2struct, p->m_name)) {
@@ -1066,7 +1068,7 @@ shared_ir_type ir::resolve_type(shared_ir_type type) const {
             SEMANTICERR(*this, type, "%s is undefined", p->m_name.c_str());
             return nullptr;
         }
-        return shared_ir_type(it->second->clone());
+        return shared_ir_type(std::static_pointer_cast<ir_type>(it->second));
     }
     case ir_type::IRTYPE_FUN: {
         auto p = (ir_funtype *)type.get();
@@ -1120,7 +1122,8 @@ bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
             if (!check_recursive(it->second.get(), used))
                 return false;
 
-            q = std::shared_ptr<ir_type>(it->second->clone());
+            q = std::shared_ptr<ir_type>(
+                std::static_pointer_cast<ir_type>(it->second));
         }
     }
 
@@ -1204,7 +1207,8 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
             p->m_expr->m_type = r;
         }
 
-        p->m_expr->m_type = ref.resolve_type(p->m_expr->m_type);
+        // this may not be necessary
+        // p->m_expr->m_type = ref.resolve_type(p->m_expr->m_type);
 
         if (!unify_type(p->m_id.get(), p->m_expr.get())) {
             TYPEERR(ref, p->m_expr, "unexpected type",
@@ -1361,12 +1365,17 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
                 auto it = ref.get_id2struct().find(user->m_name);
                 assert(it != ref.get_id2struct().end());
                 s->second->m_member[n] =
-                    std::shared_ptr<ir_type>(it->second->clone());
+                    std::static_pointer_cast<ir_type>(it->second);
             }
 
             ir_id tmp;
-            tmp.m_type = shared_ir_type(s->second->m_member[n]->clone());
+            tmp.m_type = shared_ir_type(s->second->m_member[n]);
             if (!unify_type(&tmp, it->get())) {
+                TYPEERR(ref, it->get(), "unexpected type",
+                        "    expected: %s\n"
+                        "    actual: %s",
+                        tmp.m_type->str().c_str(),
+                        (*it)->m_type->str().c_str());
                 return nullptr;
             }
         }
@@ -1728,6 +1737,18 @@ llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
     case TYPE_S32:
         return llvm::ConstantInt::get(
             ctx, llvm::APInt(32, boost::lexical_cast<int32_t>(m_num), true));
+    case TYPE_U16:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(16, boost::lexical_cast<uint16_t>(m_num), true));
+    case TYPE_S16:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(16, boost::lexical_cast<int16_t>(m_num), true));
+    case TYPE_U8:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(8, boost::lexical_cast<uint8_t>(m_num), true));
+    case TYPE_S8:
+        return llvm::ConstantInt::get(
+            ctx, llvm::APInt(8, boost::lexical_cast<int8_t>(m_num), true));
     default:
         return nullptr;
     }
@@ -1764,10 +1785,14 @@ llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
             switch (s->m_type) {                                               \
             case TYPE_U64:                                                     \
             case TYPE_U32:                                                     \
+            case TYPE_U16:                                                     \
+            case TYPE_U8:                                                      \
                 e1 = ref.get_llvm_builder().UIOP(e1, e2, NAME);                \
                 break;                                                         \
             case TYPE_S64:                                                     \
             case TYPE_S32:                                                     \
+            case TYPE_S16:                                                     \
+            case TYPE_S8:                                                      \
                 e1 = ref.get_llvm_builder().SIOP(e1, e2, NAME);                \
                 break;                                                         \
             case TYPE_FP64:                                                    \
@@ -1796,10 +1821,14 @@ llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
         switch (((ir_scalar *)m_expr[1]->m_type.get())->m_type) {              \
         case TYPE_U64:                                                         \
         case TYPE_U32:                                                         \
+        case TYPE_U16:                                                         \
+        case TYPE_U8:                                                          \
             e1 = ref.get_llvm_builder().UIOP(e1, e2, NAME);                    \
             break;                                                             \
         case TYPE_S64:                                                         \
         case TYPE_S32:                                                         \
+        case TYPE_S16:                                                         \
+        case TYPE_S8:                                                          \
             e1 = ref.get_llvm_builder().SIOP(e1, e2, NAME);                    \
             break;                                                             \
         case TYPE_FP64:                                                        \
