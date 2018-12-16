@@ -94,7 +94,7 @@ const char *e13 = "(struct mystruct (u64 hoge) (u64 huga))\n"
                   "(defun fun (ref mystruct2) ((u32 foo))\n"
                   "    (let (((ref (struct mystruct u64 u32)) x\n"
                   "                (mystruct2 (mystruct 222 333) 111 foo))\n"
-                  "          ((ref mystruct2) y x))"
+                  "          ((ref mystruct2) y x))\n"
                   "        y))";
 
 const char *e14 = "(defun fun u32 () (let ((u32 x 20)) 10))";
