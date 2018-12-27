@@ -1513,7 +1513,7 @@ shared_ir_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
     return m_type;
 }
 
-bool ir::is_structgen(ir_expr *expr) {
+bool ir::is_structgen(ir_expr *expr) const {
     if (expr->m_expr_type == ir_expr::EXPRAPPLY) {
         auto apply = (ir_apply *)expr;
         if (apply->m_expr.size() > 0 &&
@@ -1684,7 +1684,8 @@ llvm::Function *ir_defun::mkproto(ir &ref) {
     m_fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
                                    m_name, &ref.get_llvm_module());
 
-    // m_fun->setCallingConv(llvm::CallingConv::Fast);
+    if (m_name != "main")
+        m_fun->setCallingConv(llvm::CallingConv::Fast);
 
     return m_fun;
 }
@@ -2001,11 +2002,11 @@ llvm::Value *ir_apply::codegen_call(ir &ref, id2val vals,
     }
 
     auto ret = ref.get_llvm_builder().CreateCall(fun, args, "calltmp");
-    /*
-    if (ret) {
+
+    if (ret && id != "main") {
         ret->setCallingConv(llvm::CallingConv::Fast);
         ret->setTailCall();
-    } */
+    }
 
     return ret;
 }

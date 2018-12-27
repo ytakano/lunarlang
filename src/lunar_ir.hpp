@@ -291,7 +291,7 @@ class ir {
 
         return it->second;
     }
-    bool is_structgen(ir_expr *expr);
+    bool is_structgen(ir_expr *expr) const;
     void llvm_memcpy(llvm::Value *dst, llvm::Value *src, size_t size);
 
   private:

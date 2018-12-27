@@ -105,7 +105,7 @@ const char *e15 = "(struct st (u64 foo))\n"
                   "    (let (((ref mystruct) x (mystruct (st 10)))) 20))";
 
 void world(void *arg) {
-    std::string s = e13;
+    std::string s = e9;
 
     lunar::ir ir("test.ir", s);
 
