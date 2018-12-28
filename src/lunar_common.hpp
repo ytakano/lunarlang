@@ -33,6 +33,7 @@ enum type_spec {
     TYPE_S16,
     TYPE_U8,
     TYPE_S8,
+    TYPE_VOID,
 };
 
 } // namespace lunar

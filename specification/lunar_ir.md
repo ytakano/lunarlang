@@ -1,13 +1,13 @@
 
 ```
 $TOP := ($DEFUN | $DEFSTRUCT)*
-$EXPR := $LET | $ID | DECIMAL | $APPLY
+$EXPR := $LET | $ID | DECIMAL | $APPLY | $VOID
 ```
 
-## NOP
+## VOID
 
 ```
-$NOP := ()
+$VOID := ()
 ```
 
 ## Identifier
@@ -33,7 +33,7 @@ $REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | $ID
 ### Scalar Type
 
 ```
-$SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32
+$SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | void
 ```
 
 ## Let
@@ -58,7 +58,7 @@ $DEFUN := (defun $ID $TYPE (($TYPE $ID)*) $EXPR)
 ## Function Apply
 
 ```
-$APPLY := ($EXPR*)
+$APPLY := ($EXPR+)
 ```
 
 ### Basic Binary Operations

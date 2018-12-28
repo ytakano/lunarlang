@@ -47,7 +47,7 @@ void print::flush() {
 
 void print::utf8(const char *str) {
     while (*str != '\0') {
-        char h = *str & 0xf0;
+        uint8_t h = *str & 0xf0;
         switch (h) {
         case 0xc0:
         case 0xd0:

@@ -141,7 +141,7 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
     }
 
     assert(false);
-    return false;
+    return false; // never reach here
 }
 
 ir::ir(const std::string &filename, const std::string &str)
@@ -419,7 +419,7 @@ ptr_ir_expr ir::parse_expr() {
 
             if (!m_parsec.is_fail()) {
                 if (apply->m_expr.size() == 0)
-                    apply->m_expr_type = ir_expr::EXPRNOP;
+                    apply->m_expr_type = ir_expr::EXPRVOID;
                 return apply;
             }
 
@@ -516,6 +516,7 @@ ptr_ir_type ir::parse_scalartype() {
         return nullptr;
     }
 
+    // TODO: fix to use a look up table
     if (s == "u64") {
         auto t = new ir_scalar;
         t->m_type = TYPE_U64;
@@ -559,6 +560,10 @@ ptr_ir_type ir::parse_scalartype() {
     } else if (s == "fp32") {
         auto t = new ir_scalar;
         t->m_type = TYPE_FP32;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "void") {
+        auto t = new ir_scalar;
+        t->m_type = TYPE_VOID;
         return ptr_ir_type((ir_type *)t);
     } else {
         auto user = std::make_unique<ir_usertype>();
@@ -970,6 +975,8 @@ std::string ir_scalar::str() const {
         return "s8";
     case TYPE_INT:
         return "int";
+    case TYPE_VOID:
+        return "void";
     case TYPE_REF:
     case TYPE_STRUCT:
         assert(m_type != TYPE_REF && m_type != TYPE_STRUCT);
@@ -1238,10 +1245,14 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
 }
 
 shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
-    auto first = m_expr.begin();
-    if (first == m_expr.end())
-        return nullptr;
+    if (m_expr_type == EXPRVOID) {
+        auto v = std::make_shared<ir_scalar>();
+        v->m_type = TYPE_VOID;
+        m_type = v;
+        return v;
+    }
 
+    auto first = m_expr.begin();
     auto id = (ir_id *)(first->get());
     if ((*first)->m_expr_type == ir_expr::EXPRID) {
         if (id->m_id.size() == 1) {
@@ -1290,6 +1301,8 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
             return check_magnitude(ref, vars, id->m_id);
         } else if (id->m_id == "!=") {
             return check_eq(ref, vars);
+        } else if (id->m_id == "print") {
+            return check_print(ref, vars);
         } else {
             // function call
             return check_call(ref, vars, id->m_id);
@@ -1298,6 +1311,11 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
 
     // lambda or higher order function
 
+    return nullptr;
+}
+
+shared_ir_type ir_apply::check_print(const ir &ref, id2type &vars) {
+    // TODO
     return nullptr;
 }
 
@@ -1333,6 +1351,7 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
                 (*it)->m_type = r;
             }
 
+            // check types of the definition and actually passed
             ir_id tmp;
             tmp.m_type = shared_ir_type(fun->second->m_args[n]->clone());
             if (!unify_type(&tmp, it->get())) {
@@ -1601,6 +1620,8 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
     case TYPE_U8:
     case TYPE_S8:
         return llvm::Type::getInt8Ty(ref.get_llvm_ctx());
+    case TYPE_VOID:
+        return llvm::Type::getVoidTy(ref.get_llvm_ctx());
     case TYPE_INT:
     case TYPE_REF:
     case TYPE_STRUCT:
@@ -1632,7 +1653,11 @@ llvm::Function *ir_defun::codegen(ir &ref) {
 
     llvm::Value *retval = m_expr->codegen(ref, vars);
     if (retval) {
-        builder.CreateRet(retval);
+        if (m_ret->m_irtype == ir_type::IRTYPE_SCALAR &&
+            ((ir_scalar *)m_ret.get())->m_type == TYPE_VOID)
+            builder.CreateRetVoid();
+        else
+            builder.CreateRet(retval);
 
         // Validate the generated code, checking for consistency.
         // llvm::verifyFunction(fun);
@@ -1850,10 +1875,11 @@ llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
     } while (0)
 
 llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
-    auto first = m_expr.begin();
-    if (first == m_expr.end())
-        return nullptr;
+    if (m_expr_type == EXPRVOID)
+        return llvm::ConstantInt::get(ref.get_llvm_ctx(),
+                                      llvm::APInt(1, 0, false));
 
+    auto first = m_expr.begin();
     if ((*first)->m_expr_type == ir_expr::EXPRID) {
         auto id = (ir_id *)(first->get());
         if (id->m_id.size() == 1) {
