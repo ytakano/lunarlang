@@ -1360,6 +1360,7 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
         }
 
         m_type = shared_ir_type(fun->second->m_ret->clone());
+
         return m_type;
     } else {
         // structure construction
@@ -1702,6 +1703,10 @@ llvm::Function *ir_defun::mkproto(ir &ref) {
         llvm::Type *t = q->m_type->codegen(ref);
         if (t == nullptr)
             return nullptr;
+
+        if (t->isVoidTy())
+            t = llvm::Type::getInt1Ty(ref.get_llvm_ctx());
+
         args.push_back(t);
     }
 
@@ -1731,7 +1736,13 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
 
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
-        vals[p->m_id->m_id].push_back(v);
+
+        if (p->m_expr->m_expr_type == EXPRVOID) {
+            vals[p->m_id->m_id].push_back(llvm::ConstantInt::get(
+                ref.get_llvm_ctx(), llvm::APInt(1, 0, false)));
+        } else {
+            vals[p->m_id->m_id].push_back(v);
+        }
     }
 
     auto e = m_expr->codegen(ref, vals);
@@ -2024,10 +2035,21 @@ llvm::Value *ir_apply::codegen_call(ir &ref, id2val vals,
         auto t = (*it)->codegen(ref, vals);
         if (!t)
             return nullptr;
-        args.push_back(t);
+
+        if ((*it)->m_expr_type == EXPRVOID || t->getType()->isVoidTy())
+            args.push_back(llvm::ConstantInt::get(ref.get_llvm_ctx(),
+                                                  llvm::APInt(1, 0, false)));
+        else
+            args.push_back(t);
     }
 
-    auto ret = ref.get_llvm_builder().CreateCall(fun, args, "calltmp");
+    const char *s;
+    if (fun->getReturnType()->isVoidTy())
+        s = "";
+    else
+        s = "calltmp";
+
+    auto ret = ref.get_llvm_builder().CreateCall(fun, args, s);
 
     if (ret && id != "main") {
         ret->setCallingConv(llvm::CallingConv::Fast);

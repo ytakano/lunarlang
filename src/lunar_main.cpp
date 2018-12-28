@@ -104,9 +104,11 @@ const char *e15 = "(struct st (u64 foo))\n"
                   "(defun fun u32 ((u32 foo))\n"
                   "    (let (((ref mystruct) x (mystruct (st 10)))) 20))";
 
-const char *e16 = "(defun fun void ((u32 arg1) (u32 arg2))\n"
+const char *e16 = "(defun fun void ((u32 arg1) (u32 arg2) (void arg3))\n"
                   "    (let ((u32 x (+ arg1 arg2))\n"
-                  "          (u32 y (* arg1 arg2))) ()))";
+                  "          (u32 y (* arg1 arg2))) ()))\n"
+                  "(defun fun2 void ()\n"
+                  "    (let ((void x (fun 1 2 (fun 3 4 ())))) x))";
 
 void world(void *arg) {
     std::string s = e16;
