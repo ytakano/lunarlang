@@ -55,6 +55,14 @@ lunar::CH_RESULT recv_ch(void *ch, void *val) {
     return ((lunar::channel *)ch)->pop((char *)val);
 }
 
+void print_unum(uint64_t num) { p_green->m_print.unum(num); }
+void print_snum(int64_t num) { p_green->m_print.snum(num); }
+void print_boolean(bool num) { p_green->m_print.boolean(num); }
+void print_utf8(const char *str) { p_green->m_print.utf8(str); }
+void print_ptr(const void *ptr) { p_green->m_print.ptr(ptr); }
+void print_flush() { p_green->m_print.flush(); }
+void print_endl() { p_green->m_print.endl(); }
+
 } // extern "C"
 
 namespace lunar {

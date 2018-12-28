@@ -11,6 +11,7 @@
 
 #include "lunar_channel.hpp"
 #include "lunar_common.hpp"
+#include "lunar_print.hpp"
 
 extern "C" {
 
@@ -22,6 +23,14 @@ void spawn_green_thread(void (*func)(void *), void *arg,
 void *make_ch(int bucket_size, int len);
 lunar::CH_RESULT send_ch(void *ch, const void *val);
 lunar::CH_RESULT recv_ch(void *ch, void *val);
+
+void print_unum(uint64_t num);
+void print_snum(int64_t num);
+void print_boolean(bool num);
+void print_utf8(const char *str);
+void print_ptr(const void *ptr);
+void print_flush();
+void print_endl();
 
 } // extern "C"
 
@@ -68,6 +77,8 @@ class green_thread {
     void yield();
     void run();
     uint64_t spawn(void (*func)(void *), void *arg, int stack_size = 4096 * 32);
+
+    print m_print;
 
   private:
     sigjmp_buf m_jmp_buf;
