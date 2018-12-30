@@ -1497,7 +1497,6 @@ shared_ir_type ir_apply::check_magnitude(const ir &ref, id2type &vars,
 
 shared_ir_type ir_apply::check_ifexpr(const ir &ref, id2type &vars) {
     if (m_expr.size() != 4) {
-        auto id = (ir_id *)(m_expr[0].get());
         SEMANTICERR(ref, this, "\"if\" requires exactly 3 arguments");
         return nullptr;
     }
@@ -2170,7 +2169,6 @@ void ir_let::print() {
         n++;
     }
 
-    n = 0;
     std::cout << "], \"expr\":";
     m_expr->print();
     std::cout << "}}";
