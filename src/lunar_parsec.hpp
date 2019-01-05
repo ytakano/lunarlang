@@ -70,7 +70,7 @@ class parsec {
             return "";
         }
 
-        for (int i = 0; i < match.size(); i++) {
+        for (size_t i = 0; i < match.size(); i++) {
             if (m_str[m_pos] != match[i]) {
                 m_fail = true;
                 return "";

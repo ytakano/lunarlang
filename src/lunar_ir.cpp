@@ -58,7 +58,7 @@ static bool eq_type(ir_type *lhs, ir_type *rhs) {
         if (!eq_type(t1->m_ret.get(), t2->m_ret.get()))
             return false;
 
-        for (int i = 0; i < t1->m_args.size(); i++) {
+        for (size_t i = 0; i < t1->m_args.size(); i++) {
             if (!eq_type(t1->m_args[i].get(), t2->m_args[i].get()))
                 return false;
         }
@@ -77,7 +77,7 @@ static bool eq_type(ir_type *lhs, ir_type *rhs) {
         if (t1->m_member.size() != t2->m_member.size())
             return false;
 
-        for (int i = 0; i < t1->m_member.size(); i++) {
+        for (size_t i = 0; i < t1->m_member.size(); i++) {
             if (!eq_type(t1->m_member[i].get(), t2->m_member[i].get()))
                 return false;
         }
@@ -145,7 +145,7 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
 }
 
 ir::ir(const std::string &filename, const std::string &str)
-    : m_filename(filename), m_parsec(str), m_llvm_builder(m_llvm_ctx),
+    : m_parsec(str), m_filename(filename), m_llvm_builder(m_llvm_ctx),
       m_llvm_module(filename, m_llvm_ctx), m_llvm_datalayout(&m_llvm_module) {
 
     m_no_id_char.insert(' ');
@@ -1441,7 +1441,7 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
                 if (!m_expr[1]->check_type(ref, vars))
                     return nullptr;
 
-                for (int i = 2; i < m_expr.size(); i++) {
+                for (size_t i = 2; i < m_expr.size(); i++) {
                     if (!m_expr[i]->check_type(ref, vars))
                         return nullptr;
 
@@ -1943,10 +1943,6 @@ llvm::Value *ir_id::codegen(ir &ref, ir_expr::id2val &vals) {
 }
 
 llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
-    auto &builder = ref.get_llvm_builder();
-    auto &ctx = ref.get_llvm_ctx();
-    auto &layout = ref.get_llvm_datalayout();
-
     for (auto &p : m_def) {
         auto v = p->m_expr->codegen(ref, vals);
 
@@ -2026,7 +2022,7 @@ llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
         if (e1 == nullptr)                                                     \
             return nullptr;                                                    \
                                                                                \
-        for (auto i = 2; i < m_expr.size(); i++) {                             \
+        for (size_t i = 2; i < m_expr.size(); i++) {                           \
             auto e2 = m_expr[i]->codegen(ref, vals);                           \
             ir_scalar *s = (ir_scalar *)m_expr[i]->m_type.get();               \
             if (e2 == nullptr)                                                 \
@@ -2283,7 +2279,7 @@ void ir::print_err(std::size_t line, std::size_t column) const {
 
     std::cerr << lines[line - 1] << std::endl;
 
-    for (auto i = 0; i < column - 1; i++) {
+    for (size_t i = 0; i < column - 1; i++) {
         std::cerr << " ";
     }
     std::cerr << "^" << std::endl;
