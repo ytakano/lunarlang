@@ -110,8 +110,10 @@ const char *e16 = "(defun fun void ((u32 arg1) (u32 arg2) (void arg3))\n"
                   "(defun fun2 void ()\n"
                   "    (let ((void x (fun 1 2 (fun 3 4 ())))) x))";
 
+const char *e17 = "(defun main void () (print_unum 10))";
+
 void world(void *arg) {
-    std::string s = e16;
+    std::string s = e17;
 
     lunar::ir ir("test.ir", s);
 

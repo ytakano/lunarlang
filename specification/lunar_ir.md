@@ -1,6 +1,6 @@
 
 ```
-$TOP := ($DEFUN | $DEFSTRUCT)*
+$TOP := ($DEFUN | $DEFSTRUCT | $EXTERN)*
 $EXPR := $LET | $ID | DECIMAL | $APPLY | $VOID
 ```
 
@@ -53,6 +53,12 @@ $STRUCTMEM := $SCALAR | $ID | (struct $STRUCTMEM) | (ref $STRUCTMEM)
 
 ```
 $DEFUN := (defun $ID $TYPE (($TYPE $ID)*) $EXPR)
+```
+
+## Function Prototype Definition
+
+```
+$EXTERN := (extern $ID $TYPE ($TYPE*))
 ```
 
 ## Function Apply

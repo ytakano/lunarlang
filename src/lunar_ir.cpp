@@ -238,6 +238,14 @@ bool ir::parse() {
             defun->m_line = line;
             defun->m_column = column;
             m_defuns.push_back(std::move(defun));
+        } else if (id == "extern") {
+            auto extn = parse_extern();
+            if (!extn)
+                return false;
+
+            extn->m_line = line;
+            extn->m_column = column;
+            m_externs.push_back(std::move(extn));
         } else if (id == "struct") {
             auto st = parse_defstruct();
             if (!st)
@@ -735,11 +743,24 @@ ptr_ir_defun ir::parse_defun() {
         return nullptr;
     }
 
+    int n = 0;
     for (;;) {
-        m_parsec.spaces();
         char tmp;
-        PTRY(m_parsec, tmp, m_parsec.character(')'));
+        PTRY(m_parsec, tmp, [](parsec &p) {
+            p.spaces();
+            return p.character(')');
+        }(m_parsec));
+
         if (m_parsec.is_fail()) {
+            if (n > 0) {
+                m_parsec.space();
+                if (m_parsec.is_fail()) {
+                    SYNTAXERR("expected whitespace");
+                    return nullptr;
+                }
+            }
+            m_parsec.spaces();
+
             m_parsec.character('(');
             if (m_parsec.is_fail()) {
                 SYNTAXERR("expected (");
@@ -787,6 +808,7 @@ ptr_ir_defun ir::parse_defun() {
     }
     m_parsec.spaces();
 
+    // parse expression
     auto expr = parse_expr();
     if (!expr)
         return nullptr;
@@ -801,6 +823,92 @@ ptr_ir_defun ir::parse_defun() {
     defun->m_expr = std::move(expr);
 
     return defun;
+}
+
+ptr_ir_extern ir::parse_extern() {
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected (");
+        return nullptr;
+    }
+    m_parsec.spaces();
+
+    // parse function name
+    ptr_ir_extern extn(new ir_extern);
+    auto id = parse_id();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected identifier");
+        return nullptr;
+    }
+
+    extn->m_name = id;
+
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+
+    m_parsec.spaces();
+
+    // parse return types
+    auto t = parse_type();
+    if (!t)
+        return nullptr;
+
+    extn->m_ret = std::move(t);
+
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespace");
+        return nullptr;
+    }
+    m_parsec.spaces();
+
+    // parse arguments
+    m_parsec.character('(');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected (");
+        return nullptr;
+    }
+
+    int n = 0;
+    for (;;) {
+        char tmp;
+        PTRY(m_parsec, tmp, [](parsec &p) {
+            p.spaces();
+            return p.character(')');
+        }(m_parsec));
+
+        if (m_parsec.is_fail()) {
+            if (n > 0) {
+                m_parsec.space();
+                if (m_parsec.is_fail()) {
+                    SYNTAXERR("expected whitespace");
+                    return nullptr;
+                }
+            }
+            m_parsec.spaces();
+
+            auto t = parse_type();
+            if (!t)
+                return nullptr;
+
+            extn->m_args.push_back(std::move(t));
+            n++;
+        } else {
+            break;
+        }
+    }
+
+    m_parsec.spaces();
+    m_parsec.character(')');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected )");
+        return nullptr;
+    }
+
+    return extn;
 }
 
 std::string ir::parse_id() {
@@ -1002,6 +1110,8 @@ std::string ir_funtype::str() const {
 std::string ir_ref::str() const { return "(ref " + m_type->str() + ")"; }
 
 bool ir::check_type() {
+    add_builtin();
+
     for (auto &s : m_struct) {
         if (HASKEY(m_id2struct, s->m_name)) {
             SEMANTICERR(*this, s.get(), "%s is multiply defined",
@@ -1033,6 +1143,17 @@ bool ir::check_type() {
         m_id2fun[p->m_name] = p->m_funtype;
     }
 
+    for (auto &p : m_externs) {
+        if (HASKEY(m_id2fun, p->m_name) || HASKEY(m_id2struct, p->m_name)) {
+            SEMANTICERR(*this, p.get(), "%s is multiply defined",
+                        p->m_name.c_str());
+            return false;
+        }
+
+        p->resolve_funtype();
+        m_id2fun[p->m_name] = p->m_funtype;
+    }
+
     for (auto &p : m_defuns) {
         if (p->m_ret->m_irtype == ir_type::IRTYPE_STRUCT) {
             std::unordered_set<std::string> used;
@@ -1044,7 +1165,36 @@ bool ir::check_type() {
         }
     }
 
+    for (auto &p : m_externs) {
+        if (p->m_ret->m_irtype == ir_type::IRTYPE_STRUCT) {
+            std::unordered_set<std::string> used;
+            check_recursive((ir_struct *)p->m_ret.get(), used);
+        }
+
+        if (!p->check_type(*this)) {
+            return false;
+        }
+    }
+
     return true;
+}
+
+void ir::add_builtin() {
+    // TODO: add built-in functions
+    // print_unum
+    auto extn = std::make_unique<ir_extern>(false);
+
+    extn->m_name = "print_unum";
+
+    auto voidty = std::make_unique<ir_scalar>();
+    voidty->m_type = TYPE_VOID;
+    extn->m_ret = std::move(voidty);
+
+    auto arg = std::make_unique<ir_scalar>();
+    arg->m_type = TYPE_U64;
+    extn->m_args.push_back(std::move(arg));
+
+    m_externs.push_back(std::move(extn));
 }
 
 shared_ir_type ir::resolve_type(shared_ir_type type) const {
@@ -1109,6 +1259,15 @@ void ir_defun::resolve_funtype() {
     }
 }
 
+void ir_extern::resolve_funtype() {
+    m_funtype = std::make_shared<ir_funtype>();
+    m_funtype->m_ret = shared_ir_type(m_ret->clone());
+
+    for (auto &q : m_args) {
+        m_funtype->m_args.push_back(shared_ir_type(q->clone()));
+    }
+}
+
 bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
     for (auto &q : p->m_member) {
         if (q->m_irtype == ir_type::IRTYPE_USER) {
@@ -1164,6 +1323,17 @@ bool ir_defun::check_type(const ir &ref) {
                 ret->m_type->str().c_str(), m_expr->m_type->str().c_str());
         return false;
     }
+
+    return true;
+}
+
+bool ir_extern::check_type(const ir &ref) {
+    ir_expr::id2type vars;
+
+    m_funtype =
+        std::static_pointer_cast<ir_funtype>(ref.resolve_type(m_funtype));
+    if (!m_funtype)
+        return false;
 
     return true;
 }
@@ -1315,8 +1485,16 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
 }
 
 shared_ir_type ir_apply::check_print(const ir &ref, id2type &vars) {
-    // TODO
-    return nullptr;
+    for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it) {
+        if (!(*it)->check_type(ref, vars))
+            return nullptr;
+    }
+
+    auto v = std::make_shared<ir_scalar>();
+    v->m_type = TYPE_VOID;
+    m_type = v;
+
+    return v;
 }
 
 shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
@@ -1575,6 +1753,13 @@ std::string ir::codegen() {
         m_funs_prot[p->m_name] = fun;
     }
 
+    for (auto &p : m_externs) {
+        auto fun = p->mkproto(*this);
+        if (!fun)
+            return "";
+        m_funs_prot[p->m_name] = fun;
+    }
+
     // Declare the memcpy
     std::vector<llvm::Type *> vec;
     auto i8ptr =
@@ -1714,6 +1899,35 @@ llvm::Function *ir_defun::mkproto(ir &ref) {
                                    m_name, &ref.get_llvm_module());
 
     if (m_name != "main")
+        m_fun->setCallingConv(llvm::CallingConv::Fast);
+
+    return m_fun;
+}
+
+llvm::Function *ir_extern::mkproto(ir &ref) {
+    // type of return values
+    llvm::Type *type = m_ret->codegen(ref);
+    if (type == nullptr)
+        return nullptr;
+
+    // type of arguments
+    std::vector<llvm::Type *> args;
+    for (auto &q : m_args) {
+        llvm::Type *t = q->codegen(ref);
+        if (t == nullptr)
+            return nullptr;
+
+        if (t->isVoidTy())
+            t = llvm::Type::getInt1Ty(ref.get_llvm_ctx());
+
+        args.push_back(t);
+    }
+
+    auto ftype = llvm::FunctionType::get(type, args, false);
+    m_fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
+                                   m_name, &ref.get_llvm_module());
+
+    if (m_is_fastcc)
         m_fun->setCallingConv(llvm::CallingConv::Fast);
 
     return m_fun;
@@ -1921,6 +2135,8 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             BINOP(CreateICmpULE, CreateICmpSLE, CreateFCmpOLE, "<=", "letmp");
         } else if (id->m_id == "!=") {
             BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "!=", "netmp");
+        } else if (id->m_id == "print") {
+            return codegen_print(ref, vals);
         } else {
             // function call
             auto it = ref.get_struct_proto().find(id->m_id);
@@ -1933,6 +2149,8 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
 
     return nullptr;
 }
+
+llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) { return nullptr; }
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
                                   llvm::StructType *type) {
@@ -2050,7 +2268,7 @@ llvm::Value *ir_apply::codegen_call(ir &ref, id2val vals,
 
     auto ret = ref.get_llvm_builder().CreateCall(fun, args, s);
 
-    if (ret && id != "main") {
+    if (fun->getCallingConv() == llvm::CallingConv::Fast) {
         ret->setCallingConv(llvm::CallingConv::Fast);
         ret->setTailCall();
     }
@@ -2135,6 +2353,22 @@ void ir_defun::print() {
     std::cout << "],\"expr\":";
     m_expr->print();
     std::cout << "}}";
+}
+
+void ir_extern::print() {
+    std::cout << "{\"extern\":{\"id\":\"" << m_name << "\","
+              << "\"ret\":";
+    m_ret->print();
+    std::cout << ",\"args\":[";
+    auto n = m_args.size();
+    for (auto &q : m_args) {
+        q->print();
+        n--;
+        if (n > 0) {
+            std::cout << ",";
+        }
+    }
+    std::cout << "]}}";
 }
 
 void ir_apply::print() {

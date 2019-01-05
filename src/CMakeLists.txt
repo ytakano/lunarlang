@@ -48,7 +48,7 @@ FILE(GLOB CPPMain lunar_main.cpp)
 
 list(REMOVE_ITEM CPPSources ${CPPMain})
 
-#add_library(lunarlang_static STATIC ${CPPSources})
+add_library(lunarlang_static STATIC ${CPPSources})
 add_executable(lunar ${CPPMain} ${CPPSources})
 
 if(CMAKE_THREAD_LIBS_INIT)

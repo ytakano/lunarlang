@@ -146,6 +146,27 @@ struct ir_defun : public ir_statement {
 
 typedef std::unique_ptr<ir_defun> ptr_ir_defun;
 
+struct ir_extern : public ir_statement {
+    ir_extern(bool is_fastcc = true) : m_is_fastcc(is_fastcc) {}
+    virtual ~ir_extern() {}
+
+    void print();
+    bool check_type(const ir &ref);
+    llvm::Function *mkproto(ir &ref);
+
+    std::shared_ptr<ir_funtype> m_funtype;
+
+    std::string m_name;
+    ptr_ir_type m_ret;
+    std::vector<ptr_ir_type> m_args;
+    llvm::Function *m_fun;
+    bool m_is_fastcc;
+
+    void resolve_funtype();
+};
+
+typedef std::unique_ptr<ir_extern> ptr_ir_extern;
+
 struct ir_expr : public ir_ast {
     ir_expr() : m_expr_type(EXPRVAL) {}
     virtual ~ir_expr() {}
@@ -172,7 +193,7 @@ struct ir_expr : public ir_ast {
 };
 
 struct ir_id : public ir_expr {
-    ir_id() { m_expr_type = EXPRID; }
+    ir_id(std::string id = "") : m_id(id) { m_expr_type = EXPRID; }
 
     std::string m_id;
 
@@ -204,6 +225,7 @@ struct ir_apply : public ir_expr {
     void struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
                      std::vector<ptr_ir_expr> &exprs, llvm::Value *gep);
     llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
+    llvm::Value *codegen_print(ir &ref, id2val vals);
     llvm::Value *codegen_call(ir &ref, id2val vals, const std::string &id);
 };
 
@@ -312,11 +334,13 @@ class ir {
     llvm::DataLayout m_llvm_datalayout;
     llvm::Function *m_memcpy;
     std::vector<ptr_ir_defun> m_defuns;
+    std::vector<ptr_ir_extern> m_externs;
     std::vector<ptr_ir_struct> m_struct;
 
     ptr_ir_expr parse_expr();
     ptr_ir_struct parse_defstruct();
     ptr_ir_defun parse_defun();
+    ptr_ir_extern parse_extern();
     ptr_ir_type parse_type();
     ptr_ir_type parse_reftype();
     ptr_ir_type parse_scalartype();
@@ -326,6 +350,7 @@ class ir {
     ptr_ir_let parse_let();
     bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);
     std::string parse_id();
+    void add_builtin();
 };
 } // namespace lunar
 
