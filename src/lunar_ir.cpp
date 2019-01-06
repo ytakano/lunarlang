@@ -1154,13 +1154,24 @@ static std::unique_ptr<ir_extern> mk_extern(const std::string &name,
 
 static void append_arg(ir_extern *extn, type_spec type) {
     auto arg = std::make_unique<ir_scalar>();
-    arg->m_type = TYPE_U64;
+    arg->m_type = type;
     extn->m_args.push_back(std::move(arg));
+}
+
+static ptr_ir_scalar mk_voidty() {
+    auto voidty = std::make_unique<ir_scalar>();
+    voidty->m_type = TYPE_VOID;
+    return voidty;
+}
+
+static ptr_ir_ref mk_refvoid() {
+    auto ref = std::make_unique<ir_ref>();
+    ref->m_type = mk_voidty();
+    return ref;
 }
 
 void ir::add_builtin() {
     // TODO: add built-in functions
-
     auto print_unum = mk_extern("print_unum", TYPE_VOID);
     append_arg(print_unum.get(), TYPE_U64);
     m_externs.push_back(std::move(print_unum));
@@ -1187,9 +1198,17 @@ void ir::add_builtin() {
 
     auto yield_green_thread = mk_extern("yield_green_thread", TYPE_VOID);
     m_externs.push_back(std::move(yield_green_thread));
-    /*
-        auto spawn_green_thread = mk_extern("spawn_green_thread", TYPE_VOID);
-        m_externs.push_back(std::move(spawn_green_thread)); */
+
+    // void spawn_green_thread(void (*func)(void *), void *arg,
+    //                         uint32_t stack_size = 4096 * 32);
+    auto spawn_green_thread = mk_extern("spawn_green_thread", TYPE_VOID);
+    auto fun = std::make_unique<ir_funtype>();
+    fun->m_ret = mk_voidty();
+    fun->m_args.push_back(mk_refvoid());
+    spawn_green_thread->m_args.push_back(std::move(fun));
+    spawn_green_thread->m_args.push_back(mk_refvoid());
+    append_arg(spawn_green_thread.get(), TYPE_U32);
+    m_externs.push_back(std::move(spawn_green_thread));
 }
 
 shared_ir_type ir::resolve_type(shared_ir_type type) const {

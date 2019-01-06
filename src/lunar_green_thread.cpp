@@ -39,7 +39,7 @@ void init_thread() {
 
 void run_green_thread() { p_green->run(); }
 
-void spawn_green_thread(void (*func)(void *), void *arg, int stack_size) {
+void spawn_green_thread(void (*func)(void *), void *arg, uint32_t stack_size) {
     p_green->spawn(func, arg, stack_size);
 }
 
@@ -131,7 +131,8 @@ void green_thread::yield() {
     siglongjmp(m_jmp_buf, 1);
 }
 
-uint64_t green_thread::spawn(void (*func)(void *), void *arg, int stack_size) {
+uint64_t green_thread::spawn(void (*func)(void *), void *arg,
+                             uint32_t stack_size) {
     auto ctx = std::unique_ptr<context>(new context);
 
     for (;;) {

@@ -58,6 +58,8 @@ struct ir_scalar : public ir_type {
     type_spec m_type;
 };
 
+typedef std::unique_ptr<ir_scalar> ptr_ir_scalar;
+
 struct ir_funtype : public ir_type {
     ir_funtype() { m_irtype = IRTYPE_FUN; }
 

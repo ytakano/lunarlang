@@ -19,7 +19,7 @@ void init_thread();
 void run_green_thread();
 void yield_green_thread();
 void spawn_green_thread(void (*func)(void *), void *arg,
-                        int stack_size = 4096 * 32);
+                        uint32_t stack_size = 4096 * 32);
 void *make_ch(int bucket_size, int len);
 lunar::CH_RESULT send_ch(void *ch, const void *val);
 lunar::CH_RESULT recv_ch(void *ch, void *val);
@@ -77,7 +77,8 @@ class green_thread {
 
     void yield();
     void run();
-    uint64_t spawn(void (*func)(void *), void *arg, int stack_size = 4096 * 32);
+    uint64_t spawn(void (*func)(void *), void *arg,
+                   uint32_t stack_size = 4096 * 32);
 
     print m_print;
 
