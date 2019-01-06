@@ -1124,6 +1124,25 @@ bool ir::check_type() {
         if (!p->check_type(*this)) {
             return false;
         }
+
+        if (p->m_name == "main") {
+            if (p->m_ret->m_irtype != ir_type::IRTYPE_SCALAR) {
+                SEMANTICERR(*this, p, "main function must be void type");
+                return false;
+            }
+
+            ir_scalar *s = (ir_scalar *)p->m_ret.get();
+            if (s->m_type != TYPE_VOID) {
+                SEMANTICERR(*this, p, "main function must be void type");
+                return false;
+            }
+
+            if (p->m_args.size() > 0) {
+                SEMANTICERR(*this, p,
+                            "main function must not take any arguments");
+                return false;
+            }
+        }
     }
 
     for (auto &p : m_externs) {
@@ -1166,7 +1185,9 @@ static ptr_ir_scalar mk_voidty() {
 
 static ptr_ir_ref mk_refvoid() {
     auto ref = std::make_unique<ir_ref>();
-    ref->m_type = mk_voidty();
+    auto u8ptr = std::make_unique<ir_scalar>();
+    u8ptr->m_type = TYPE_U8;
+    ref->m_type = std::move(u8ptr);
     return ref;
 }
 
@@ -1850,7 +1871,8 @@ llvm::Type *ir_funtype::codegen(ir &ref) {
         args.push_back(a);
     }
 
-    return llvm::FunctionType::get(ret, args, false);
+    auto ftype = llvm::FunctionType::get(ret, args, false);
+    return llvm::PointerType::getUnqual(ftype);
 }
 
 llvm::Function *ir_defun::codegen(ir &ref) {
@@ -1879,10 +1901,97 @@ llvm::Function *ir_defun::codegen(ir &ref) {
         // Validate the generated code, checking for consistency.
         // llvm::verifyFunction(fun);
 
+        if (m_name == "main")
+            codegen_main(ref);
+
         return m_fun;
     }
 
     return nullptr;
+}
+
+llvm::Function *ir_defun::codegen_main(ir &ref) {
+    auto &ctx = ref.get_llvm_ctx();
+
+    auto ret = llvm::IntegerType::get(ctx, 64);
+    auto argc = llvm::IntegerType::get(ctx, 64);
+    auto charty = llvm::IntegerType::get(ctx, 8);
+    auto charptr = llvm::PointerType::getUnqual(charty);
+    auto argv = llvm::PointerType::getUnqual(charptr);
+
+    std::vector<llvm::Type *> args;
+    args.push_back(std::move(argc));
+    args.push_back(std::move(argv));
+
+    auto ftype = llvm::FunctionType::get(ret, args, false);
+    auto mainfun = llvm::Function::Create(
+        ftype, llvm::Function::ExternalLinkage, "main", &ref.get_llvm_module());
+
+    int n = 0;
+    for (auto &arg : mainfun->args()) {
+        if (n == 0)
+            arg.setName("argc");
+        else
+            arg.setName("argv");
+        n++;
+    }
+
+    auto entry = codegen_entry(ref);
+
+    std::vector<llvm::Value *> vals;
+    auto bb = llvm::BasicBlock::Create(ref.get_llvm_ctx(), "entry", mainfun);
+    auto &builder = ref.get_llvm_builder();
+    builder.SetInsertPoint(bb);
+    builder.CreateCall(ref.get_function("init_thread"), vals, "");
+
+    auto voidty = llvm::PointerType::getUnqual(llvm::IntegerType::get(ctx, 8));
+    vals.push_back(entry);
+    vals.push_back(llvm::ConstantPointerNull::get(voidty));
+    vals.push_back(
+        llvm::ConstantInt::get(ctx, llvm::APInt(32, 4096 * 32, false)));
+    builder.CreateCall(ref.get_function("spawn_green_thread"), vals, "");
+
+    vals.clear();
+    builder.CreateCall(ref.get_function("run_green_thread"), vals, "");
+
+    builder.CreateRet(llvm::ConstantInt::get(ctx, llvm::APInt(64, 0, false)));
+
+    return mainfun;
+}
+
+llvm::Function *ir_defun::codegen_entry(ir &ref) {
+    // TODO: handling spawn
+
+    auto &ctx = ref.get_llvm_ctx();
+
+    auto voidty = llvm::Type::getVoidTy(ctx);
+    auto voidptr = llvm::PointerType::getUnqual(llvm::IntegerType::get(ctx, 8));
+
+    std::vector<llvm::Type *> args;
+    args.push_back(std::move(voidptr));
+
+    auto ftype = llvm::FunctionType::get(voidty, args, false);
+    auto entry =
+        llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
+                               m_name + ":entry", &ref.get_llvm_module());
+
+    entry->args().begin()->setName("arg");
+
+    auto bb = llvm::BasicBlock::Create(ref.get_llvm_ctx(), "entry", entry);
+    auto &builder = ref.get_llvm_builder();
+    builder.SetInsertPoint(bb);
+
+    std::vector<llvm::Value *> vals;
+    auto ret = builder.CreateCall(m_fun, vals, "");
+
+    if (m_fun->getCallingConv() == llvm::CallingConv::Fast) {
+        ret->setCallingConv(llvm::CallingConv::Fast);
+        ret->setTailCall();
+    }
+
+    builder.CreateRetVoid();
+
+    return entry;
 }
 
 llvm::Type *ir_struct::codegen(ir &ref) {
@@ -1926,12 +2035,17 @@ llvm::Function *ir_defun::mkproto(ir &ref) {
         args.push_back(t);
     }
 
-    auto ftype = llvm::FunctionType::get(type, args, false);
-    m_fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage,
-                                   m_name, &ref.get_llvm_module());
+    std::string name;
+    if (m_name == "main")
+        name = "main:lunar";
+    else
+        name = m_name;
 
-    if (m_name != "main")
-        m_fun->setCallingConv(llvm::CallingConv::Fast);
+    auto ftype = llvm::FunctionType::get(type, args, false);
+    m_fun = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage, name,
+                                   &ref.get_llvm_module());
+
+    m_fun->setCallingConv(llvm::CallingConv::Fast);
 
     return m_fun;
 }

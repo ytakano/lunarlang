@@ -116,7 +116,7 @@ const char *e18 = "(struct st (u64 foo))\n"
                   "(defun func void (((fun u32 ((ref st))) arg)) ())";
 
 void world(void *arg) {
-    std::string s = e18;
+    std::string s = e17;
 
     lunar::ir ir("test.ir", s);
 

@@ -134,6 +134,8 @@ struct ir_defun : public ir_statement {
     bool check_type(const ir &ref);
     llvm::Function *mkproto(ir &ref);
     llvm::Function *codegen(ir &ref);
+    llvm::Function *codegen_main(ir &ref);
+    llvm::Function *codegen_entry(ir &ref);
 
     std::shared_ptr<ir_funtype> m_funtype;
 

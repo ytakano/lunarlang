@@ -1,5 +1,7 @@
 #include "lunar_green_thread.hpp"
 
+#include <iostream>
+
 #include <unistd.h>
 
 #include <sys/mman.h>
@@ -178,10 +180,12 @@ uint64_t green_thread::spawn(void (*func)(void *), void *arg,
 }
 
 void green_thread::run() {
-    if (sigsetjmp(m_jmp_buf, 0) == 0)
+    if (sigsetjmp(m_jmp_buf, 0) == 0) {
         yield();
-    else
+    } else {
+        m_print.flush();
         delete this;
+    }
 }
 
 } // namespace lunar
