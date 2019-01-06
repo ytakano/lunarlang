@@ -26,7 +26,7 @@ $DECIMAL := [1-9][0-9]*
 ## Type
 
 ```
-$TYPE := $SCALAR | (ref $REFTYPE)
+$TYPE := $SCALAR | (ref $REFTYPE) | (fun $TYPE ($TYPE*))
 $REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | $ID
 ```
 

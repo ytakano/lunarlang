@@ -37,6 +37,16 @@
         fprintf(stderr, M2 "\n", ##__VA_ARGS__);                               \
     } while (0)
 
+#define SPACEPLUS(PARSEC)                                                      \
+    do {                                                                       \
+        (PARSEC).space();                                                      \
+        if ((PARSEC).is_fail()) {                                              \
+            SYNTAXERR("expected whitespace");                                  \
+            return nullptr;                                                    \
+        }                                                                      \
+        (PARSEC).spaces();                                                     \
+    } while (0)
+
 namespace lunar {
 
 static bool eq_type(ir_type *lhs, ir_type *rhs) {
@@ -265,12 +275,7 @@ bool ir::parse() {
 }
 
 ptr_ir_struct ir::parse_defstruct() {
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     auto name = parse_id();
     if (m_parsec.is_fail()) {
@@ -278,12 +283,7 @@ ptr_ir_struct ir::parse_defstruct() {
         return nullptr;
     }
 
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     auto st = std::make_unique<ir_struct>();
 
@@ -305,12 +305,7 @@ ptr_ir_struct ir::parse_defstruct() {
         if (!t)
             return nullptr;
 
-        m_parsec.space();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected whitespace");
-            return nullptr;
-        }
-        m_parsec.spaces();
+        SPACEPLUS(m_parsec);
 
         auto id = parse_id();
         if (m_parsec.is_fail()) {
@@ -346,12 +341,7 @@ ptr_ir_struct ir::parse_defstruct() {
         if (!m_parsec.is_fail())
             return st;
 
-        m_parsec.space();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected whitespace");
-            return nullptr;
-        }
-        m_parsec.spaces();
+        SPACEPLUS(m_parsec);
     }
 
     assert(false);
@@ -402,11 +392,7 @@ ptr_ir_expr ir::parse_expr() {
 
         // LET
         if (!m_parsec.is_fail()) {
-            m_parsec.space();
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("expected whitespace");
-                return nullptr;
-            }
+            SPACEPLUS(m_parsec);
 
             auto let = parse_let();
             if (let) {
@@ -431,14 +417,10 @@ ptr_ir_expr ir::parse_expr() {
                 return apply;
             }
 
-            if (apply->m_expr.size() > 0) {
-                m_parsec.space();
-                if (m_parsec.is_fail()) {
-                    SYNTAXERR("expected whitespace");
-                    return nullptr;
-                }
-            }
-            m_parsec.spaces();
+            if (apply->m_expr.size() > 0)
+                SPACEPLUS(m_parsec);
+            else
+                m_parsec.spaces();
 
             auto e = parse_expr();
             if (!e)
@@ -497,6 +479,16 @@ ptr_ir_type ir::parse_type() {
             ref->m_line = line;
             ref->m_column = column;
             return ref;
+        }
+
+        if (id == "fun") {
+            auto fun = parse_fun();
+            if (!fun)
+                return nullptr;
+
+            fun->m_line = line;
+            fun->m_column = column;
+            return fun;
         }
 
         SYNTAXERR2("expected type specifiler", line, column);
@@ -584,12 +576,7 @@ ptr_ir_type ir::parse_scalartype() {
 }
 
 ptr_ir_struct ir::parse_struct() {
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     auto st = std::make_unique<ir_struct>();
 
@@ -609,12 +596,7 @@ ptr_ir_struct ir::parse_struct() {
         if (!m_parsec.is_fail())
             return st;
 
-        m_parsec.space();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected whitespace");
-            return nullptr;
-        }
-        m_parsec.spaces();
+        SPACEPLUS(m_parsec);
     }
 
     assert(false);
@@ -622,12 +604,7 @@ ptr_ir_struct ir::parse_struct() {
 }
 
 ptr_ir_type ir::parse_ref() {
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     auto t = parse_reftype();
     if (!t)
@@ -696,13 +673,58 @@ ptr_ir_type ir::parse_reftype() {
     return s;
 }
 
-ptr_ir_defun ir::parse_defun() {
-    m_parsec.space();
+ptr_ir_type ir::parse_fun() {
+    SPACEPLUS(m_parsec);
+
+    auto ret = parse_type();
+    if (!ret)
+        return nullptr;
+
+    SPACEPLUS(m_parsec);
+
+    m_parsec.character('(');
     if (m_parsec.is_fail()) {
         SYNTAXERR("expected (");
         return nullptr;
     }
+
+    auto fun = std::make_unique<ir_funtype>();
+    fun->m_ret = std::move(ret);
+
+    for (int n = 0;; n++) {
+        char tmp;
+        PTRY(m_parsec, tmp, [](parsec &p) {
+            p.spaces();
+            return p.character(')');
+        }(m_parsec));
+
+        if (!m_parsec.is_fail())
+            break;
+
+        if (n > 0)
+            SPACEPLUS(m_parsec);
+        else
+            m_parsec.spaces();
+
+        auto arg = parse_type();
+        if (!arg)
+            return nullptr;
+
+        fun->m_args.push_back(std::move(arg));
+    }
+
     m_parsec.spaces();
+    m_parsec.character(')');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected )");
+        return nullptr;
+    }
+
+    return fun;
+}
+
+ptr_ir_defun ir::parse_defun() {
+    SPACEPLUS(m_parsec);
 
     // parse function name
     ptr_ir_defun defun(new ir_defun);
@@ -714,13 +736,7 @@ ptr_ir_defun ir::parse_defun() {
 
     defun->m_name = id;
 
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     // parse return types
     auto t = parse_type();
@@ -729,12 +745,7 @@ ptr_ir_defun ir::parse_defun() {
 
     defun->m_ret = std::move(t);
 
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     // parse arguments
     m_parsec.character('(');
@@ -752,14 +763,10 @@ ptr_ir_defun ir::parse_defun() {
         }(m_parsec));
 
         if (m_parsec.is_fail()) {
-            if (n > 0) {
-                m_parsec.space();
-                if (m_parsec.is_fail()) {
-                    SYNTAXERR("expected whitespace");
-                    return nullptr;
-                }
-            }
-            m_parsec.spaces();
+            if (n > 0)
+                SPACEPLUS(m_parsec);
+            else
+                m_parsec.spaces();
 
             m_parsec.character('(');
             if (m_parsec.is_fail()) {
@@ -773,11 +780,7 @@ ptr_ir_defun ir::parse_defun() {
             if (!t)
                 return nullptr;
 
-            m_parsec.space();
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("expected whitespace");
-                return nullptr;
-            }
+            SPACEPLUS(m_parsec);
 
             auto id = parse_id();
             if (m_parsec.is_fail()) {
@@ -801,12 +804,7 @@ ptr_ir_defun ir::parse_defun() {
         }
     }
 
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     // parse expression
     auto expr = parse_expr();
@@ -826,12 +824,7 @@ ptr_ir_defun ir::parse_defun() {
 }
 
 ptr_ir_extern ir::parse_extern() {
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected (");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     // parse function name
     ptr_ir_extern extn(new ir_extern);
@@ -843,13 +836,7 @@ ptr_ir_extern ir::parse_extern() {
 
     extn->m_name = id;
 
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     // parse return types
     auto t = parse_type();
@@ -858,12 +845,7 @@ ptr_ir_extern ir::parse_extern() {
 
     extn->m_ret = std::move(t);
 
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     // parse arguments
     m_parsec.character('(');
@@ -881,14 +863,10 @@ ptr_ir_extern ir::parse_extern() {
         }(m_parsec));
 
         if (m_parsec.is_fail()) {
-            if (n > 0) {
-                m_parsec.space();
-                if (m_parsec.is_fail()) {
-                    SYNTAXERR("expected whitespace");
-                    return nullptr;
-                }
-            }
-            m_parsec.spaces();
+            if (n > 0)
+                SPACEPLUS(m_parsec);
+            else
+                m_parsec.spaces();
 
             auto t = parse_type();
             if (!t)
@@ -956,15 +934,11 @@ ptr_ir_let ir::parse_let() {
     auto let = std::make_unique<ir_let>();
 
     for (;;) {
-        if (let->m_def.size() > 0) {
-            m_parsec.space();
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("expected whitespace");
-                return nullptr;
-            }
-        }
+        if (let->m_def.size() > 0)
+            SPACEPLUS(m_parsec);
+        else
+            m_parsec.spaces();
 
-        m_parsec.spaces();
         m_parsec.character('(');
         if (m_parsec.is_fail()) {
             SYNTAXERR("expected (");
@@ -976,12 +950,7 @@ ptr_ir_let ir::parse_let() {
         if (!type)
             return nullptr;
 
-        m_parsec.space();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected whitespace");
-            return nullptr;
-        }
-        m_parsec.spaces();
+        SPACEPLUS(m_parsec);
 
         auto id = parse_id();
         if (m_parsec.is_fail()) {
@@ -989,12 +958,7 @@ ptr_ir_let ir::parse_let() {
             return nullptr;
         }
 
-        m_parsec.space();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected whitespace");
-            return nullptr;
-        }
-        m_parsec.spaces();
+        SPACEPLUS(m_parsec);
 
         auto e = parse_expr();
         if (!e)
@@ -1024,12 +988,7 @@ ptr_ir_let ir::parse_let() {
             break;
     }
 
-    m_parsec.space();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected whitespace");
-        return nullptr;
-    }
-    m_parsec.spaces();
+    SPACEPLUS(m_parsec);
 
     auto e = parse_expr();
     if (!e)
@@ -1087,7 +1046,9 @@ std::string ir_scalar::str() const {
         return "void";
     case TYPE_REF:
     case TYPE_STRUCT:
-        assert(m_type != TYPE_REF && m_type != TYPE_STRUCT);
+    case TYPE_FUN:
+        assert(m_type != TYPE_REF && m_type != TYPE_STRUCT &&
+               m_type != TYPE_FUN);
         return "";
     }
 }
@@ -1179,22 +1140,56 @@ bool ir::check_type() {
     return true;
 }
 
-void ir::add_builtin() {
-    // TODO: add built-in functions
-    // print_unum
+static std::unique_ptr<ir_extern> mk_extern(const std::string &name,
+                                            type_spec type) {
     auto extn = std::make_unique<ir_extern>(false);
+    extn->m_name = name;
 
-    extn->m_name = "print_unum";
+    auto t = std::make_unique<ir_scalar>();
+    t->m_type = type;
+    extn->m_ret = std::move(t);
 
-    auto voidty = std::make_unique<ir_scalar>();
-    voidty->m_type = TYPE_VOID;
-    extn->m_ret = std::move(voidty);
+    return extn;
+}
 
+static void append_arg(ir_extern *extn, type_spec type) {
     auto arg = std::make_unique<ir_scalar>();
     arg->m_type = TYPE_U64;
     extn->m_args.push_back(std::move(arg));
+}
 
-    m_externs.push_back(std::move(extn));
+void ir::add_builtin() {
+    // TODO: add built-in functions
+
+    auto print_unum = mk_extern("print_unum", TYPE_VOID);
+    append_arg(print_unum.get(), TYPE_U64);
+    m_externs.push_back(std::move(print_unum));
+
+    auto print_snum = mk_extern("print_snum", TYPE_VOID);
+    append_arg(print_snum.get(), TYPE_S64);
+    m_externs.push_back(std::move(print_snum));
+
+    auto print_boolean = mk_extern("print_boolean", TYPE_VOID);
+    append_arg(print_boolean.get(), TYPE_BOOL);
+    m_externs.push_back(std::move(print_boolean));
+
+    auto print_flush = mk_extern("print_flush", TYPE_VOID);
+    m_externs.push_back(std::move(print_flush));
+
+    auto print_endl = mk_extern("print_endl", TYPE_VOID);
+    m_externs.push_back(std::move(print_endl));
+
+    auto init_thread = mk_extern("init_thread", TYPE_VOID);
+    m_externs.push_back(std::move(init_thread));
+
+    auto run_green_thread = mk_extern("run_green_thread", TYPE_VOID);
+    m_externs.push_back(std::move(run_green_thread));
+
+    auto yield_green_thread = mk_extern("yield_green_thread", TYPE_VOID);
+    m_externs.push_back(std::move(yield_green_thread));
+    /*
+        auto spawn_green_thread = mk_extern("spawn_green_thread", TYPE_VOID);
+        m_externs.push_back(std::move(spawn_green_thread)); */
 }
 
 shared_ir_type ir::resolve_type(shared_ir_type type) const {
@@ -1810,8 +1805,9 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
     case TYPE_INT:
     case TYPE_REF:
     case TYPE_STRUCT:
+    case TYPE_FUN:
         assert(m_type != TYPE_INT && m_type != TYPE_REF &&
-               m_type != TYPE_STRUCT);
+               m_type != TYPE_STRUCT && m_type != TYPE_FUN);
         return nullptr;
     }
 }
@@ -1819,6 +1815,23 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
 llvm::Type *ir_ref::codegen(ir &ref) {
     auto t = m_type->codegen(ref);
     return llvm::PointerType::getUnqual(t);
+}
+
+llvm::Type *ir_funtype::codegen(ir &ref) {
+    auto ret = m_ret->codegen(ref);
+    if (!ret)
+        return nullptr;
+
+    std::vector<llvm::Type *> args;
+    for (auto &arg : m_args) {
+        auto a = arg->codegen(ref);
+        if (!a)
+            return nullptr;
+
+        args.push_back(a);
+    }
+
+    return llvm::FunctionType::get(ret, args, false);
 }
 
 llvm::Function *ir_defun::codegen(ir &ref) {
@@ -2305,7 +2318,22 @@ void ir::print() {
     std::cout << "]}";
 }
 
-void ir_funtype::print() {}
+void ir_funtype::print() {
+    std::cout << "{\"fun\":{\"ret\":";
+
+    m_ret->print();
+
+    std::cout << ",\"args\":[";
+    auto n = m_args.size();
+    for (auto &q : m_args) {
+        q->print();
+        n--;
+        if (n > 0) {
+            std::cout << ",";
+        }
+    }
+    std::cout << "]}}";
+}
 
 void ir_struct::print() {
     std::cout << "{\"struct\":{\"name\":\"" << m_name << "\",\"member\":[";

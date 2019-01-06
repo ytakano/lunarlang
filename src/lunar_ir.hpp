@@ -64,7 +64,7 @@ struct ir_funtype : public ir_type {
     void print();
     ir_type *clone() const { return (new ir_funtype(*this)); }
     std::string str() const;
-    llvm::Type *codegen(ir &ref) { return nullptr; };
+    llvm::Type *codegen(ir &ref);
 
     shared_ir_type m_ret;
     std::vector<shared_ir_type> m_args;
@@ -346,6 +346,7 @@ class ir {
     ptr_ir_type parse_scalartype();
     ptr_ir_struct parse_struct();
     ptr_ir_type parse_ref();
+    ptr_ir_type parse_fun();
     ptr_ir_decimal parse_decimal();
     ptr_ir_let parse_let();
     bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);

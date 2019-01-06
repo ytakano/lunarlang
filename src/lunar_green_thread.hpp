@@ -24,6 +24,7 @@ void *make_ch(int bucket_size, int len);
 lunar::CH_RESULT send_ch(void *ch, const void *val);
 lunar::CH_RESULT recv_ch(void *ch, void *val);
 
+// TODO: float, double
 void print_unum(uint64_t num);
 void print_snum(int64_t num);
 void print_boolean(bool num);
