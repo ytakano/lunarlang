@@ -69,7 +69,7 @@ void print_endl() { p_green->m_print.endl(); }
 
 namespace lunar {
 
-green_thread::green_thread() : m_running(nullptr) {}
+green_thread::green_thread() : m_running(nullptr), m_remove(nullptr) {}
 
 green_thread::~green_thread() {}
 
@@ -86,7 +86,11 @@ void green_thread::yield() {
             m_suspend.push_back(previous);
         } else if (previous->m_state == context::TERMINATED) {
             auto it = m_id2ctx.find(previous->m_id);
-            m_remove = std::move(it->second);
+
+            if (m_remove)
+                delete m_remove;
+
+            m_remove = it->second;
             m_id2ctx.erase(it);
             previous = nullptr;
         }
@@ -135,7 +139,7 @@ void green_thread::yield() {
 
 uint64_t green_thread::spawn(void (*func)(void *), void *arg,
                              uint32_t stack_size) {
-    auto ctx = std::unique_ptr<context>(new context);
+    auto ctx = new context;
 
     for (;;) {
         current_id++;
@@ -163,9 +167,9 @@ uint64_t green_thread::spawn(void (*func)(void *), void *arg,
     ctx->m_stack_size = stack_size / sizeof(uint64_t);
 
     auto s = ctx->m_stack_size;
-    ctx->m_stack[s - 2] = (uint64_t)ctx.get(); // push context
-    ctx->m_stack[s - 3] = (uint64_t)arg;       // push argument
-    ctx->m_stack[s - 4] = (uint64_t)func;      // push func
+    ctx->m_stack[s - 2] = (uint64_t)ctx;  // push context
+    ctx->m_stack[s - 3] = (uint64_t)arg;  // push argument
+    ctx->m_stack[s - 4] = (uint64_t)func; // push func
 
     // see /proc/sys/vm/max_map_count for Linux
     if (mprotect(&ctx->m_stack[0], pagesize, PROT_NONE) < 0) {
@@ -173,8 +177,8 @@ uint64_t green_thread::spawn(void (*func)(void *), void *arg,
         exit(-1);
     }
 
-    m_suspend.push_back(ctx.get());
-    m_id2ctx[current_id] = std::move(ctx);
+    m_suspend.push_back(ctx);
+    m_id2ctx[current_id] = ctx;
 
     return current_id;
 }

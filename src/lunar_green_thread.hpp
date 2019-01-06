@@ -6,9 +6,8 @@
 #include <deque>
 #include <memory>
 
-#include <unordered_map>
-#include <unordered_set>
-
+#include "external/tsl/hopscotch_map.h"
+#include "external/tsl/hopscotch_set.h"
 #include "lunar_channel.hpp"
 #include "lunar_common.hpp"
 #include "lunar_print.hpp"
@@ -87,12 +86,12 @@ class green_thread {
 
     context *m_running;
     std::deque<context *> m_suspend;
-    std::unordered_map<channel *, context *> m_rch2ctx;
-    std::unordered_map<channel *, std::unordered_set<context *>> m_wch2ctx;
+    tsl::hopscotch_map<channel *, context *> m_rch2ctx;
+    tsl::hopscotch_map<channel *, tsl::hopscotch_set<context *>> m_wch2ctx;
 
-    std::unordered_map<uint64_t, ptr_context> m_id2ctx;
+    tsl::hopscotch_map<uint64_t, context *> m_id2ctx;
 
-    ptr_context m_remove;
+    context *m_remove;
 
     void remove_context(context *ctx);
     void first_switch(context *pre, context *ctx);

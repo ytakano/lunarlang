@@ -47,6 +47,34 @@
         (PARSEC).spaces();                                                     \
     } while (0)
 
+#define PARSEID(ID, PARSEC)                                                    \
+    do {                                                                       \
+        (ID) = parse_id();                                                     \
+        if ((PARSEC).is_fail()) {                                              \
+            SYNTAXERR("expected identifier");                                  \
+            return nullptr;                                                    \
+        }                                                                      \
+    } while (0)
+
+#define PARSELPAREN(PARSEC)                                                    \
+    do {                                                                       \
+        (PARSEC).character('(');                                               \
+        if ((PARSEC).is_fail()) {                                              \
+            SYNTAXERR("expected (");                                           \
+            return nullptr;                                                    \
+        }                                                                      \
+    } while (0)
+
+#define PARSERPAREN(PARSEC)                                                    \
+    do {                                                                       \
+        (PARSEC).spaces();                                                     \
+        (PARSEC).character(')');                                               \
+        if ((PARSEC).is_fail()) {                                              \
+            SYNTAXERR("expected )");                                           \
+            return nullptr;                                                    \
+        }                                                                      \
+    } while (0)
+
 namespace lunar {
 
 static bool eq_type(ir_type *lhs, ir_type *rhs) {
@@ -277,12 +305,8 @@ bool ir::parse() {
 ptr_ir_struct ir::parse_defstruct() {
     SPACEPLUS(m_parsec);
 
-    auto name = parse_id();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected identifier");
-        return nullptr;
-    }
-
+    std::string name;
+    PARSEID(name, m_parsec);
     SPACEPLUS(m_parsec);
 
     auto st = std::make_unique<ir_struct>();
@@ -291,11 +315,7 @@ ptr_ir_struct ir::parse_defstruct() {
 
     int n = 0;
     for (;;) {
-        m_parsec.character('(');
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected (");
-            return nullptr;
-        }
+        PARSELPAREN(m_parsec);
         m_parsec.spaces();
 
         auto line = m_parsec.get_line();
@@ -306,19 +326,9 @@ ptr_ir_struct ir::parse_defstruct() {
             return nullptr;
 
         SPACEPLUS(m_parsec);
-
-        auto id = parse_id();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected identifier");
-            return nullptr;
-        }
-
-        m_parsec.spaces();
-        m_parsec.character(')');
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected )");
-            return nullptr;
-        }
+        std::string id;
+        PARSEID(id, m_parsec);
+        PARSERPAREN(m_parsec);
 
         if (HASKEY(st->m_id2idx, id)) {
             ir_id i;
@@ -465,11 +475,8 @@ ptr_ir_type ir::parse_type() {
     PTRY(m_parsec, tmp, m_parsec.character('('));
     if (!m_parsec.is_fail()) {
         m_parsec.spaces();
-        auto id = parse_id();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected identifier");
-            return nullptr;
-        }
+        std::string id;
+        PARSEID(id, m_parsec);
 
         if (id == "ref") {
             auto ref = parse_ref();
@@ -510,11 +517,8 @@ ptr_ir_type ir::parse_type() {
 }
 
 ptr_ir_type ir::parse_scalartype() {
-    std::string s = parse_id();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected identifier");
-        return nullptr;
-    }
+    std::string s;
+    PARSEID(s, m_parsec);
 
     // TODO: fix to use a look up table
     if (s == "u64") {
@@ -610,12 +614,7 @@ ptr_ir_type ir::parse_ref() {
     if (!t)
         return nullptr;
 
-    m_parsec.spaces();
-    m_parsec.character(')');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected )");
-        return nullptr;
-    }
+    PARSERPAREN(m_parsec);
 
     auto ref = std::make_unique<ir_ref>();
     ref->m_type = std::move(t);
@@ -634,11 +633,8 @@ ptr_ir_type ir::parse_reftype() {
 
         line = m_parsec.get_line();
         column = m_parsec.get_column();
-        auto id = parse_id();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected identifier");
-            return nullptr;
-        }
+        std::string id;
+        PARSEID(id, m_parsec);
 
         if (id == "ref") {
             auto ref = parse_ref();
@@ -681,12 +677,7 @@ ptr_ir_type ir::parse_fun() {
         return nullptr;
 
     SPACEPLUS(m_parsec);
-
-    m_parsec.character('(');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected (");
-        return nullptr;
-    }
+    PARSELPAREN(m_parsec);
 
     auto fun = std::make_unique<ir_funtype>();
     fun->m_ret = std::move(ret);
@@ -713,12 +704,7 @@ ptr_ir_type ir::parse_fun() {
         fun->m_args.push_back(std::move(arg));
     }
 
-    m_parsec.spaces();
-    m_parsec.character(')');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected )");
-        return nullptr;
-    }
+    PARSERPAREN(m_parsec);
 
     return fun;
 }
@@ -728,12 +714,8 @@ ptr_ir_defun ir::parse_defun() {
 
     // parse function name
     ptr_ir_defun defun(new ir_defun);
-    auto id = parse_id();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected identifier");
-        return nullptr;
-    }
-
+    std::string id;
+    PARSEID(id, m_parsec);
     defun->m_name = id;
 
     SPACEPLUS(m_parsec);
@@ -748,11 +730,7 @@ ptr_ir_defun ir::parse_defun() {
     SPACEPLUS(m_parsec);
 
     // parse arguments
-    m_parsec.character('(');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected (");
-        return nullptr;
-    }
+    PARSELPAREN(m_parsec);
 
     int n = 0;
     for (;;) {
@@ -768,12 +746,7 @@ ptr_ir_defun ir::parse_defun() {
             else
                 m_parsec.spaces();
 
-            m_parsec.character('(');
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("expected (");
-                return nullptr;
-            }
-
+            PARSELPAREN(m_parsec);
             m_parsec.spaces();
 
             auto t = parse_type();
@@ -782,23 +755,15 @@ ptr_ir_defun ir::parse_defun() {
 
             SPACEPLUS(m_parsec);
 
-            auto id = parse_id();
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("expected identifier");
-                return nullptr;
-            }
+            std::string id;
+            PARSEID(id, m_parsec);
 
             auto p = std::make_unique<ir_id>();
             p->m_id = id;
             p->m_type = std::move(t);
             defun->m_args.push_back(std::move(p));
 
-            m_parsec.spaces();
-            m_parsec.character(')');
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("expected )");
-                return nullptr;
-            }
+            PARSERPAREN(m_parsec);
         } else {
             break;
         }
@@ -811,12 +776,7 @@ ptr_ir_defun ir::parse_defun() {
     if (!expr)
         return nullptr;
 
-    m_parsec.spaces();
-    m_parsec.character(')');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected )");
-        return nullptr;
-    }
+    PARSERPAREN(m_parsec);
 
     defun->m_expr = std::move(expr);
 
@@ -828,12 +788,9 @@ ptr_ir_extern ir::parse_extern() {
 
     // parse function name
     ptr_ir_extern extn(new ir_extern);
-    auto id = parse_id();
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected identifier");
-        return nullptr;
-    }
 
+    std::string id;
+    PARSEID(id, m_parsec);
     extn->m_name = id;
 
     SPACEPLUS(m_parsec);
@@ -848,11 +805,7 @@ ptr_ir_extern ir::parse_extern() {
     SPACEPLUS(m_parsec);
 
     // parse arguments
-    m_parsec.character('(');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected (");
-        return nullptr;
-    }
+    PARSELPAREN(m_parsec);
 
     int n = 0;
     for (;;) {
@@ -879,12 +832,7 @@ ptr_ir_extern ir::parse_extern() {
         }
     }
 
-    m_parsec.spaces();
-    m_parsec.character(')');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected )");
-        return nullptr;
-    }
+    PARSERPAREN(m_parsec);
 
     return extn;
 }
@@ -925,11 +873,7 @@ ptr_ir_let ir::parse_let() {
     m_parsec.spaces();
 
     // parse definitions
-    m_parsec.character('(');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected (");
-        return nullptr;
-    }
+    PARSELPAREN(m_parsec);
 
     auto let = std::make_unique<ir_let>();
 
@@ -939,11 +883,7 @@ ptr_ir_let ir::parse_let() {
         else
             m_parsec.spaces();
 
-        m_parsec.character('(');
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected (");
-            return nullptr;
-        }
+        PARSELPAREN(m_parsec);
         m_parsec.spaces();
 
         auto type = parse_type();
@@ -952,11 +892,8 @@ ptr_ir_let ir::parse_let() {
 
         SPACEPLUS(m_parsec);
 
-        auto id = parse_id();
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected identifier");
-            return nullptr;
-        }
+        std::string id;
+        PARSEID(id, m_parsec);
 
         SPACEPLUS(m_parsec);
 
@@ -964,12 +901,7 @@ ptr_ir_let ir::parse_let() {
         if (!e)
             return nullptr;
 
-        m_parsec.spaces();
-        m_parsec.character(')');
-        if (m_parsec.is_fail()) {
-            SYNTAXERR("expected )");
-            return nullptr;
-        }
+        PARSERPAREN(m_parsec);
 
         auto p = std::make_unique<ir_let::var>();
         p->m_id = std::make_unique<ir_id>();
@@ -996,12 +928,7 @@ ptr_ir_let ir::parse_let() {
 
     let->m_expr = std::move(e);
 
-    m_parsec.spaces();
-    m_parsec.character(')');
-    if (m_parsec.is_fail()) {
-        SYNTAXERR("expected )");
-        return nullptr;
-    }
+    PARSERPAREN(m_parsec);
 
     return let;
 }
