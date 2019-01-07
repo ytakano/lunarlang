@@ -1,6 +1,7 @@
 #ifndef LUNAR_PARSEC_HPP
 #define LUNAR_PARSEC_HPP
 
+#include <functional>
 #include <iostream>
 #include <string>
 #include <unordered_set>
@@ -125,6 +126,42 @@ class parsec {
         increment();
         m_fail = false;
         return ret;
+    }
+
+    char satisfy(std::function<bool(char)> fun) {
+        if (m_pos >= m_str.size()) {
+            m_fail = true;
+            return 0;
+        }
+
+        char ret = m_str[m_pos];
+        if (!fun(ret)) {
+            m_fail = true;
+            return 0;
+        }
+
+        increment();
+        m_fail = false;
+        return ret;
+    }
+
+    char any() {
+        if (m_pos >= m_str.size()) {
+            m_fail = true;
+            return 0;
+        }
+
+        char ret = m_str[m_pos];
+        increment();
+        m_fail = false;
+        return ret;
+    }
+
+    char hex() {
+        return satisfy([&](char c) {
+            return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') ||
+                   ('A' <= c && c <= 'F');
+        });
     }
 
     char space() { return oneof(m_spaces); }

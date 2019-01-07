@@ -242,6 +242,44 @@ ir::ir(const std::string &filename, const std::string &str)
     m_1to9.insert('7');
     m_1to9.insert('8');
     m_1to9.insert('9');
+
+    m_esc_char['a'] = '\a';
+    m_esc_char['b'] = '\b';
+    m_esc_char['f'] = '\f';
+    m_esc_char['r'] = '\r';
+    m_esc_char['n'] = '\n';
+    m_esc_char['t'] = '\t';
+    m_esc_char['v'] = '\v';
+    m_esc_char['\\'] = '\\';
+    m_esc_char['?'] = '\?';
+    m_esc_char['\''] = '\'';
+    m_esc_char['\"'] = '"';
+    m_esc_char['\0'] = '\0';
+    m_esc_char['U'] = 'U';
+    m_esc_char['u'] = 'u';
+
+    m_hex2num['0'] = 0;
+    m_hex2num['1'] = 1;
+    m_hex2num['2'] = 2;
+    m_hex2num['3'] = 3;
+    m_hex2num['4'] = 4;
+    m_hex2num['5'] = 5;
+    m_hex2num['6'] = 6;
+    m_hex2num['7'] = 7;
+    m_hex2num['8'] = 8;
+    m_hex2num['9'] = 9;
+    m_hex2num['a'] = 10;
+    m_hex2num['A'] = 10;
+    m_hex2num['b'] = 11;
+    m_hex2num['B'] = 11;
+    m_hex2num['c'] = 12;
+    m_hex2num['C'] = 12;
+    m_hex2num['d'] = 13;
+    m_hex2num['D'] = 13;
+    m_hex2num['e'] = 14;
+    m_hex2num['e'] = 14;
+    m_hex2num['f'] = 15;
+    m_hex2num['F'] = 15;
 }
 
 bool ir::parse() {
@@ -850,6 +888,58 @@ std::string ir::parse_id() {
     return ret;
 }
 
+ptr_ir_str ir::parse_str() {
+    std::string ret;
+
+    for (;;) {
+        char c = m_parsec.any();
+        if (m_parsec.is_fail()) {
+            return nullptr;
+        }
+
+        if (c == '\"')
+            break;
+
+        if (c == '\\') {
+            // parse escape character
+            char esc = m_parsec.satisfy(
+                [&](char c) { return m_esc_char.find(c) != m_esc_char.end(); });
+
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("unexpected character");
+                return nullptr;
+            }
+
+            if (esc == 'u' || esc == 'U') {
+                for (int i = 0; i < (esc == 'u') ? 2 : 4; i++) {
+                    char h0 = m_parsec.hex();
+                    if (m_parsec.is_fail()) {
+                        SYNTAXERR("unexpected character");
+                        return nullptr;
+                    }
+
+                    char h1 = m_parsec.hex();
+                    if (m_parsec.is_fail()) {
+                        SYNTAXERR("unexpected character");
+                        return nullptr;
+                    }
+
+                    ret.push_back(m_hex2num[h0] << 4 | m_hex2num[h1]);
+                }
+            } else {
+                ret.push_back(m_esc_char[esc]);
+            }
+        } else {
+            ret.push_back(c);
+        }
+    }
+
+    auto ptr = std::make_unique<ir_str>();
+    ptr->m_str = ret;
+
+    return ptr;
+}
+
 ptr_ir_decimal ir::parse_decimal() {
     std::string num;
     auto line = m_parsec.get_line();
@@ -1316,6 +1406,17 @@ shared_ir_type ir_id::check_type(const ir &ref, id2type &vars) {
 shared_ir_type ir_decimal::check_type(const ir &ref, id2type &vars) {
     auto p = new ir_scalar;
     p->m_type = TYPE_INT;
+
+    m_type = shared_ir_type(p);
+
+    return m_type;
+}
+
+shared_ir_type ir_str::check_type(const ir &ref, id2type &vars) {
+    auto p = new ir_ref;
+    auto c = new ir_scalar;
+    c->m_type = TYPE_S8;
+    p->m_type = shared_ir_type(c);
 
     m_type = shared_ir_type(p);
 
@@ -2074,6 +2175,10 @@ llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
     return nullptr;
 }
 
+llvm::Value *ir_str::codegen(ir &ref, ir_expr::id2val &vals) {
+    return ref.get_llvm_builder().CreateGlobalString(m_str, "str");
+}
+
 llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
     if (m_bool)
         return llvm::ConstantInt::get(ref.get_llvm_ctx(),
@@ -2472,6 +2577,8 @@ void ir_bool::print() {
 }
 
 void ir_decimal::print() { std::cout << "{\"decimal\":" << m_num << "}"; }
+
+void ir_str::print() { std::cout << "{\"str\":\"" << m_str << "\"}"; }
 
 void ir_let::print() {
     int n = 0;

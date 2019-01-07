@@ -181,6 +181,7 @@ struct ir_expr : public ir_ast {
         EXPRVAL,
         EXPRAPPLY,
         EXPRDECIMAL,
+        EXPRSTR,
         EXPRBOOL,
         EXPRLET
     };
@@ -247,6 +248,19 @@ struct ir_decimal : public ir_expr {
 };
 
 typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
+
+struct ir_str : public ir_expr {
+    ir_str() { m_expr_type = EXPRSTR; }
+    virtual ~ir_str() {}
+
+    shared_ir_type check_type(const ir &ref, id2type &vars);
+    llvm::Value *codegen(ir &ref, id2val &vals);
+    void print();
+
+    std::string m_str;
+};
+
+typedef std::unique_ptr<ir_str> ptr_ir_str;
 
 struct ir_bool : public ir_expr {
     ir_bool() { m_expr_type = EXPRBOOL; }
@@ -328,6 +342,8 @@ class ir {
     std::unordered_set<char> m_no_id_char;
     std::unordered_set<char> m_0to9;
     std::unordered_set<char> m_1to9;
+    std::unordered_map<char, char> m_esc_char;
+    std::unordered_map<char, uint8_t> m_hex2num;
     std::unordered_map<std::string, std::shared_ptr<ir_funtype>> m_id2fun;
     std::unordered_map<std::string, std::shared_ptr<ir_struct>> m_id2struct;
     std::unordered_map<std::string, llvm::Function *> m_funs_prot;
@@ -352,6 +368,7 @@ class ir {
     ptr_ir_type parse_ref();
     ptr_ir_type parse_fun();
     ptr_ir_decimal parse_decimal();
+    ptr_ir_str parse_str();
     ptr_ir_let parse_let();
     bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);
     std::string parse_id();
