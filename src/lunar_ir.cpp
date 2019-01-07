@@ -1,5 +1,7 @@
 #include "lunar_ir.hpp"
 
+#include "lunar_string.hpp"
+
 #include <iostream>
 
 #include <boost/algorithm/string.hpp>
@@ -408,10 +410,20 @@ ptr_ir_expr ir::parse_expr() {
         char tmp;
         PTRY(m_parsec, tmp, m_parsec.character('('));
         if (m_parsec.is_fail()) {
-            // DECIMAL
-            ptr_ir_decimal dec;
             line = m_parsec.get_line();
             column = m_parsec.get_column();
+            // string
+            PTRY(m_parsec, tmp, m_parsec.character('"'));
+            if (!m_parsec.is_fail()) {
+                ptr_ir_str str = parse_str();
+                if (str)
+                    return str;
+                else
+                    return nullptr;
+            }
+
+            // DECIMAL
+            ptr_ir_decimal dec;
             PTRY(m_parsec, dec, parse_decimal());
 
             if (dec) {
@@ -2176,7 +2188,7 @@ llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
 }
 
 llvm::Value *ir_str::codegen(ir &ref, ir_expr::id2val &vals) {
-    return ref.get_llvm_builder().CreateGlobalString(m_str, "str");
+    return ref.get_llvm_builder().CreateGlobalStringPtr(m_str, "str");
 }
 
 llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
@@ -2578,7 +2590,9 @@ void ir_bool::print() {
 
 void ir_decimal::print() { std::cout << "{\"decimal\":" << m_num << "}"; }
 
-void ir_str::print() { std::cout << "{\"str\":\"" << m_str << "\"}"; }
+void ir_str::print() {
+    std::cout << "{\"str\":\"" << escape_json(m_str) << "\"}";
+}
 
 void ir_let::print() {
     int n = 0;

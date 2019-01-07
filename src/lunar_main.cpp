@@ -1,48 +1,10 @@
 #include "lunar_green_thread.hpp"
 #include "lunar_ir.hpp"
+#include "lunar_string.hpp"
 
 #include <sstream>
 
 #include <stdio.h>
-
-static std::string escapeJsonString(const std::string &input) {
-    std::ostringstream ss;
-    for (auto iter = input.cbegin(); iter != input.cend(); iter++) {
-        // C++98/03:
-        // for (std::string::const_iterator iter = input.begin(); iter !=
-        // input.end(); iter++) {
-        switch (*iter) {
-        case '\\':
-            ss << "\\\\";
-            break;
-        case '"':
-            ss << "\\\"";
-            break;
-        case '/':
-            ss << "\\/";
-            break;
-        case '\b':
-            ss << "\\b";
-            break;
-        case '\f':
-            ss << "\\f";
-            break;
-        case '\n':
-            ss << "\\n";
-            break;
-        case '\r':
-            ss << "\\r";
-            break;
-        case '\t':
-            ss << "\\t";
-            break;
-        default:
-            ss << *iter;
-            break;
-        }
-    }
-    return ss.str();
-}
 
 const char *e1 = "(defun fun u32 ((u32 arg1) (u32 arg2))\n"
                  "    (let ((u32 x (+ arg1 arg2))\n"
@@ -115,15 +77,17 @@ const char *e17 = "(defun main void () (print_unum 10))";
 const char *e18 = "(struct st (u64 foo))\n"
                   "(defun func void (((fun u32 ((ref st))) arg)) ())";
 
+const char *e19 = "(defun func (ref s8) () \"Hello world!\n\")";
+
 void world(void *arg) {
-    std::string s = e17;
+    std::string s = e19;
 
     lunar::ir ir("test.ir", s);
 
     if (ir.parse() && ir.check_type()) {
-        std::cout << "{\"input\":\"" << escapeJsonString(s) << "\",\"AST\":";
+        std::cout << "{\"input\":\"" << lunar::escape_json(s) << "\",\"AST\":";
         ir.print();
-        std::cout << ",\"LLVM\":\"" << escapeJsonString(ir.codegen()) << "\"}"
+        std::cout << ",\"LLVM\":\"" << lunar::escape_json(ir.codegen()) << "\"}"
                   << std::endl;
     } else {
         std::cout << "false" << std::endl;
