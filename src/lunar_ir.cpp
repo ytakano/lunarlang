@@ -124,9 +124,10 @@ static bool eq_type(ir_type *lhs, ir_type *rhs) {
 
         return true;
     }
-    case ir_type::IRTYPE_USER: {
+    case ir_type::IRTYPE_UTF8:
+        return true;
+    case ir_type::IRTYPE_USER:
         return false;
-    }
     }
 }
 
@@ -175,6 +176,8 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
             return false;
 
         lhs->m_type = rhs->m_type;
+        return true;
+    case ir_type::IRTYPE_UTF8:
         return true;
     case ir_type::IRTYPE_USER:
         return false;
@@ -416,10 +419,13 @@ ptr_ir_expr ir::parse_expr() {
             PTRY(m_parsec, tmp, m_parsec.character('"'));
             if (!m_parsec.is_fail()) {
                 ptr_ir_str str = parse_str();
-                if (str)
+                if (str) {
+                    str->m_line = line;
+                    str->m_column = column;
                     return str;
-                else
+                } else {
                     return nullptr;
+                }
             }
 
             // DECIMAL
@@ -618,6 +624,9 @@ ptr_ir_type ir::parse_scalartype() {
     } else if (s == "void") {
         auto t = new ir_scalar;
         t->m_type = TYPE_VOID;
+        return ptr_ir_type((ir_type *)t);
+    } else if (s == "utf8") {
+        auto t = new ir_utf8;
         return ptr_ir_type((ir_type *)t);
     } else {
         auto user = std::make_unique<ir_usertype>();
@@ -1076,8 +1085,9 @@ std::string ir_scalar::str() const {
     case TYPE_REF:
     case TYPE_STRUCT:
     case TYPE_FUN:
+    case TYPE_UTF8:
         assert(m_type != TYPE_REF && m_type != TYPE_STRUCT &&
-               m_type != TYPE_FUN);
+               m_type != TYPE_FUN && m_type != TYPE_UTF8);
         return "";
     }
 }
@@ -1098,6 +1108,8 @@ std::string ir_funtype::str() const {
 }
 
 std::string ir_ref::str() const { return "(ref " + m_type->str() + ")"; }
+
+std::string ir_utf8::str() const { return "utf8"; }
 
 bool ir::check_type() {
     add_builtin();
@@ -1264,6 +1276,7 @@ void ir::add_builtin() {
 shared_ir_type ir::resolve_type(shared_ir_type type) const {
     switch (type->m_irtype) {
     case ir_type::IRTYPE_SCALAR:
+    case ir_type::IRTYPE_UTF8:
         return type;
     case ir_type::IRTYPE_STRUCT: {
         auto p = (ir_struct *)type.get();
@@ -1425,13 +1438,7 @@ shared_ir_type ir_decimal::check_type(const ir &ref, id2type &vars) {
 }
 
 shared_ir_type ir_str::check_type(const ir &ref, id2type &vars) {
-    auto p = new ir_ref;
-    auto c = new ir_scalar;
-    c->m_type = TYPE_S8;
-    p->m_type = shared_ir_type(c);
-
-    m_type = shared_ir_type(p);
-
+    m_type = std::make_shared<ir_utf8>();
     return m_type;
 }
 
@@ -1886,8 +1893,10 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
     case TYPE_REF:
     case TYPE_STRUCT:
     case TYPE_FUN:
+    case TYPE_UTF8:
         assert(m_type != TYPE_INT && m_type != TYPE_REF &&
-               m_type != TYPE_STRUCT && m_type != TYPE_FUN);
+               m_type != TYPE_STRUCT && m_type != TYPE_FUN &&
+               m_type != TYPE_UTF8);
         return nullptr;
     }
 }
@@ -1895,6 +1904,11 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
 llvm::Type *ir_ref::codegen(ir &ref) {
     auto t = m_type->codegen(ref);
     return llvm::PointerType::getUnqual(t);
+}
+
+llvm::Type *ir_utf8::codegen(ir &ref) {
+    auto i8 = llvm::Type::getInt8Ty(ref.get_llvm_ctx());
+    return llvm::PointerType::getUnqual(i8);
 }
 
 llvm::Type *ir_funtype::codegen(ir &ref) {
@@ -2469,7 +2483,7 @@ void ir::print_err(std::size_t line, std::size_t column) const {
 
     std::cerr << lines[line - 1] << std::endl;
 
-    for (size_t i = 0; i < column - 1; i++) {
+    for (size_t i = 1; i < column; i++) {
         std::cerr << " ";
     }
     std::cerr << "^" << std::endl;
@@ -2533,6 +2547,8 @@ void ir_ref::print() {
     m_type->print();
     std::cout << "}";
 }
+
+void ir_utf8::print() { std::cout << "\"utf8\""; }
 
 void ir_scalar::print() { std::cout << "\"" << str() << "\""; }
 

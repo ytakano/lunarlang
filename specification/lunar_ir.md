@@ -27,13 +27,19 @@ $DECIMAL := [1-9][0-9]*
 
 ```
 $TYPE := $SCALAR | (ref $REFTYPE) | (fun $TYPE ($TYPE*))
-$REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | $ID
+$REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | $UTF8 |$ID
 ```
 
 ### Scalar Type
 
 ```
 $SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | void
+```
+
+## UTF8
+
+```
+$UTF8 = utf8
 ```
 
 ## Let

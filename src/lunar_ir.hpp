@@ -32,6 +32,7 @@ struct ir_type : public ir_ast {
         IRTYPE_FUN,
         IRTYPE_STRUCT,
         IRTYPE_USER,
+        IRTYPE_UTF8,
     };
 
     ir_type() {}
@@ -115,6 +116,17 @@ struct ir_ref : public ir_type {
 };
 
 typedef std::unique_ptr<ir_ref> ptr_ir_ref;
+
+struct ir_utf8 : public ir_type {
+    ir_utf8() { m_irtype = IRTYPE_UTF8; }
+
+    void print();
+    ir_type *clone() const { return (new ir_utf8(*this)); }
+    std::string str() const;
+    llvm::Type *codegen(ir &ref);
+};
+
+typedef std::unique_ptr<ir_utf8> ptr_ir_utf8;
 
 struct ir_statement : public ir_ast {
     ir_statement() {}

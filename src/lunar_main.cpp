@@ -77,7 +77,7 @@ const char *e17 = "(defun main void () (print_unum 10))";
 const char *e18 = "(struct st (u64 foo))\n"
                   "(defun func void (((fun u32 ((ref st))) arg)) ())";
 
-const char *e19 = "(defun func (ref s8) () \"Hello world!\n\")";
+const char *e19 = "(defun func utf8 () \"Hello world!\\n\")";
 
 void world(void *arg) {
     std::string s = e19;
