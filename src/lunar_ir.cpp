@@ -403,55 +403,50 @@ ptr_ir_struct ir::parse_defstruct() {
 
 ptr_ir_expr ir::parse_expr() {
     std::string id;
+    char tmp;
 
     auto line = m_parsec.get_line();
     auto column = m_parsec.get_column();
 
-    PTRY(m_parsec, id, parse_id());
-    if (m_parsec.is_fail()) {
-
-        char tmp;
-        PTRY(m_parsec, tmp, m_parsec.character('('));
-        if (m_parsec.is_fail()) {
-            line = m_parsec.get_line();
-            column = m_parsec.get_column();
-            // string
-            PTRY(m_parsec, tmp, m_parsec.character('"'));
-            if (!m_parsec.is_fail()) {
-                ptr_ir_str str = parse_str();
-                if (str) {
-                    str->m_line = line;
-                    str->m_column = column;
-                    return str;
-                } else {
-                    return nullptr;
-                }
-            }
-
-            // DECIMAL
-            ptr_ir_decimal dec;
-            PTRY(m_parsec, dec, parse_decimal());
-
-            if (dec) {
-                dec->m_line = line;
-                dec->m_column = column;
-                return dec;
-            }
-
-            m_parsec.character('0');
-            if (!m_parsec.is_fail()) {
-                dec = std::make_unique<ir_decimal>();
-                dec->m_num = "0";
-                dec->m_line = line;
-                dec->m_column = column;
-                return dec;
-            }
-
-            SYNTAXERR("could not parse expression");
-
-            return nullptr;
+    // DECIMAL
+    ptr_ir_decimal dec;
+    PTRY(m_parsec, dec, parse_decimal());
+    if (dec) {
+        char dot;
+        PTRY(m_parsec, dot, m_parsec.character('.'));
+        if (!m_parsec.is_fail()) {
+            // TODO: parse floating pointer
         }
 
+        if (dec)
+            return dec;
+    }
+
+    // zero
+    PTRY(m_parsec, tmp, m_parsec.character('0'));
+    if (!m_parsec.is_fail()) {
+        dec = std::make_unique<ir_decimal>();
+        dec->m_num = "0";
+        dec->m_line = line;
+        dec->m_column = column;
+        return dec;
+    }
+
+    // string
+    PTRY(m_parsec, tmp, m_parsec.character('"'));
+    if (!m_parsec.is_fail()) {
+        ptr_ir_str str = parse_str();
+        if (str) {
+            str->m_line = line;
+            str->m_column = column;
+            return str;
+        } else {
+            return nullptr;
+        }
+    }
+
+    PTRY(m_parsec, tmp, m_parsec.character('('));
+    if (!m_parsec.is_fail()) {
         line = m_parsec.get_line();
         column = m_parsec.get_column();
         PTRY(m_parsec, id, m_parsec.str("let"));
@@ -496,7 +491,10 @@ ptr_ir_expr ir::parse_expr() {
             apply->m_column = column;
             apply->m_expr.push_back(std::move(e));
         }
-    } else {
+    }
+
+    PTRY(m_parsec, id, parse_id());
+    if (!m_parsec.is_fail()) {
         // BOOL
         if (id == "true") {
             auto b = std::make_unique<ir_bool>();
@@ -520,6 +518,7 @@ ptr_ir_expr ir::parse_expr() {
         return e;
     }
 
+    SYNTAXERR("could not parse expression");
     return nullptr;
 }
 
@@ -965,6 +964,12 @@ ptr_ir_decimal ir::parse_decimal() {
     std::string num;
     auto line = m_parsec.get_line();
     auto column = m_parsec.get_column();
+
+    char minus;
+    PTRY(m_parsec, minus, m_parsec.character('-'));
+    if (!m_parsec.is_fail())
+        num.push_back(minus);
+
     char c = m_parsec.oneof(m_1to9);
     if (m_parsec.is_fail())
         return nullptr;
