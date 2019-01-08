@@ -346,6 +346,7 @@ class ir {
     }
     bool is_structgen(ir_expr *expr) const;
     void llvm_memcpy(llvm::Value *dst, llvm::Value *src, size_t size);
+    llvm::Value *get_constant_str(std::string str);
 
   private:
     parsec m_parsec;
@@ -360,6 +361,7 @@ class ir {
     std::unordered_map<std::string, std::shared_ptr<ir_struct>> m_id2struct;
     std::unordered_map<std::string, llvm::Function *> m_funs_prot;
     std::unordered_map<std::string, llvm::StructType *> m_struct_prot;
+    std::unordered_map<std::string, llvm::Value *> m_constant_str;
     llvm::LLVMContext m_llvm_ctx;
     llvm::IRBuilder<> m_llvm_builder;
     llvm::Module m_llvm_module;

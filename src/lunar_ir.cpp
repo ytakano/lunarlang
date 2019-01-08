@@ -506,7 +506,7 @@ ptr_ir_expr ir::parse_expr() {
             return b;
         } else if (id == "false") {
             auto b = std::make_unique<ir_bool>();
-            b->m_bool = true;
+            b->m_bool = false;
             b->m_line = line;
             b->m_column = column;
             return b;
@@ -1245,6 +1245,14 @@ void ir::add_builtin() {
     auto print_boolean = mk_extern("print_boolean", TYPE_VOID);
     append_arg(print_boolean.get(), TYPE_BOOL);
     m_externs.push_back(std::move(print_boolean));
+
+    auto print_utf8 = mk_extern("print_utf8", TYPE_VOID);
+    print_utf8->m_args.push_back(mk_refvoid());
+    m_externs.push_back(std::move(print_utf8));
+
+    auto print_ptr = mk_extern("print_ptr", TYPE_VOID);
+    print_ptr->m_args.push_back(mk_refvoid());
+    m_externs.push_back(std::move(print_ptr));
 
     auto print_flush = mk_extern("print_flush", TYPE_VOID);
     m_externs.push_back(std::move(print_flush));
@@ -2174,6 +2182,7 @@ llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
     case TYPE_U64:
         return llvm::ConstantInt::get(
             ctx, llvm::APInt(64, boost::lexical_cast<uint64_t>(m_num), false));
+    case TYPE_INT:
     case TYPE_S64:
         return llvm::ConstantInt::get(
             ctx, llvm::APInt(64, boost::lexical_cast<int64_t>(m_num), true));
@@ -2201,8 +2210,19 @@ llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
     return nullptr;
 }
 
+llvm::Value *ir::get_constant_str(std::string str) {
+    auto it = m_constant_str.find(str);
+    if (it != m_constant_str.end())
+        return it->second;
+
+    auto val = m_llvm_builder.CreateGlobalStringPtr(str, "str");
+    m_constant_str[str] = val;
+
+    return val;
+}
+
 llvm::Value *ir_str::codegen(ir &ref, ir_expr::id2val &vals) {
-    return ref.get_llvm_builder().CreateGlobalStringPtr(m_str, "str");
+    return ref.get_constant_str(m_str);
 }
 
 llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
@@ -2350,7 +2370,101 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
     return nullptr;
 }
 
-llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) { return nullptr; }
+llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) {
+    auto &builder = ref.get_llvm_builder();
+    auto &ctx = ref.get_llvm_ctx();
+
+    int n = 0;
+    for (auto it = m_expr.begin() + 1; it != m_expr.end(); ++it, n++) {
+        if (n > 0) {
+            std::vector<llvm::Value *> args;
+            args.push_back(ref.get_constant_str(" "));
+            builder.CreateCall(ref.get_function("print_utf8"), args, "");
+        }
+
+        auto val = (*it)->codegen(ref, vals);
+        if (!val)
+            return nullptr;
+
+        switch ((*it)->m_type->m_irtype) {
+        case ir_type::IRTYPE_SCALAR: {
+            auto s = (ir_scalar *)(*it)->m_type.get();
+            switch (s->m_type) {
+            case TYPE_U32:
+            case TYPE_U16:
+            case TYPE_U8:
+                val = builder.CreateIntCast(
+                    val, llvm::IntegerType::get(ctx, 64), false, "uintcast");
+            case TYPE_U64: {
+                std::vector<llvm::Value *> args;
+                args.push_back(val);
+                builder.CreateCall(ref.get_function("print_unum"), args, "");
+                break;
+            }
+            case TYPE_S32:
+            case TYPE_S16:
+            case TYPE_S8:
+                val = builder.CreateIntCast(
+                    val, llvm::IntegerType::get(ctx, 64), true, "sintcast");
+            case TYPE_INT:
+            case TYPE_S64: {
+                std::vector<llvm::Value *> args;
+                args.push_back(val);
+                builder.CreateCall(ref.get_function("print_snum"), args, "");
+                break;
+            }
+            case TYPE_VOID: {
+                std::vector<llvm::Value *> args;
+                args.push_back(ref.get_constant_str("void"));
+                builder.CreateCall(ref.get_function("print_utf8"), args, "");
+                break;
+            }
+            case TYPE_BOOL: {
+                std::vector<llvm::Value *> args;
+                args.push_back(val);
+                builder.CreateCall(ref.get_function("print_boolean"), args, "");
+                break;
+            }
+            case TYPE_FP64:
+            case TYPE_FP32: {
+                // TODO
+                std::vector<llvm::Value *> args;
+                args.push_back(ref.get_constant_str(
+                    "PRINTING FLOATING NUMBER IS NOT IMPLEMENTED"));
+                builder.CreateCall(ref.get_function("print_utf8"), args, "");
+            }
+            default:;
+            }
+            break;
+        }
+        case ir_type::IRTYPE_UTF8: {
+            std::vector<llvm::Value *> args;
+            args.push_back(val);
+            builder.CreateCall(ref.get_function("print_utf8"), args, "");
+            break;
+        }
+        case ir_type::IRTYPE_REF: {
+            std::vector<llvm::Value *> args;
+            args.push_back(val);
+            builder.CreateCall(ref.get_function("print_ptr"), args, "");
+            break;
+        }
+        case ir_type::IRTYPE_STRUCT:
+        case ir_type::IRTYPE_FUN:
+        case ir_type::IRTYPE_USER: {
+            // TODO
+            std::vector<llvm::Value *> args;
+            args.push_back(ref.get_constant_str("NOT IMPLEMENTED"));
+            builder.CreateCall(ref.get_function("print_utf8"), args, "");
+        }
+        }
+    }
+
+    std::vector<llvm::Value *> args;
+    builder.CreateCall(ref.get_function("print_endl"), args, "");
+
+    return llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false));
+}
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
                                   llvm::StructType *type) {

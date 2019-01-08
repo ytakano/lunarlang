@@ -79,8 +79,11 @@ const char *e18 = "(struct st (u64 foo))\n"
 
 const char *e19 = "(defun func utf8 () \"Hello world!\\n\")";
 
+const char *e20 =
+    "(defun main void () (print \"Hello world!\" 100 200 () true false))";
+
 void world(void *arg) {
-    std::string s = e19;
+    std::string s = e20;
 
     lunar::ir ir("test.ir", s);
 
@@ -92,6 +95,7 @@ void world(void *arg) {
     } else {
         std::cout << "false" << std::endl;
     }
+
     yield_green_thread();
 }
 

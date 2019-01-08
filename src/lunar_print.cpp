@@ -90,6 +90,7 @@ void print::utf8(const char *str) {
                 flush();
 
             str++;
+            m_pos++;
         }
     }
 }
