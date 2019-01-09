@@ -79,11 +79,13 @@ const char *e18 = "(struct st (u64 foo))\n"
 
 const char *e19 = "(defun func utf8 () \"Hello world!\\n\")";
 
-const char *e20 =
-    "(defun main void () (print \"Hello world!\" 100 -200 0 () true false))";
+const char *e20 = "(defun main void ()\n"
+                  "    (print \"Hello world!\" 100 -200 0 10.7 () true false))";
+
+const char *e21 = "(defun main void () (print 100.1e-3f))";
 
 void world(void *arg) {
-    std::string s = e20;
+    std::string s = e21;
 
     lunar::ir ir("test.ir", s);
 

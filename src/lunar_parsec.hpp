@@ -9,45 +9,62 @@
 #define PMANY(P, RET, X)                                                       \
     for (;;) {                                                                 \
         std::size_t pos, line, column;                                         \
-        P.checkpoint(pos, line, column);                                       \
+        (P).checkpoint(pos, line, column);                                     \
         auto r = X;                                                            \
-        if (P.is_fail()) {                                                     \
-            P.revert(pos, line, column);                                       \
-            P.set_fail(false);                                                 \
+        if ((P).is_fail()) {                                                   \
+            (P).revert(pos, line, column);                                     \
+            (P).set_fail(false);                                               \
             break;                                                             \
         }                                                                      \
-        RET.push_back(r);                                                      \
+        (RET).push_back(r);                                                    \
+    }
+
+#define PMANYONE(P, RET, X)                                                    \
+    auto r = X;                                                                \
+    if (!(P).is_fail()) {                                                      \
+        (RET).push_back(r);                                                    \
+        for (;;) {                                                             \
+            std::size_t pos, line, column;                                     \
+            (P).checkpoint(pos, line, column);                                 \
+            r = X;                                                             \
+            if ((P).is_fail()) {                                               \
+                (P).revert(pos, line, column);                                 \
+                (P).set_fail(false);                                           \
+                break;                                                         \
+            }                                                                  \
+            (RET).push_back(r);                                                \
+        }                                                                      \
     }
 
 #define PMANYMV(P, RET, X)                                                     \
     for (;;) {                                                                 \
         std::size_t pos, line, column;                                         \
-        P.checkpoint(pos, line, column);                                       \
+        (P).checkpoint(pos, line, column);                                     \
         auto r = X;                                                            \
-        if (P.is_fail()) {                                                     \
-            P.revert(pos, line, column);                                       \
-            P.set_fail(false);                                                 \
+        if ((P).is_fail()) {                                                   \
+            (P).revert(pos, line, column);                                     \
+            (P).set_fail(false);                                               \
             break;                                                             \
         }                                                                      \
-        RET.push_back(std::move(r));                                           \
+        (RET).push_back(std::move(r));                                         \
     }
 
 #define PTRY(P, RET, X)                                                        \
     do {                                                                       \
         std::size_t pos, line, column;                                         \
-        P.checkpoint(pos, line, column);                                       \
+        (P).checkpoint(pos, line, column);                                     \
         RET = X;                                                               \
-        if (P.is_fail())                                                       \
-            P.revert(pos, line, column);                                       \
+        if ((P).is_fail())                                                     \
+            (P).revert(pos, line, column);                                     \
     } while (0);
 
 #define PTRYMV(P, RET, X)                                                      \
     do {                                                                       \
         std::size_t pos, line, column;                                         \
-        P.checkpoint(pos, line, column);                                       \
+        (P).checkpoint(pos, line, column);                                     \
         RET = std::move(X);                                                    \
-        if (P.is_fail())                                                       \
-            P.revert(pos, line, column);                                       \
+        if ((P).is_fail())                                                     \
+            (P).revert(pos, line, column);                                     \
     } while (0);
 
 namespace lunar {

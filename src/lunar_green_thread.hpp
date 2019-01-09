@@ -29,6 +29,8 @@ void print_snum(int64_t num);
 void print_boolean(bool num);
 void print_utf8(const char *str);
 void print_ptr(const void *ptr);
+void print_fp32(float var);
+void print_fp64(double var);
 void print_flush();
 void print_endl();
 

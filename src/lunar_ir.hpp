@@ -193,6 +193,7 @@ struct ir_expr : public ir_ast {
         EXPRVAL,
         EXPRAPPLY,
         EXPRDECIMAL,
+        EXPRFLOAT,
         EXPRSTR,
         EXPRBOOL,
         EXPRLET
@@ -260,6 +261,20 @@ struct ir_decimal : public ir_expr {
 };
 
 typedef std::unique_ptr<ir_decimal> ptr_ir_decimal;
+
+struct ir_float : public ir_expr {
+    ir_float() : m_is_double(true) { m_expr_type = EXPRFLOAT; }
+    virtual ~ir_float() {}
+
+    shared_ir_type check_type(const ir &ref, id2type &vars);
+    llvm::Value *codegen(ir &ref, id2val &vals);
+    void print();
+
+    std::string m_num;
+    bool m_is_double;
+};
+
+typedef std::unique_ptr<ir_float> ptr_ir_float;
 
 struct ir_str : public ir_expr {
     ir_str() { m_expr_type = EXPRSTR; }
@@ -382,6 +397,7 @@ class ir {
     ptr_ir_type parse_ref();
     ptr_ir_type parse_fun();
     ptr_ir_decimal parse_decimal();
+    ptr_ir_float parse_float(std::string num);
     ptr_ir_str parse_str();
     ptr_ir_let parse_let();
     bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);

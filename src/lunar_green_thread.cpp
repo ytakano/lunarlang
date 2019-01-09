@@ -62,6 +62,8 @@ void print_snum(int64_t num) { p_green->m_print.snum(num); }
 void print_boolean(bool num) { p_green->m_print.boolean(num); }
 void print_utf8(const char *str) { p_green->m_print.utf8(str); }
 void print_ptr(const void *ptr) { p_green->m_print.ptr(ptr); }
+void print_fp32(float num) { p_green->m_print.fp32(num); }
+void print_fp64(double num) { p_green->m_print.fp64(num); }
 void print_flush() { p_green->m_print.flush(); }
 void print_endl() { p_green->m_print.endl(); }
 

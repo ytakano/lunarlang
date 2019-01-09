@@ -410,26 +410,34 @@ ptr_ir_expr ir::parse_expr() {
 
     // DECIMAL
     ptr_ir_decimal dec;
-    PTRY(m_parsec, dec, parse_decimal());
+    PTRY(m_parsec, tmp, m_parsec.character('0'));
+    if (m_parsec.is_fail()) {
+        PTRY(m_parsec, dec, parse_decimal());
+    } else {
+        dec = std::make_unique<ir_decimal>();
+        dec->m_num = "0";
+    }
+
+    // FLOATING POINT NUMBER
     if (dec) {
         char dot;
         PTRY(m_parsec, dot, m_parsec.character('.'));
         if (!m_parsec.is_fail()) {
-            // TODO: parse floating pointer
+            dec->m_num.push_back(dot);
+            auto fptype = parse_float(dec->m_num);
+            if (!fptype)
+                return nullptr;
+
+            fptype->m_line = line;
+            fptype->m_column = column;
+            return fptype;
         }
 
-        if (dec)
+        if (dec) {
+            dec->m_line = line;
+            dec->m_column = column;
             return dec;
-    }
-
-    // zero
-    PTRY(m_parsec, tmp, m_parsec.character('0'));
-    if (!m_parsec.is_fail()) {
-        dec = std::make_unique<ir_decimal>();
-        dec->m_num = "0";
-        dec->m_line = line;
-        dec->m_column = column;
-        return dec;
+        }
     }
 
     // string
@@ -614,7 +622,7 @@ ptr_ir_type ir::parse_scalartype() {
         return ptr_ir_type((ir_type *)t);
     } else if (s == "fp64") {
         auto t = new ir_scalar;
-        t->m_type = TYPE_FP32;
+        t->m_type = TYPE_FP64;
         return ptr_ir_type((ir_type *)t);
     } else if (s == "fp32") {
         auto t = new ir_scalar;
@@ -985,6 +993,44 @@ ptr_ir_decimal ir::parse_decimal() {
     return d;
 }
 
+ptr_ir_float ir::parse_float(std::string num) {
+    char c;
+
+    PMANYONE(m_parsec, num, m_parsec.oneof(m_0to9));
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("must be a decimal number");
+        return nullptr;
+    }
+
+    PTRY(m_parsec, c, m_parsec.character('e'));
+    if (!m_parsec.is_fail()) {
+        num.push_back(c);
+        c = m_parsec.satisfy([](char a) { return a == '+' || a == '-'; });
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("must be + or -");
+            return nullptr;
+        }
+
+        num.push_back(c);
+
+        PMANYONE(m_parsec, num, m_parsec.oneof(m_0to9));
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("must be a decimal number");
+            return nullptr;
+        }
+    }
+
+    ptr_ir_float fptype = std::make_unique<ir_float>();
+
+    PTRY(m_parsec, c, m_parsec.character('f'));
+    if (!m_parsec.is_fail())
+        fptype->m_is_double = false;
+
+    fptype->m_num = num;
+
+    return fptype;
+}
+
 ptr_ir_let ir::parse_let() {
     m_parsec.spaces();
 
@@ -1251,6 +1297,14 @@ void ir::add_builtin() {
     append_arg(print_boolean.get(), TYPE_BOOL);
     m_externs.push_back(std::move(print_boolean));
 
+    auto print_fp32 = mk_extern("print_fp32", TYPE_VOID);
+    append_arg(print_fp32.get(), TYPE_FP32);
+    m_externs.push_back(std::move(print_fp32));
+
+    auto print_fp64 = mk_extern("print_fp64", TYPE_VOID);
+    append_arg(print_fp64.get(), TYPE_FP64);
+    m_externs.push_back(std::move(print_fp64));
+
     auto print_utf8 = mk_extern("print_utf8", TYPE_VOID);
     print_utf8->m_args.push_back(mk_refvoid());
     m_externs.push_back(std::move(print_utf8));
@@ -1444,6 +1498,19 @@ shared_ir_type ir_id::check_type(const ir &ref, id2type &vars) {
 shared_ir_type ir_decimal::check_type(const ir &ref, id2type &vars) {
     auto p = new ir_scalar;
     p->m_type = TYPE_INT;
+
+    m_type = shared_ir_type(p);
+
+    return m_type;
+}
+
+shared_ir_type ir_float::check_type(const ir &ref, id2type &vars) {
+    auto p = new ir_scalar;
+
+    if (m_is_double)
+        p->m_type = TYPE_FP64;
+    else
+        p->m_type = TYPE_FP32;
 
     m_type = shared_ir_type(p);
 
@@ -2215,6 +2282,25 @@ llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
     return nullptr;
 }
 
+llvm::Value *ir_float::codegen(ir &ref, ir_expr::id2val &vals) {
+    auto t = (ir_scalar *)m_type.get();
+    auto &ctx = ref.get_llvm_ctx();
+    switch (t->m_type) {
+    case TYPE_FP64: {
+        double num = boost::lexical_cast<double>(m_num);
+        return llvm::ConstantFP::get(ctx, llvm::APFloat(num));
+    }
+    case TYPE_FP32: {
+        float num = boost::lexical_cast<float>(m_num);
+        return llvm::ConstantFP::get(ctx, llvm::APFloat(num));
+    }
+    default:
+        return nullptr;
+    }
+
+    return nullptr;
+};
+
 llvm::Value *ir::get_constant_str(std::string str) {
     auto it = m_constant_str.find(str);
     if (it != m_constant_str.end())
@@ -2430,13 +2516,17 @@ llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) {
                 builder.CreateCall(ref.get_function("print_boolean"), args, "");
                 break;
             }
-            case TYPE_FP64:
-            case TYPE_FP32: {
-                // TODO
+            case TYPE_FP64: {
                 std::vector<llvm::Value *> args;
-                args.push_back(ref.get_constant_str(
-                    "PRINTING FLOATING NUMBER IS NOT IMPLEMENTED"));
-                builder.CreateCall(ref.get_function("print_utf8"), args, "");
+                args.push_back(val);
+                builder.CreateCall(ref.get_function("print_fp64"), args, "");
+                break;
+            }
+            case TYPE_FP32: {
+                std::vector<llvm::Value *> args;
+                args.push_back(val);
+                builder.CreateCall(ref.get_function("print_fp32"), args, "");
+                break;
             }
             default:;
             }
@@ -2724,6 +2814,8 @@ void ir_bool::print() {
 }
 
 void ir_decimal::print() { std::cout << "{\"decimal\":" << m_num << "}"; }
+
+void ir_float::print() { std::cout << "{\"float\":" << m_num << "}"; }
 
 void ir_str::print() {
     std::cout << "{\"str\":\"" << escape_json(m_str) << "\"}";

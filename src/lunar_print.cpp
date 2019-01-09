@@ -102,4 +102,12 @@ void print::ptr(const void *ptr) {
     m_pos += snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "0x%p", ptr);
 }
 
+void print::fp32(float var) {
+    snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "%f", var);
+}
+
+void print::fp64(double var) {
+    snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "%lf", var);
+}
+
 } // namespace lunar

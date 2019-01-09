@@ -17,6 +17,8 @@ class print {
     void boolean(bool var);
     void utf8(const char *str);
     void ptr(const void *ptr);
+    void fp32(float var);
+    void fp64(double var);
     void endl();
     void flush();
 
