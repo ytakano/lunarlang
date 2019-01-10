@@ -1,7 +1,7 @@
 
 ```
 $TOP := ($DEFUN | $DEFSTRUCT | $EXTERN)*
-$EXPR := $LET | $ID | DECIMAL | $APPLY | $VOID
+$EXPR := $LET | $ID | $DECIMAL | $FLOAT | $APPLY | $VOID
 ```
 
 ## VOID
@@ -20,14 +20,22 @@ $WHITESPACE = space | tab | \r | \n | \r\n
 ## Decimal Number
 
 ```
-$DECIMAL := [1-9][0-9]*
+$DECIMAL := [1-9][0-9]* | 0
+```
+
+## Floating Point Number
+
+```
+$FLOAT := $DECIMAL.[0-9]* $EXP? f?
+$EXP := e $PLUSMINUS [0-9]+
+$PLUSMINUS := + | -
 ```
 
 ## Type
 
 ```
 $TYPE := $SCALAR | (ref $REFTYPE) | (fun $TYPE ($TYPE*))
-$REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | $UTF8 |$ID
+$REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | (vec $REFTYPE+) | $UTF8 | $ID
 ```
 
 ### Scalar Type
@@ -80,13 +88,31 @@ $OPS := ($OP $EXPR $EXPR+)
 $OP := + | - | * | / | < | > | <= | >= | =
 ```
 
-### Reference
+### Structure Creation
 
+An instance of a structure type is created by ```(structure_type $EXPR+)``` and the expression returns
+a ```(ref structure_type)``` type.
+
+Example:
 ```
-$REF := (ref $EXPR)
+(struct st (u64 foo))
+(struct mystruct ((ref st) bar))
+(defun fun void ((u32 foo))
+    (let (((ref mystruct) x (mystruct (st 10))))
+        ()))
 ```
 
-$EXPR must be structure type
+### Vector Creation
+
+An instance of a vector type is created by ```(vec $TYPE number)``` whose number variable must be ```u64``` and the expression returns a ```(vec $TYPE)``` type.
+
+Example:
+```
+(defun fun void ()
+    (let (((vec u32) x (vec u32 10)))
+        ()))
+```
+This example creates a u32 vector whose size is 10.
 
 ### Yield
 

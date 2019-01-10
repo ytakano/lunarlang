@@ -77,6 +77,10 @@
         }                                                                      \
     } while (0)
 
+#define TRUEVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 1, false))
+#define FALSEVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false))
+#define VOIDVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false))
+
 namespace lunar {
 
 static bool eq_type(ir_type *lhs, ir_type *rhs) {
@@ -1895,8 +1899,7 @@ void ir::llvm_memcpy(llvm::Value *dst, llvm::Value *src, size_t size) {
     args.push_back(m_llvm_builder.CreateBitCast(src, i8ptr));
     args.push_back(
         llvm::ConstantInt::get(m_llvm_ctx, llvm::APInt(64, size, false)));
-    args.push_back(
-        llvm::ConstantInt::get(m_llvm_ctx, llvm::APInt(1, 0, false)));
+    args.push_back(FALSEVAL(m_llvm_ctx));
     m_llvm_builder.CreateCall(m_memcpy, args, "memcpytmp");
 }
 
@@ -2227,8 +2230,7 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
         auto v = p->m_expr->codegen(ref, vals);
 
         if (p->m_expr->m_expr_type == EXPRVOID) {
-            vals[p->m_id->m_id].push_back(llvm::ConstantInt::get(
-                ref.get_llvm_ctx(), llvm::APInt(1, 0, false)));
+            vals[p->m_id->m_id].push_back(VOIDVAL(ref.get_llvm_ctx()));
         } else {
             vals[p->m_id->m_id].push_back(v);
         }
@@ -2318,11 +2320,9 @@ llvm::Value *ir_str::codegen(ir &ref, ir_expr::id2val &vals) {
 
 llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
     if (m_bool)
-        return llvm::ConstantInt::get(ref.get_llvm_ctx(),
-                                      llvm::APInt(1, 1, false));
+        return TRUEVAL(ref.get_llvm_ctx());
     else
-        return llvm::ConstantInt::get(ref.get_llvm_ctx(),
-                                      llvm::APInt(1, 0, false));
+        return FALSEVAL(ref.get_llvm_ctx());
 
     return nullptr;
 }
@@ -2411,8 +2411,7 @@ llvm::Value *ir_bool::codegen(ir &ref, ir_expr::id2val &vals) {
 
 llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
     if (m_expr_type == EXPRVOID)
-        return llvm::ConstantInt::get(ref.get_llvm_ctx(),
-                                      llvm::APInt(1, 0, false));
+        return VOIDVAL(ref.get_llvm_ctx());
 
     auto first = m_expr.begin();
     if ((*first)->m_expr_type == ir_expr::EXPRID) {
@@ -2558,7 +2557,7 @@ llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) {
     std::vector<llvm::Value *> args;
     builder.CreateCall(ref.get_function("print_endl"), args, "");
 
-    return llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false));
+    return VOIDVAL(ctx);
 }
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
@@ -2600,8 +2599,7 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
     auto &builder = ref.get_llvm_builder();
     auto &ctx = ref.get_llvm_ctx();
 
-    condv = builder.CreateICmpEQ(
-        condv, llvm::ConstantInt::get(ctx, llvm::APInt(1, 1, false)), "ifcond");
+    condv = builder.CreateICmpEQ(condv, TRUEVAL(ref.get_llvm_ctx()), "ifcond");
 
     llvm::Function *func = builder.GetInsertBlock()->getParent();
 
@@ -2620,6 +2618,9 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
     if (!thenv)
         return nullptr;
 
+    if (thenv->getType()->isVoidTy())
+        thenv = VOIDVAL(ctx);
+
     builder.CreateBr(merge_bb);
     // Codegen of 'Then' can change the current block, update ThenBB for
     // the PHI.
@@ -2632,6 +2633,9 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
     llvm::Value *elsev = m_expr[3]->codegen(ref, vals);
     if (!elsev)
         return nullptr;
+
+    if (elsev->getType()->isVoidTy())
+        elsev = VOIDVAL(ctx);
 
     builder.CreateBr(merge_bb);
     // Codegen of 'Else' can change the current block, update ElseBB for
@@ -2663,8 +2667,7 @@ llvm::Value *ir_apply::codegen_call(ir &ref, id2val vals,
             return nullptr;
 
         if ((*it)->m_expr_type == EXPRVOID || t->getType()->isVoidTy())
-            args.push_back(llvm::ConstantInt::get(ref.get_llvm_ctx(),
-                                                  llvm::APInt(1, 0, false)));
+            args.push_back(VOIDVAL(ref.get_llvm_ctx()));
         else
             args.push_back(t);
     }

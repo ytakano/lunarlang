@@ -84,8 +84,15 @@ const char *e20 = "(defun main void ()\n"
 
 const char *e21 = "(defun main void () (print 100.1e-3f))";
 
+const char *e22 = "(struct st (s32 foo))\n"
+                  "(defun func void ((s32 arg))\n"
+                  "    (let (((ref st) v (st arg)))\n"
+                  "        (if (= arg 0)\n"
+                  "            ()\n"
+                  "            (func (- arg 1)))))";
+
 void world(void *arg) {
-    std::string s = e21;
+    std::string s = e22;
 
     lunar::ir ir("test.ir", s);
 
