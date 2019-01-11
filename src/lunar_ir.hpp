@@ -33,6 +33,7 @@ struct ir_type : public ir_ast {
         IRTYPE_STRUCT,
         IRTYPE_USER,
         IRTYPE_UTF8,
+        IRTYPE_VEC,
     };
 
     ir_type() {}
@@ -127,6 +128,19 @@ struct ir_utf8 : public ir_type {
 };
 
 typedef std::unique_ptr<ir_utf8> ptr_ir_utf8;
+
+struct ir_vec : public ir_type {
+    ir_vec() { m_irtype = IRTYPE_VEC; }
+
+    void print();
+    ir_type *clone() const { return (new ir_vec(*this)); }
+    std::string str() const;
+    llvm::Type *codegen(ir &ref);
+
+    shared_ir_type m_type;
+};
+
+typedef std::unique_ptr<ir_vec> ptr_ir_vec;
 
 struct ir_statement : public ir_ast {
     ir_statement() {}
@@ -239,12 +253,13 @@ struct ir_apply : public ir_expr {
     shared_ir_type check_print(const ir &ref, id2type &vars);
     shared_ir_type check_call(const ir &ref, id2type &vars,
                               const std::string &id);
-    llvm::Value *struct_gen(ir &ref, id2val vals, llvm::StructType *type);
-    void struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
+    llvm::Value *struct_gen(ir &ref, id2val &vals, llvm::StructType *type);
+    void struct_gen2(ir &ref, id2val &vals, llvm::StructType *type,
                      std::vector<ptr_ir_expr> &exprs, llvm::Value *gep);
-    llvm::Value *codegen_ifexpr(ir &ref, id2val vals);
-    llvm::Value *codegen_print(ir &ref, id2val vals);
-    llvm::Value *codegen_call(ir &ref, id2val vals, const std::string &id);
+    llvm::Value *codegen_ifexpr(ir &ref, id2val &vals);
+    llvm::Value *codegen_print(ir &ref, id2val &vals);
+    llvm::Value *codegen_vec(ir &ref, id2val &vals);
+    llvm::Value *codegen_call(ir &ref, id2val &vals, const std::string &id);
 };
 
 typedef std::unique_ptr<ir_apply> ptr_ir_apply;

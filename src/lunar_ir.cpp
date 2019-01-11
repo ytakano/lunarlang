@@ -109,6 +109,11 @@ static bool eq_type(ir_type *lhs, ir_type *rhs) {
 
         return true;
     }
+    case ir_type::IRTYPE_VEC: {
+        auto t1 = (const ir_vec *)lhs;
+        auto t2 = (const ir_vec *)rhs;
+        return eq_type(t1->m_type.get(), t2->m_type.get());
+    }
     case ir_type::IRTYPE_REF: {
         auto t1 = (const ir_ref *)lhs;
         auto t2 = (const ir_ref *)rhs;
@@ -173,6 +178,7 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
             }
         }
     }
+    case ir_type::IRTYPE_VEC:
     case ir_type::IRTYPE_FUN:
     case ir_type::IRTYPE_REF:
     case ir_type::IRTYPE_STRUCT:
@@ -1166,6 +1172,8 @@ std::string ir_ref::str() const { return "(ref " + m_type->str() + ")"; }
 
 std::string ir_utf8::str() const { return "utf8"; }
 
+std::string ir_vec::str() const { return "(vec " + m_type->str() + ")"; }
+
 bool ir::check_type() {
     add_builtin();
 
@@ -1363,6 +1371,11 @@ shared_ir_type ir::resolve_type(shared_ir_type type) const {
     }
     case ir_type::IRTYPE_REF: {
         auto p = (ir_ref *)type.get();
+        p->m_type = resolve_type(p->m_type);
+        return type;
+    }
+    case ir_type::IRTYPE_VEC: {
+        auto p = (ir_vec *)type.get();
         p->m_type = resolve_type(p->m_type);
         return type;
     }
@@ -1994,6 +2007,11 @@ llvm::Type *ir_utf8::codegen(ir &ref) {
     return llvm::PointerType::getUnqual(i8);
 }
 
+llvm::Type *ir_vec::codegen(ir &ref) {
+    auto t = m_type->codegen(ref);
+    return llvm::PointerType::getUnqual(t);
+}
+
 llvm::Type *ir_funtype::codegen(ir &ref) {
     auto ret = m_ret->codegen(ref);
     if (!ret)
@@ -2447,6 +2465,8 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             BINOP(CreateICmpNE, CreateICmpNE, CreateFCmpONE, "!=", "netmp");
         } else if (id->m_id == "print") {
             return codegen_print(ref, vals);
+        } else if (id->m_id == "vec") {
+            return codegen_vec(ref, vals);
         } else {
             // function call
             auto it = ref.get_struct_proto().find(id->m_id);
@@ -2460,7 +2480,7 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
     return nullptr;
 }
 
-llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) {
+llvm::Value *ir_apply::codegen_print(ir &ref, id2val &vals) {
     auto &builder = ref.get_llvm_builder();
     auto &ctx = ref.get_llvm_ctx();
 
@@ -2543,6 +2563,7 @@ llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) {
             builder.CreateCall(ref.get_function("print_ptr"), args, "");
             break;
         }
+        case ir_type::IRTYPE_VEC:
         case ir_type::IRTYPE_STRUCT:
         case ir_type::IRTYPE_FUN:
         case ir_type::IRTYPE_USER: {
@@ -2560,7 +2581,22 @@ llvm::Value *ir_apply::codegen_print(ir &ref, id2val vals) {
     return VOIDVAL(ctx);
 }
 
-llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
+llvm::Value *ir_apply::codegen_vec(ir &ref, id2val &vals) {
+    auto type = m_type->codegen(ref);
+    if (!type)
+        return nullptr;
+
+    auto num = m_expr[2]->codegen(ref, vals);
+    if (!num)
+        return nullptr;
+
+    auto &builder = ref.get_llvm_builder();
+    auto alloc = builder.CreateAlloca(type, num);
+
+    return alloc;
+}
+
+llvm::Value *ir_apply::struct_gen(ir &ref, id2val &vals,
                                   llvm::StructType *type) {
     auto &builder = ref.get_llvm_builder();
     auto alloc = builder.CreateAlloca(type);
@@ -2570,7 +2606,7 @@ llvm::Value *ir_apply::struct_gen(ir &ref, id2val vals,
     return alloc;
 }
 
-void ir_apply::struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
+void ir_apply::struct_gen2(ir &ref, id2val &vals, llvm::StructType *type,
                            std::vector<ptr_ir_expr> &exprs, llvm::Value *gep) {
     auto &builder = ref.get_llvm_builder();
 
@@ -2591,7 +2627,7 @@ void ir_apply::struct_gen2(ir &ref, id2val vals, llvm::StructType *type,
     }
 }
 
-llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
+llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val &vals) {
     llvm::Value *condv = m_expr[1]->codegen(ref, vals);
     if (!condv)
         return nullptr;
@@ -2652,7 +2688,7 @@ llvm::Value *ir_apply::codegen_ifexpr(ir &ref, id2val vals) {
     return pn;
 }
 
-llvm::Value *ir_apply::codegen_call(ir &ref, id2val vals,
+llvm::Value *ir_apply::codegen_call(ir &ref, id2val &vals,
                                     const std::string &id) {
     auto fun = ref.get_function(id);
     if (!fun) {
@@ -2761,6 +2797,12 @@ void ir_ref::print() {
 }
 
 void ir_utf8::print() { std::cout << "\"utf8\""; }
+
+void ir_vec::print() {
+    std::cout << "{\"vec\":";
+    m_type->print();
+    std::cout << "}";
+}
 
 void ir_scalar::print() { std::cout << "\"" << str() << "\""; }
 
