@@ -77,6 +77,15 @@
         }                                                                      \
     } while (0)
 
+#define TRYRPAREN(PARSEC)                                                      \
+    do {                                                                       \
+        char tmp;                                                              \
+        PTRY(PARSEC, tmp, [](parsec &p) {                                      \
+            p.spaces();                                                        \
+            return p.character(')');                                           \
+        }(PARSEC));                                                            \
+    } while (0)
+
 #define TRUEVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 1, false))
 #define FALSEVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false))
 #define VOIDVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false))
@@ -395,12 +404,7 @@ ptr_ir_struct ir::parse_defstruct() {
         st->m_member.push_back(std::move(t));
         n++;
 
-        char tmp;
-        PTRY(m_parsec, tmp, [](parsec &p) {
-            p.spaces();
-            return p.character(')');
-        }(m_parsec));
-
+        TRYRPAREN(m_parsec);
         if (!m_parsec.is_fail())
             return st;
 
@@ -485,11 +489,7 @@ ptr_ir_expr ir::parse_expr() {
         // APPLY
         auto apply = std::make_unique<ir_apply>();
         for (;;) {
-            PTRY(m_parsec, tmp, [](parsec &p) {
-                p.spaces();
-                return p.character(')');
-            }(m_parsec));
-
+            TRYRPAREN(m_parsec);
             if (!m_parsec.is_fail()) {
                 if (apply->m_expr.size() == 0)
                     apply->m_expr_type = ir_expr::EXPRVOID;
@@ -667,12 +667,7 @@ ptr_ir_struct ir::parse_struct() {
 
         st->m_member.push_back(std::move(t));
 
-        char tmp;
-        PTRY(m_parsec, tmp, [](parsec &p) {
-            p.spaces();
-            return p.character(')');
-        }(m_parsec));
-
+        TRYRPAREN(m_parsec);
         if (!m_parsec.is_fail())
             return st;
 
@@ -732,6 +727,16 @@ ptr_ir_type ir::parse_reftype() {
             return s;
         }
 
+        if (id == "vec") {
+            auto v = parse_vec();
+            if (!v)
+                return nullptr;
+
+            v->m_line = line;
+            v->m_column = column;
+            return v;
+        }
+
         SYNTAXERR2("expected type specifier", line, column);
         return nullptr;
     }
@@ -759,12 +764,7 @@ ptr_ir_type ir::parse_fun() {
     fun->m_ret = std::move(ret);
 
     for (int n = 0;; n++) {
-        char tmp;
-        PTRY(m_parsec, tmp, [](parsec &p) {
-            p.spaces();
-            return p.character(')');
-        }(m_parsec));
-
+        TRYRPAREN(m_parsec);
         if (!m_parsec.is_fail())
             break;
 
@@ -783,6 +783,18 @@ ptr_ir_type ir::parse_fun() {
     PARSERPAREN(m_parsec);
 
     return fun;
+}
+
+ptr_ir_type ir::parse_vec() {
+    SPACEPLUS(m_parsec);
+
+    auto t = parse_reftype();
+    if (!t)
+        return nullptr;
+
+    TRYRPAREN(m_parsec);
+
+    return nullptr;
 }
 
 ptr_ir_defun ir::parse_defun() {
@@ -810,12 +822,7 @@ ptr_ir_defun ir::parse_defun() {
 
     int n = 0;
     for (;;) {
-        char tmp;
-        PTRY(m_parsec, tmp, [](parsec &p) {
-            p.spaces();
-            return p.character(')');
-        }(m_parsec));
-
+        TRYRPAREN(m_parsec);
         if (m_parsec.is_fail()) {
             if (n > 0)
                 SPACEPLUS(m_parsec);
@@ -885,12 +892,7 @@ ptr_ir_extern ir::parse_extern() {
 
     int n = 0;
     for (;;) {
-        char tmp;
-        PTRY(m_parsec, tmp, [](parsec &p) {
-            p.spaces();
-            return p.character(')');
-        }(m_parsec));
-
+        TRYRPAREN(m_parsec);
         if (m_parsec.is_fail()) {
             if (n > 0)
                 SPACEPLUS(m_parsec);
@@ -1082,12 +1084,7 @@ ptr_ir_let ir::parse_let() {
         p->m_expr = std::move(e);
         let->m_def.push_back(std::move(p));
 
-        char tmp;
-        PTRY(m_parsec, tmp, [](parsec &p) {
-            p.spaces();
-            return p.character(')');
-        }(m_parsec));
-
+        TRYRPAREN(m_parsec);
         if (!m_parsec.is_fail())
             break;
     }
@@ -2008,8 +2005,14 @@ llvm::Type *ir_utf8::codegen(ir &ref) {
 }
 
 llvm::Type *ir_vec::codegen(ir &ref) {
-    auto t = m_type->codegen(ref);
-    return llvm::PointerType::getUnqual(t);
+    if (m_num) {
+        auto t = m_type->codegen(ref);
+        return llvm::ArrayType::get(
+            t, boost::lexical_cast<uint64_t>(m_num->m_num));
+    } else {
+        auto t = m_type->codegen(ref);
+        return llvm::PointerType::getUnqual(t);
+    }
 }
 
 llvm::Type *ir_funtype::codegen(ir &ref) {

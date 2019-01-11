@@ -35,13 +35,14 @@ $PLUSMINUS := + | -
 
 ```
 $TYPE := $SCALAR | (ref $REFTYPE) | (fun $TYPE ($TYPE*))
-$REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | (vec $REFTYPE+) | $UTF8 | $ID
+$REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | $VEC | $ID
+$VEC := (vec $TYPE $DECIMAL?)
 ```
 
 ### Scalar Type
 
 ```
-$SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | void
+$SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | utf8 | void
 ```
 
 ## UTF8
@@ -60,7 +61,7 @@ $LET := (let (($TYPE $ID $EXPR)+) $EXPR)
 
 ```
 $DEFSTRUCT := (struct $ID ($STRUCTMEM $ID)+)
-$STRUCTMEM := $SCALAR | $ID | (struct $STRUCTMEM) | (ref $STRUCTMEM)
+$STRUCTMEM := $SCALAR | (struct $STRUCTMEM+) | (ref $STRUCTMEM) | $VEC | $ID
 ```
 
 ## Function Definition

@@ -129,6 +129,9 @@ struct ir_utf8 : public ir_type {
 
 typedef std::unique_ptr<ir_utf8> ptr_ir_utf8;
 
+struct ir_decimal;
+typedef std::shared_ptr<ir_decimal> shared_ir_decimal;
+
 struct ir_vec : public ir_type {
     ir_vec() { m_irtype = IRTYPE_VEC; }
 
@@ -138,6 +141,7 @@ struct ir_vec : public ir_type {
     llvm::Type *codegen(ir &ref);
 
     shared_ir_type m_type;
+    shared_ir_decimal m_num;
 };
 
 typedef std::unique_ptr<ir_vec> ptr_ir_vec;
@@ -411,6 +415,7 @@ class ir {
     ptr_ir_struct parse_struct();
     ptr_ir_type parse_ref();
     ptr_ir_type parse_fun();
+    ptr_ir_type parse_vec();
     ptr_ir_decimal parse_decimal();
     ptr_ir_float parse_float(std::string num);
     ptr_ir_str parse_str();
