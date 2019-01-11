@@ -793,8 +793,12 @@ ptr_ir_type ir::parse_vec() {
         return nullptr;
 
     TRYRPAREN(m_parsec);
+    if (m_parsec.is_fail()) {
+    }
 
-    return nullptr;
+    auto ret = std::uni
+
+        return nullptr;
 }
 
 ptr_ir_defun ir::parse_defun() {
