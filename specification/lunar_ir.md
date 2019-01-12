@@ -36,7 +36,8 @@ $PLUSMINUS := + | -
 ```
 $TYPE := $SCALAR | (ref $REFTYPE) | (fun $TYPE ($TYPE*))
 $REFTYPE := $SCALAR | (struct $REFTYPE+) | (ref $REFTYPE) | $VEC | $ID
-$VEC := (vec $TYPE $DECIMAL?)
+$VEC := (vec $VECTYPE $DECIMAL?)
+$VECTYPE := $SCALAR | (ref $REFTYPE) | (fun $TYPE ($TYPE*)) | (struct $REFTYPE+) | $ID
 ```
 
 ### Scalar Type

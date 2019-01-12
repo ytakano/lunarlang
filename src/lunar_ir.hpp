@@ -214,7 +214,8 @@ struct ir_expr : public ir_ast {
         EXPRFLOAT,
         EXPRSTR,
         EXPRBOOL,
-        EXPRLET
+        EXPRLET,
+        EXPRVEC,
     };
 
     typedef std::unordered_map<std::string, std::deque<shared_ir_type>> id2type;
@@ -340,6 +341,20 @@ struct ir_let : public ir_expr {
 
 typedef std::unique_ptr<ir_let> ptr_ir_let;
 
+struct ir_mkvec : public ir_expr {
+    ir_mkvec() { m_expr_type = EXPRVEC; }
+    virtual ~ir_mkvec() {}
+
+    shared_ir_type check_type(const ir &ref, id2type &vars);
+    llvm::Value *codegen(ir &ref, id2val &vals);
+    void print();
+
+    ptr_ir_type m_vectype;
+    ptr_ir_expr m_num;
+};
+
+typedef std::unique_ptr<ir_mkvec> ptr_ir_mkvec;
+
 class ir {
   public:
     ir(const std::string &filename, const std::string &str);
@@ -416,10 +431,12 @@ class ir {
     ptr_ir_type parse_ref();
     ptr_ir_type parse_fun();
     ptr_ir_type parse_vec();
+    ptr_ir_type parse_vectype();
     ptr_ir_decimal parse_decimal();
     ptr_ir_float parse_float(std::string num);
     ptr_ir_str parse_str();
     ptr_ir_let parse_let();
+    ptr_ir_mkvec parse_mkvec();
     bool check_recursive(ir_struct *p, std::unordered_set<std::string> &used);
     std::string parse_id();
     void add_builtin();

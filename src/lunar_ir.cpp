@@ -89,6 +89,7 @@
 #define TRUEVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 1, false))
 #define FALSEVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false))
 #define VOIDVAL(ctx) llvm::ConstantInt::get(ctx, llvm::APInt(1, 0, false))
+#define I8PTR(ctx) llvm::PointerType::getUnqual(llvm::IntegerType::get(ctx, 8))
 
 namespace lunar {
 
@@ -486,6 +487,20 @@ ptr_ir_expr ir::parse_expr() {
             return let;
         }
 
+        // VECTOR
+        PTRY(m_parsec, id, m_parsec.str("vec"));
+        if (!m_parsec.is_fail()) {
+            SPACEPLUS(m_parsec);
+
+            auto vec = parse_mkvec();
+            if (vec) {
+                vec->m_line = line;
+                vec->m_column = column;
+            }
+
+            return vec;
+        }
+
         // APPLY
         auto apply = std::make_unique<ir_apply>();
         for (;;) {
@@ -540,6 +555,19 @@ ptr_ir_expr ir::parse_expr() {
     return nullptr;
 }
 
+#define PARSETYPE(ID, STR, FUN)                                                \
+    do {                                                                       \
+        if (ID == STR) {                                                       \
+            auto ret = FUN;                                                    \
+            if (!ret)                                                          \
+                return nullptr;                                                \
+                                                                               \
+            ret->m_line = line;                                                \
+            ret->m_column = column;                                            \
+            return ret;                                                        \
+        }                                                                      \
+    } while (0)
+
 ptr_ir_type ir::parse_type() {
     auto line = m_parsec.get_line();
     auto column = m_parsec.get_column();
@@ -551,24 +579,19 @@ ptr_ir_type ir::parse_type() {
         std::string id;
         PARSEID(id, m_parsec);
 
-        if (id == "ref") {
-            auto ref = parse_ref();
-            if (!ref)
-                return nullptr;
+        PARSETYPE(id, "ref", parse_ref());
+        PARSETYPE(id, "fun", parse_fun());
 
-            ref->m_line = line;
-            ref->m_column = column;
-            return ref;
+        if (id == "vec") {
+            SYNTAXERR2("vector type must be referred by reference type", line,
+                       column);
+            return nullptr;
         }
 
-        if (id == "fun") {
-            auto fun = parse_fun();
-            if (!fun)
-                return nullptr;
-
-            fun->m_line = line;
-            fun->m_column = column;
-            return fun;
+        if (id == "struct") {
+            SYNTAXERR2("structure type must be referred by reference type",
+                       line, column);
+            return nullptr;
         }
 
         SYNTAXERR2("expected type specifiler", line, column);
@@ -707,34 +730,14 @@ ptr_ir_type ir::parse_reftype() {
         std::string id;
         PARSEID(id, m_parsec);
 
-        if (id == "ref") {
-            auto ref = parse_ref();
-            if (!ref)
-                return nullptr;
+        PARSETYPE(id, "ref", parse_ref());
+        PARSETYPE(id, "struct", parse_struct());
+        PARSETYPE(id, "vec", parse_vec());
 
-            ref->m_line = line;
-            ref->m_column = column;
-            return ref;
-        }
-
-        if (id == "struct") {
-            auto s = parse_struct();
-            if (!s)
-                return nullptr;
-
-            s->m_line = line;
-            s->m_column = column;
-            return s;
-        }
-
-        if (id == "vec") {
-            auto v = parse_vec();
-            if (!v)
-                return nullptr;
-
-            v->m_line = line;
-            v->m_column = column;
-            return v;
+        if (id == "fun") {
+            SYNTAXERR2("function type could not be a reference type", line,
+                       column);
+            return nullptr;
         }
 
         SYNTAXERR2("expected type specifier", line, column);
@@ -788,17 +791,68 @@ ptr_ir_type ir::parse_fun() {
 ptr_ir_type ir::parse_vec() {
     SPACEPLUS(m_parsec);
 
-    auto t = parse_reftype();
+    auto t = parse_vectype();
     if (!t)
         return nullptr;
 
+    auto ret = std::make_unique<ir_vec>();
+    ret->m_type = std::move(t);
+
     TRYRPAREN(m_parsec);
-    if (m_parsec.is_fail()) {
+    if (!m_parsec.is_fail()) {
+        return ret;
     }
 
-    auto ret = std::uni
+    SPACEPLUS(m_parsec);
 
+    auto num = parse_decimal();
+    if (!num) {
+        SYNTAXERR("expected a decimal number");
         return nullptr;
+    }
+
+    ret->m_num = std::move(num);
+
+    PARSERPAREN(m_parsec);
+
+    return ret;
+}
+
+ptr_ir_type ir::parse_vectype() {
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
+
+    char tmp;
+    PTRY(m_parsec, tmp, m_parsec.character('('));
+    if (!m_parsec.is_fail()) {
+        m_parsec.spaces();
+
+        line = m_parsec.get_line();
+        column = m_parsec.get_column();
+        std::string id;
+        PARSEID(id, m_parsec);
+
+        PARSETYPE(id, "ref", parse_ref());
+        PARSETYPE(id, "struct", parse_struct());
+        PARSETYPE(id, "fun", parse_vec());
+
+        if (id == "vec") {
+            SYNTAXERR2("multi dimentional vector is not supported", line,
+                       column);
+            return nullptr;
+        }
+
+        SYNTAXERR2("expected type specifier", line, column);
+        return nullptr;
+    }
+
+    auto s = parse_scalartype();
+    if (s) {
+        s->m_line = line;
+        s->m_column = column;
+    }
+
+    return s;
 }
 
 ptr_ir_defun ir::parse_defun() {
@@ -1106,6 +1160,26 @@ ptr_ir_let ir::parse_let() {
     return let;
 }
 
+ptr_ir_mkvec ir::parse_mkvec() {
+    auto t = parse_vectype();
+    if (!t)
+        return nullptr;
+
+    SPACEPLUS(m_parsec);
+
+    auto e = parse_expr();
+    if (!e)
+        return nullptr;
+
+    PARSERPAREN(m_parsec);
+
+    auto mkvec = std::make_unique<ir_mkvec>();
+    mkvec->m_vectype = std::move(t);
+    mkvec->m_num = std::move(e);
+
+    return mkvec;
+}
+
 std::string ir_struct::str() const {
     std::string s = "(struct";
     for (auto &p : m_member) {
@@ -1144,6 +1218,7 @@ std::string ir_scalar::str() const {
         return "int";
     case TYPE_VOID:
         return "void";
+    case TYPE_VEC:
     case TYPE_REF:
     case TYPE_STRUCT:
     case TYPE_FUN:
@@ -1458,6 +1533,23 @@ bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
     return true;
 }
 
+static bool check_refvec(const ir &ref, ir_type *type) {
+    if (type->m_irtype == ir_type::IRTYPE_REF) {
+        auto r = (ir_ref *)type;
+        if (r->m_type->m_irtype == ir_type::IRTYPE_VEC) {
+            auto v = (ir_vec *)r->m_type.get();
+            if (v->m_num) {
+                SEMANTICERR(
+                    ref, v->m_num,
+                    "the number of elements could not be specified here");
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool ir_defun::check_type(const ir &ref) {
     ir_expr::id2type vars;
 
@@ -1468,11 +1560,16 @@ bool ir_defun::check_type(const ir &ref) {
 
     int n = 0;
     for (auto &p : m_args) {
+        if (!check_refvec(ref, p->m_type.get()))
+            return false;
         vars[p->m_id].push_back(m_funtype->m_args[n]);
         n++;
     }
 
     if (!m_expr->check_type(ref, vars))
+        return false;
+
+    if (!check_refvec(ref, m_funtype->m_ret.get()))
         return false;
 
     auto ret = std::make_unique<ir_id>();
@@ -1550,6 +1647,7 @@ shared_ir_type ir_bool::check_type(const ir &ref, id2type &vars) {
 }
 
 shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
+    // check the type of the variable definitions
     for (auto &p : m_def) {
         p->m_id->m_type = ref.resolve_type(p->m_id->m_type);
         if (!p->m_id->m_type)
@@ -1563,6 +1661,9 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
             r->m_type = p->m_expr->m_type;
             p->m_expr->m_type = r;
         }
+
+        if (!check_refvec(ref, p->m_id->m_type.get()))
+            return nullptr;
 
         // this may not be necessary
         // p->m_expr->m_type = ref.resolve_type(p->m_expr->m_type);
@@ -1579,6 +1680,7 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
         vars[p->m_id->m_id].push_back(p->m_id->m_type);
     }
 
+    // check the type of the expression
     auto t = m_expr->check_type(ref, vars);
 
     if (!t)
@@ -1592,6 +1694,40 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
     m_type = t;
 
     return t;
+}
+
+shared_ir_type ir_mkvec::check_type(const ir &ref, id2type &vars) {
+    // check the type of vector
+    auto t = std::shared_ptr<ir_type>(m_vectype->clone());
+    t = ref.resolve_type(t);
+
+    auto v = std::make_shared<ir_vec>();
+    v->m_type = t;
+
+    auto reftype = std::make_shared<ir_ref>();
+    reftype->m_type = v;
+
+    m_type = reftype;
+
+    // check whether the type of the expression indicating the number of
+    // elements is u64
+    auto e = m_num->check_type(ref, vars);
+    if (!e)
+        return nullptr;
+
+    ir_id u64expr;
+    auto u64type = std::make_shared<ir_scalar>();
+    u64type->m_type = TYPE_U64;
+    u64expr.m_type = u64type;
+
+    if (!unify_type(&u64expr, m_num.get())) {
+        TYPEERR(ref, m_num, "unexpected type",
+                "    expected: u64\n"
+                "    actual: %s",
+                e->str().c_str());
+    }
+
+    return reftype;
 }
 
 shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
@@ -1643,7 +1779,7 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
             case '=':
                 return check_eq(ref, vars);
             default:
-                return nullptr;
+                return check_call(ref, vars, id->m_id);
             }
         } else if (id->m_id == "if") {
             return check_ifexpr(ref, vars);
@@ -1747,7 +1883,14 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
             }
 
             ir_id tmp;
-            tmp.m_type = shared_ir_type(s->second->m_member[n]);
+            if (member->m_irtype == ir_type::IRTYPE_VEC) {
+                auto r = std::make_shared<ir_ref>();
+                r->m_type = shared_ir_type(s->second->m_member[n]);
+                tmp.m_type = r;
+            } else {
+                tmp.m_type = shared_ir_type(s->second->m_member[n]);
+            }
+
             if (!unify_type(&tmp, it->get())) {
                 TYPEERR(ref, it->get(), "unexpected type",
                         "    expected: %s\n"
@@ -1907,10 +2050,8 @@ bool ir::is_structgen(ir_expr *expr) const {
 
 void ir::llvm_memcpy(llvm::Value *dst, llvm::Value *src, size_t size) {
     std::vector<llvm::Value *> args;
-    auto i8ptr =
-        llvm::PointerType::getUnqual(llvm::IntegerType::get(m_llvm_ctx, 8));
-    args.push_back(m_llvm_builder.CreateBitCast(dst, i8ptr));
-    args.push_back(m_llvm_builder.CreateBitCast(src, i8ptr));
+    args.push_back(m_llvm_builder.CreateBitCast(dst, I8PTR(m_llvm_ctx)));
+    args.push_back(m_llvm_builder.CreateBitCast(src, I8PTR(m_llvm_ctx)));
     args.push_back(
         llvm::ConstantInt::get(m_llvm_ctx, llvm::APInt(64, size, false)));
     args.push_back(FALSEVAL(m_llvm_ctx));
@@ -1941,10 +2082,8 @@ std::string ir::codegen() {
 
     // Declare the memcpy
     std::vector<llvm::Type *> vec;
-    auto i8ptr =
-        llvm::PointerType::getUnqual(llvm::IntegerType::get(m_llvm_ctx, 8));
-    vec.push_back(i8ptr); /* i8 */
-    vec.push_back(i8ptr); /* i8 */
+    vec.push_back(I8PTR(m_llvm_ctx)); /* i8 */
+    vec.push_back(I8PTR(m_llvm_ctx)); /* i8 */
     vec.push_back(llvm::IntegerType::get(m_llvm_ctx, 64));
     vec.push_back(llvm::IntegerType::get(m_llvm_ctx, 1));
     m_memcpy = llvm::Intrinsic::getDeclaration(&m_llvm_module,
@@ -1986,6 +2125,7 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
         return llvm::Type::getInt8Ty(ref.get_llvm_ctx());
     case TYPE_VOID:
         return llvm::Type::getVoidTy(ref.get_llvm_ctx());
+    case TYPE_VEC:
     case TYPE_INT:
     case TYPE_REF:
     case TYPE_STRUCT:
@@ -1999,8 +2139,15 @@ llvm::Type *ir_scalar::codegen(ir &ref) {
 }
 
 llvm::Type *ir_ref::codegen(ir &ref) {
-    auto t = m_type->codegen(ref);
-    return llvm::PointerType::getUnqual(t);
+    switch (m_type->m_irtype) {
+    case ir_type::IRTYPE_VEC:
+    case ir_type::IRTYPE_STRUCT:
+        return m_type->codegen(ref);
+    default: {
+        auto t = m_type->codegen(ref);
+        return llvm::PointerType::getUnqual(t);
+    }
+    }
 }
 
 llvm::Type *ir_utf8::codegen(ir &ref) {
@@ -2122,7 +2269,7 @@ llvm::Function *ir_defun::codegen_main(ir &ref) {
 }
 
 llvm::Function *ir_defun::codegen_entry(ir &ref) {
-    // TODO: handling spawn
+    // TODO: handle spawn
 
     auto &ctx = ref.get_llvm_ctx();
 
@@ -2272,6 +2419,19 @@ llvm::Value *ir_let::codegen(ir &ref, ir_expr::id2val &vals) {
     }
 
     return e;
+}
+
+llvm::Value *ir_mkvec::codegen(ir &ref, ir_expr::id2val &vals) {
+    auto tmp = ((ir_ref *)m_type.get())->m_type;
+    auto type = ((ir_vec *)tmp.get())->m_type->codegen(ref);
+    if (!type)
+        return nullptr;
+
+    auto num = m_num->codegen(ref, vals);
+    if (!num)
+        return nullptr;
+
+    return ref.get_llvm_builder().CreateAlloca(type, num);
 }
 
 llvm::Value *ir_decimal::codegen(ir &ref, ir_expr::id2val &vals) {
@@ -2460,7 +2620,12 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             case '=':
                 BINOP(CreateICmpEQ, CreateICmpEQ, CreateFCmpOEQ, "=", "eqtmp");
             default:
-                return nullptr;
+                // function call
+                auto it = ref.get_struct_proto().find(id->m_id);
+                if (it != ref.get_struct_proto().end()) {
+                    return struct_gen(ref, vals, it->second);
+                }
+                return codegen_call(ref, vals, id->m_id);
             }
         } else if (id->m_id == "if") {
             return codegen_ifexpr(ref, vals);
@@ -2630,7 +2795,18 @@ void ir_apply::struct_gen2(ir &ref, id2val &vals, llvm::StructType *type,
         }
 
         auto t = (*it)->codegen(ref, vals);
-        builder.CreateStore(t, ptr);
+
+        if (type->getElementType(n)->isArrayTy()) {
+            auto vec = (llvm::ArrayType *)type->getElementType(n);
+            auto &layout = ref.get_llvm_datalayout();
+            auto vecsize = vec->getNumElements() *
+                           layout.getTypeAllocSize(vec->getElementType());
+            auto head =
+                builder.CreateBitCast(ptr, I8PTR(ref.get_llvm_ctx()), "vec");
+            ref.llvm_memcpy(head, t, vecsize);
+        } else {
+            builder.CreateStore(t, ptr);
+        }
     }
 }
 
@@ -2889,6 +3065,15 @@ void ir_let::print() {
 
     std::cout << "], \"expr\":";
     m_expr->print();
+    std::cout << "}}";
+}
+
+void ir_mkvec::print() {
+    int n = 0;
+    std::cout << "{\"mkvec\":{\"type\":";
+    m_vectype->print();
+    std::cout << ",\"num\":";
+    m_num->print();
     std::cout << "}}";
 }
 

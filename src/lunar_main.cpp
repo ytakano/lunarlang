@@ -91,8 +91,22 @@ const char *e22 = "(struct st (s32 foo))\n"
                   "            ()\n"
                   "            (func (- arg 1)))))";
 
+const char *e23 = "(defun fun (ref (vec u32)) (((ref (vec u32)) arg))\n"
+                  "    (let (((ref (vec u32)) x (vec u32 10))) x))";
+
+const char *e24 = "(struct s ((vec u32 10) x))\n"
+                  "(defun fun void (((ref s) arg)) ())";
+
+const char *e25 = "(struct s ((vec u32 2) x))\n"
+                  "(defun fun (ref s) ()\n"
+                  "    (let (((ref (vec u32)) x (vec u32 2))\n"
+                  "          ((ref s) y (s x))) y))";
+
+const char *e26 = "(defun fun (ref (vec u32)) ()\n"
+                  "    (let (((ref (vec u32)) x (vec u32 20))) x))";
+
 void world(void *arg) {
-    std::string s = e22;
+    std::string s = e25;
 
     lunar::ir ir("test.ir", s);
 

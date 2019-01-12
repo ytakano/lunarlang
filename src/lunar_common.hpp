@@ -36,6 +36,7 @@ enum type_spec {
     TYPE_VOID,
     TYPE_FUN,
     TYPE_UTF8,
+    TYPE_VEC,
 };
 
 } // namespace lunar
