@@ -116,6 +116,32 @@ Example:
 ```
 This example creates a u32 vector whose size is 10.
 
+### Element Access
+
+```
+$ELM := (elm $EXPR $EXPR)
+```
+
+It returns a reference of the element.
+
+```
+(defun fun (ref u32) (((ref (vec u32)) arg))
+    (elm arg 1))
+```
+
+```
+(struct st (u64 foo))
+(defun fun (ref u64) (((ref st) arg))
+    (elm arg 0))
+```
+
+### Load and Store
+
+```
+$LOAD := (laod $EXPR)
+$STORE := (store $EXPR $EXPR)
+```
+
 ### Yield
 
 ```

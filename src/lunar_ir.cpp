@@ -1789,6 +1789,8 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
             return check_eq(ref, vars);
         } else if (id->m_id == "print") {
             return check_print(ref, vars);
+        } else if (id->m_id == "elm") {
+            return check_elm(ref, vars);
         } else {
             // function call
             return check_call(ref, vars, id->m_id);
@@ -1811,6 +1813,80 @@ shared_ir_type ir_apply::check_print(const ir &ref, id2type &vars) {
     m_type = v;
 
     return v;
+}
+
+shared_ir_type ir_apply::check_elm(const ir &ref, id2type &vars) {
+    if (m_expr.size() != 3) {
+        SEMANTICERR(ref, this, "elm requires exactly 2 arguments");
+        return nullptr;
+    }
+
+    auto type = m_expr[1]->check_type(ref, vars);
+    if (!type)
+        return nullptr;
+
+    if (type->m_irtype != ir_type::IRTYPE_REF) {
+        SEMANTICERR(ref, m_expr[1],
+                    "elm requires a reference type at the first argument");
+        return nullptr;
+    }
+
+    auto reftype = (ir_ref *)type.get();
+    switch (reftype->m_type->m_irtype) {
+    case ir_type::IRTYPE_STRUCT: {
+        if (m_expr[2]->m_expr_type != EXPRID) {
+            SEMANTICERR(ref, m_expr[2],
+                        "elm requires an identifier at the second argument for "
+                        "structure type");
+            return nullptr;
+        }
+        auto id = (ir_id *)m_expr[2].get();
+        auto st = (ir_struct *)reftype->m_type.get();
+
+        auto it = st->m_id2idx.find(id->m_id);
+        if (it == st->m_id2idx.end()) {
+            SEMANTICERR(ref, m_expr[2],
+                        "%s is a not member of the first argument",
+                        id->m_id.c_str());
+            return nullptr;
+        }
+
+        auto idx = it->second;
+        auto ret = std::make_shared<ir_ref>();
+        ret->m_type = st->m_member[idx];
+
+        m_type = ret;
+
+        return ret;
+    }
+    case ir_type::IRTYPE_VEC: {
+        auto d = m_expr[2]->check_type(ref, vars);
+        if (d->m_irtype == ir_type::IRTYPE_SCALAR) {
+            auto num = (ir_scalar *)d.get();
+            if (num->m_type == TYPE_S64 || num->m_type == TYPE_INT) {
+                auto ret = std::make_shared<ir_ref>();
+                auto vec = (ir_vec *)reftype->m_type.get();
+
+                ret->m_type = vec->m_type;
+                m_type = ret;
+
+                return ret;
+            }
+        }
+        SEMANTICERR(
+            ref, m_expr[2],
+            "elm requires a value of s64 type at the second argument for "
+            "vector type");
+        return nullptr;
+    }
+    default:
+        SEMANTICERR(ref, m_expr[1],
+                    "elm requires a reference type of structure or vector at "
+                    "the first argument");
+        return nullptr;
+    }
+
+    return nullptr;
 }
 
 shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
@@ -2639,6 +2715,8 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
             return codegen_print(ref, vals);
         } else if (id->m_id == "vec") {
             return codegen_vec(ref, vals);
+        } else if (id->m_id == "elm") {
+            return codegen_elm(ref, vals);
         } else {
             // function call
             auto it = ref.get_struct_proto().find(id->m_id);
@@ -2766,6 +2844,31 @@ llvm::Value *ir_apply::codegen_vec(ir &ref, id2val &vals) {
     auto alloc = builder.CreateAlloca(type, num);
 
     return alloc;
+}
+
+llvm::Value *ir_apply::codegen_elm(ir &ref, id2val &vals) {
+    auto &builder = ref.get_llvm_builder();
+
+    auto reftype = (ir_ref *)m_expr[1]->m_type.get();
+    switch (reftype->m_type->m_irtype) {
+    case ir_type::IRTYPE_STRUCT: {
+        auto id = (ir_id *)m_expr[2].get();
+        auto st = (ir_struct *)reftype->m_type.get();
+
+        auto it = st->m_id2idx.find(id->m_id);
+        assert(it != st->m_id2idx.end());
+
+        auto val = m_expr[1]->codegen(ref, vals);
+        return builder.CreateStructGEP(val, it->second, "elm");
+    }
+    case ir_type::IRTYPE_VEC: {
+        auto val1 = m_expr[1]->codegen(ref, vals);
+        auto val2 = m_expr[2]->codegen(ref, vals);
+        return builder.CreateGEP(val1, val2, "elm");
+    }
+    default:;
+    }
+    return nullptr;
 }
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val &vals,

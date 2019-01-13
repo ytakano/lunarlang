@@ -105,8 +105,16 @@ const char *e25 = "(struct s ((vec u32 2) x))\n"
 const char *e26 = "(defun fun (ref (vec u32)) ()\n"
                   "    (let (((ref (vec u32)) x (vec u32 20))) x))";
 
+const char *e27 = "(struct st1 (s32 bar) (u64 foo))\n"
+                  "(struct st2 (u8 fiz) (st1 buz))\n"
+                  "(defun fun (ref u64) (((ref st2) arg))\n"
+                  "    (elm (elm arg buz) foo))";
+
+const char *e28 = "(defun fun (ref u32) (((ref (vec u32)) arg))\n"
+                  "    (elm arg 1))";
+
 void world(void *arg) {
-    std::string s = e25;
+    std::string s = e27;
 
     lunar::ir ir("test.ir", s);
 
