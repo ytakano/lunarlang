@@ -113,8 +113,11 @@ const char *e27 = "(struct st1 (s32 bar) (u64 foo))\n"
 const char *e28 = "(defun fun (ref u32) (((ref (vec u32)) arg))\n"
                   "    (elm arg 1))";
 
+const char *e29 = "(defun fun (ref (vec u32)) (((ref (ref (vec u32))) arg))\n"
+                  "    (load arg))";
+
 void world(void *arg) {
-    std::string s = e19;
+    std::string s = e29;
 
     lunar::ir ir("test.ir", s);
 
