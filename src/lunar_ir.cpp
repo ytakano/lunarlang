@@ -602,6 +602,9 @@ ptr_ir_type ir::parse_type() {
     if (s->m_irtype == ir_type::IRTYPE_USER) {
         SYNTAXERR2("unexpected type", line, column);
         return nullptr;
+    } else if (s->m_irtype == ir_type::IRTYPE_UTF8) {
+        SYNTAXERR2("utf8 type must be referred by refernce type", line, column);
+        return nullptr;
     }
 
     if (s) {
@@ -1633,7 +1636,9 @@ shared_ir_type ir_float::check_type(const ir &ref, id2type &vars) {
 }
 
 shared_ir_type ir_str::check_type(const ir &ref, id2type &vars) {
-    m_type = std::make_shared<ir_utf8>();
+    auto ret = std::make_shared<ir_ref>();
+    ret->m_type = std::make_shared<ir_utf8>();
+    m_type = ret;
     return m_type;
 }
 
@@ -1791,6 +1796,10 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
             return check_print(ref, vars);
         } else if (id->m_id == "elm") {
             return check_elm(ref, vars);
+        } else if (id->m_id == "load") {
+            // TODO
+        } else if (id->m_id == "store") {
+            // TODO
         } else {
             // function call
             return check_call(ref, vars, id->m_id);
@@ -2218,6 +2227,7 @@ llvm::Type *ir_ref::codegen(ir &ref) {
     switch (m_type->m_irtype) {
     case ir_type::IRTYPE_VEC:
     case ir_type::IRTYPE_STRUCT:
+    case ir_type::IRTYPE_UTF8:
         return m_type->codegen(ref);
     default: {
         auto t = m_type->codegen(ref);
@@ -2801,21 +2811,22 @@ llvm::Value *ir_apply::codegen_print(ir &ref, id2val &vals) {
             }
             break;
         }
-        case ir_type::IRTYPE_UTF8: {
-            std::vector<llvm::Value *> args;
-            args.push_back(val);
-            builder.CreateCall(ref.get_function("print_utf8"), args, "");
-            break;
-        }
         case ir_type::IRTYPE_REF: {
             std::vector<llvm::Value *> args;
             args.push_back(val);
-            builder.CreateCall(ref.get_function("print_ptr"), args, "");
+
+            auto r = (ir_ref *)(*it)->m_type.get();
+            if (r->m_type->m_irtype == ir_type::IRTYPE_UTF8)
+                builder.CreateCall(ref.get_function("print_utf8"), args, "");
+            else
+                builder.CreateCall(ref.get_function("print_ptr"), args, "");
+
             break;
         }
         case ir_type::IRTYPE_VEC:
         case ir_type::IRTYPE_STRUCT:
         case ir_type::IRTYPE_FUN:
+        case ir_type::IRTYPE_UTF8:
         case ir_type::IRTYPE_USER: {
             // TODO
             std::vector<llvm::Value *> args;

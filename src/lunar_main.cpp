@@ -77,7 +77,7 @@ const char *e17 = "(defun main void () (print_unum 10))";
 const char *e18 = "(struct st (u64 foo))\n"
                   "(defun func void (((fun u32 ((ref st))) arg)) ())";
 
-const char *e19 = "(defun func utf8 () \"Hello world!\\n\")";
+const char *e19 = "(defun func (ref utf8) () \"Hello world!\\n\")";
 
 const char *e20 = "(defun main void ()\n"
                   "    (print \"Hello world!\" 100 -200 0 10.7 () true false))";
@@ -114,7 +114,7 @@ const char *e28 = "(defun fun (ref u32) (((ref (vec u32)) arg))\n"
                   "    (elm arg 1))";
 
 void world(void *arg) {
-    std::string s = e27;
+    std::string s = e19;
 
     lunar::ir ir("test.ir", s);
 
