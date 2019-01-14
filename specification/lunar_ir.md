@@ -1,7 +1,12 @@
+# The Specification of Lunar IR
+
+Lunar IR is a low-level intermediate language to implement call-by-value functional programming languages.
+
+## Top
 
 ```
 $TOP := ($DEFUN | $DEFSTRUCT | $EXTERN)*
-$EXPR := $LET | $ID | $DECIMAL | $FLOAT | $APPLY | $VOID
+$EXPR := $LET | $ID | $DECIMAL | $FLOAT | $BOOL | $UTF8 | $APPLY | $VOID
 ```
 
 ## VOID
@@ -31,12 +36,31 @@ $EXP := e $PLUSMINUS [0-9]+
 $PLUSMINUS := + | -
 ```
 
+## UTF-8 String
+
+```
+$UTF8 := " $CHAR* "
+$ESCAPE := \a | \b | \f | \r | \n | \t | \v | \\ | \? | \' | \" | \0 | \UXXXXXXXX | \uXXXX
+$CHAR := $ESCAPE | characters not in $ESCAPE
+```
+
+```
+"Hello 世界!"
+```
+
+This expression returns a value whose type is `(ref utf8)`.
+
+## Boolean
+
+```
+$BOOL := true | false
+```
+
 ## Type
 
 ```
 $TYPE := $SCALAR | (ref $REFTYPE)
 $REFTYPE := $SCALAR | (ref $REFTYPE) | (struct $REFTYPE+) | $VEC | $FUN | $ID
-$FUN := (fun $TYPE ($TYPE*))
 $VEC := (vec $VECTYPE $DECIMAL?) | utf8
 $VECTYPE := $SCALAR | (ref $REFTYPE) | (struct $REFTYPE+) | $ID
 ```
@@ -47,10 +71,10 @@ $VECTYPE := $SCALAR | (ref $REFTYPE) | (struct $REFTYPE+) | $ID
 $SCALAR := bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | void
 ```
 
-## UTF8
+### Function Type
 
 ```
-$UTF8 = utf8
+$FUN := (fun $TYPE ($TYPE*))
 ```
 
 ## Let
@@ -91,10 +115,16 @@ $OPS := ($OP $EXPR $EXPR+)
 $OP := + | - | * | / | < | > | <= | >= | =
 ```
 
+### If
+
+```
+(if $EXPR $EXPR $EXPR)
+```
+
 ### Structure Creation
 
 An instance of a structure type is created by ```(structure_type $EXPR+)``` and the expression returns
-a ```(ref structure_type)``` type.
+a value whose type is ```(ref structure_type)```.
 
 Example:
 ```
@@ -107,29 +137,33 @@ Example:
 
 ### Vector Creation
 
-An instance of a vector type is created by ```(vec $TYPE number)``` whose number variable must be ```u64``` and the expression returns a ```(vec $TYPE)``` type.
+An instance of a vector type is created by `(vec $TYPE number)` whose `number`
+must be `u64` and the expression returns a value whose type is `(ref (vec $TYPE))`.
 
 Example:
 ```
 (defun fun void ()
-    (let (((vec u32) x (vec u32 10)))
+    (let (((ref (vec u32)) x (vec u32 10)))
         ()))
 ```
-This example creates a u32 vector whose size is 10.
+This example creates a vector of `u32` whose size is 10.
 
 ### Element Access
 
 ```
-$ELM := (elm $EXPR $EXPR)
+(elm $EXPR $EXPR)
 ```
 
-It returns a reference of the element.
+This function returns a reference of the element.
+The first argument must be a value whose type is reference of vector or structure.
 
+Example of vector type:
 ```
 (defun fun (ref u32) (((ref (vec u32)) arg))
     (elm arg 1))
 ```
 
+Example of structure type:
 ```
 (struct st (u64 foo))
 (defun fun (ref u64) (((ref st) arg))
