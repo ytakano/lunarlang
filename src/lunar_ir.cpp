@@ -580,7 +580,6 @@ ptr_ir_type ir::parse_type() {
         PARSEID(id, m_parsec);
 
         PARSETYPE(id, "ref", parse_ref());
-        PARSETYPE(id, "fun", parse_fun());
 
         if (id == "vec") {
             SYNTAXERR2("vector type must be referred by reference type", line,
@@ -591,6 +590,12 @@ ptr_ir_type ir::parse_type() {
         if (id == "struct") {
             SYNTAXERR2("structure type must be referred by reference type",
                        line, column);
+            return nullptr;
+        }
+
+        if (id == "fun") {
+            SYNTAXERR2("function type must be referred by reference type", line,
+                       column);
             return nullptr;
         }
 
@@ -736,12 +741,7 @@ ptr_ir_type ir::parse_reftype() {
         PARSETYPE(id, "ref", parse_ref());
         PARSETYPE(id, "struct", parse_struct());
         PARSETYPE(id, "vec", parse_vec());
-
-        if (id == "fun") {
-            SYNTAXERR2("function type could not be a reference type", line,
-                       column);
-            return nullptr;
-        }
+        PARSETYPE(id, "fun", parse_fun());
 
         SYNTAXERR2("expected type specifier", line, column);
         return nullptr;
@@ -837,11 +837,17 @@ ptr_ir_type ir::parse_vectype() {
 
         PARSETYPE(id, "ref", parse_ref());
         PARSETYPE(id, "struct", parse_struct());
-        PARSETYPE(id, "fun", parse_vec());
 
         if (id == "vec") {
             SYNTAXERR2("multi dimentional vector is not supported", line,
                        column);
+            return nullptr;
+        }
+
+        if (id == "fun") {
+            SYNTAXERR2("function vector is not supported. use (ref func * *) "
+                       "type for vector",
+                       line, column);
             return nullptr;
         }
 
@@ -2263,6 +2269,7 @@ llvm::Type *ir_ref::codegen(ir &ref) {
     case ir_type::IRTYPE_VEC:
     case ir_type::IRTYPE_STRUCT:
     case ir_type::IRTYPE_UTF8:
+    case ir_type::IRTYPE_FUN:
         return m_type->codegen(ref);
     case ir_type::IRTYPE_SCALAR: {
         auto s = (ir_scalar *)m_type.get();
