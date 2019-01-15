@@ -1803,10 +1803,9 @@ shared_ir_type ir_apply::check_type(const ir &ref, id2type &vars) {
         } else if (id->m_id == "elm") {
             return check_elm(ref, vars);
         } else if (id->m_id == "load") {
-            // TODO
             return check_load(ref, vars);
         } else if (id->m_id == "store") {
-            // TODO
+            return check_store(ref, vars);
         } else {
             // function call
             return check_call(ref, vars, id->m_id);
@@ -1907,9 +1906,10 @@ shared_ir_type ir_apply::check_elm(const ir &ref, id2type &vars) {
 
 shared_ir_type ir_apply::check_load(const ir &ref, id2type &vars) {
     if (m_expr.size() != 2) {
-        SEMANTICERR(ref, this, "elm requires exactly an argument");
+        SEMANTICERR(ref, this, "load requires exactly an argument");
         return nullptr;
     }
+
     auto type = m_expr[1]->check_type(ref, vars);
     if (!type)
         return nullptr;
@@ -1928,8 +1928,9 @@ shared_ir_type ir_apply::check_load(const ir &ref, id2type &vars) {
     case ir_type::IRTYPE_VEC:
     case ir_type::IRTYPE_STRUCT:
     case ir_type::IRTYPE_USER:
+    case ir_type::IRTYPE_FUN:
         TYPEERR(ref, m_expr[1], "unexpected type",
-                "    expected: (ref [scalar|(ref *)|(fun * *)])\n"
+                "    expected: (ref [scalar | (ref *)])\n"
                 "    actual: %s",
                 type->str().c_str());
         return nullptr;
@@ -1937,6 +1938,58 @@ shared_ir_type ir_apply::check_load(const ir &ref, id2type &vars) {
         m_type = r->m_type;
         return m_type;
     }
+}
+
+shared_ir_type ir_apply::check_store(const ir &ref, id2type &vars) {
+    if (m_expr.size() != 3) {
+        SEMANTICERR(ref, this, "store requires exactly 2 argument");
+        return nullptr;
+    }
+
+    auto dsttype = m_expr[1]->check_type(ref, vars);
+    if (!dsttype)
+        return nullptr;
+
+    if (dsttype->m_irtype != ir_type::IRTYPE_REF) {
+        TYPEERR(ref, m_expr[1], "unexpected type",
+                "    expected: (ref *)\n"
+                "    actual: %s",
+                dsttype->str().c_str());
+        return nullptr;
+    }
+
+    auto srctype = m_expr[2]->check_type(ref, vars);
+    if (!srctype)
+        return nullptr;
+
+    auto r = (ir_ref *)dsttype.get();
+    switch (r->m_type->m_irtype) {
+    case ir_type::IRTYPE_UTF8:
+    case ir_type::IRTYPE_VEC:
+    case ir_type::IRTYPE_STRUCT:
+    case ir_type::IRTYPE_USER:
+    case ir_type::IRTYPE_FUN:
+        TYPEERR(ref, m_expr[1], "unexpected type",
+                "    expected: (ref [scalar | (ref *)])\n"
+                "    actual: %s",
+                dsttype->str().c_str());
+        return nullptr;
+    default:;
+    }
+
+    ir_id tmp;
+    tmp.m_type = shared_ir_type(r->m_type->clone());
+    if (!unify_type(&tmp, m_expr[2].get())) {
+        TYPEERR(ref, m_expr[2], "unexpected type",
+                "    expected: %s\n"
+                "    actual: %s",
+                r->m_type->str().c_str(), m_expr[2]->m_type->str().c_str());
+        return nullptr;
+    }
+
+    m_type = mk_voidty();
+
+    return m_type;
 }
 
 shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
@@ -2779,6 +2832,7 @@ llvm::Value *ir_apply::codegen(ir &ref, ir_expr::id2val &vals) {
         } else if (id->m_id == "load") {
             return codegen_load(ref, vals);
         } else if (id->m_id == "store") {
+            return codegen_store(ref, vals);
         } else {
             // function call
             auto it = ref.get_struct_proto().find(id->m_id);
@@ -2938,6 +2992,13 @@ llvm::Value *ir_apply::codegen_load(ir &ref, id2val &vals) {
     auto &builder = ref.get_llvm_builder();
     auto val = m_expr[1]->codegen(ref, vals);
     return builder.CreateLoad(val, "load");
+}
+
+llvm::Value *ir_apply::codegen_store(ir &ref, id2val &vals) {
+    auto &builder = ref.get_llvm_builder();
+    auto ptr = m_expr[1]->codegen(ref, vals);
+    auto val = m_expr[2]->codegen(ref, vals);
+    return builder.CreateStore(val, ptr);
 }
 
 llvm::Value *ir_apply::struct_gen(ir &ref, id2val &vals,

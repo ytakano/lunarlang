@@ -258,6 +258,7 @@ struct ir_apply : public ir_expr {
     shared_ir_type check_print(const ir &ref, id2type &vars);
     shared_ir_type check_elm(const ir &ref, id2type &vars);
     shared_ir_type check_load(const ir &ref, id2type &vars);
+    shared_ir_type check_store(const ir &ref, id2type &vars);
     shared_ir_type check_call(const ir &ref, id2type &vars,
                               const std::string &id);
     llvm::Value *struct_gen(ir &ref, id2val &vals, llvm::StructType *type);
@@ -268,6 +269,7 @@ struct ir_apply : public ir_expr {
     llvm::Value *codegen_vec(ir &ref, id2val &vals);
     llvm::Value *codegen_elm(ir &ref, id2val &vals);
     llvm::Value *codegen_load(ir &ref, id2val &vals);
+    llvm::Value *codegen_store(ir &ref, id2val &vals);
     llvm::Value *codegen_call(ir &ref, id2val &vals, const std::string &id);
 };
 

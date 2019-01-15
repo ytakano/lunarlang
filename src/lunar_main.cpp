@@ -117,8 +117,11 @@ const char *e29 = "(defun fun (ref (fun void ()))\n"
                   "           (((ref (ref (fun void ()))) arg))\n"
                   "    (load arg))";
 
+const char *e30 = "(defun fun void (((ref u32) arg))\n"
+                  "    (store arg 10))";
+
 void world(void *arg) {
-    std::string s = e29;
+    std::string s = e30;
 
     lunar::ir ir("test.ir", s);
 
