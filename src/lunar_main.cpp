@@ -33,12 +33,11 @@ const char *e8 = "(defun fun u64 ((u64 num))\n"
                  "     1\n"
                  "     (fun (- num 1))))\n";
 
-const char *e9 =
-    "(defun main s64 ((s64 argc) ((ref (ref s8)) argv)) (fact 5))\n"
-    "(defun fact s64 ((s64 num))\n"
-    "    (if (= num 0)\n"
-    "     1\n"
-    "     (* num (fact (- num 1)))))\n";
+const char *e9 = "(defun fun s64 () (fact 5))\n"
+                 "(defun fact s64 ((s64 num))\n"
+                 "    (if (= num 0)\n"
+                 "     1\n"
+                 "     (* num (fact (- num 1)))))\n";
 
 const char *e10 =
     "(struct mystruct (u64 foo) (u32 bar))\n"
@@ -120,8 +119,31 @@ const char *e29 = "(defun fun (ref (fun void ()))\n"
 const char *e30 = "(defun fun void (((ref u32) arg))\n"
                   "    (store arg 10))";
 
+const char *e31 = "(struct st (u32 foo))\n"
+                  "(defun fun void (((ref st) arg)) ())\n"
+                  "(defun fun2 void () (fun (st 10)))\n"
+                  "(defun fun3 void ()\n"
+                  "    (let (((ref st) a (st 20))) (fun a)))";
+
+const char *e32 = "(defun fun void (((ref (vec u32)) arg)) ())\n"
+                  "(defun fun2 void () (fun (vec u32 10)))\n"
+                  "(defun fun3 void ()\n"
+                  "    (let (((ref (vec u32)) a (vec u32 20))) (fun a)))";
+
+const char *e33 =
+    "(defun fun void (((ref u32) arg)) ())\n"
+    "(defun fun2 void () (fun (elm (vec u32 10) 0)))\n"
+    "(defun fun3 void ()\n"
+    "    (let (((ref (vec u32)) a (vec u32 20))) (fun (elm a 1))))";
+
+const char *e34 = "(struct st (u32 foo))\n"
+                  "(defun fun void (((ref u32) arg)) ())\n"
+                  "(defun fun2 void () (fun (elm (st 10) foo)))\n"
+                  "(defun fun3 void ()\n"
+                  "    (let (((ref st) a (st 20))) (fun (elm a foo))))";
+
 void world(void *arg) {
-    std::string s = e30;
+    std::string s = e9;
 
     lunar::ir ir("test.ir", s);
 

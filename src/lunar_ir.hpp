@@ -106,13 +106,14 @@ struct ir_usertype : public ir_type {
 typedef std::unique_ptr<ir_usertype> ptr_ir_usertype;
 
 struct ir_ref : public ir_type {
-    ir_ref() { m_irtype = IRTYPE_REF; }
+    ir_ref() : m_is_alloca(false) { m_irtype = IRTYPE_REF; }
 
     void print();
     ir_type *clone() const { return (new ir_ref(*this)); }
     std::string str() const;
     llvm::Type *codegen(ir &ref);
 
+    bool m_is_alloca;
     shared_ir_type m_type;
 };
 
@@ -241,7 +242,7 @@ struct ir_id : public ir_expr {
 };
 
 struct ir_apply : public ir_expr {
-    ir_apply() { m_expr_type = EXPRAPPLY; }
+    ir_apply() : m_is_tailcall(true) { m_expr_type = EXPRAPPLY; }
     virtual ~ir_apply() {}
 
     shared_ir_type check_type(const ir &ref, id2type &vars);
@@ -249,6 +250,7 @@ struct ir_apply : public ir_expr {
     void print();
 
     std::vector<ptr_ir_expr> m_expr;
+    bool m_is_tailcall;
 
   private:
     shared_ir_type check_ifexpr(const ir &ref, id2type &vars);

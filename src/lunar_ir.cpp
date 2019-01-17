@@ -188,9 +188,16 @@ static bool unify_type(ir_expr *lhs, ir_expr *rhs) {
             }
         }
     }
+    case ir_type::IRTYPE_REF: {
+        auto lref = (ir_ref *)lhs->m_type.get();
+        auto rref = (ir_ref *)rhs->m_type.get();
+        if (lref->m_is_alloca || rref->m_is_alloca) {
+            lref->m_is_alloca = true;
+            rref->m_is_alloca = true;
+        }
+    }
     case ir_type::IRTYPE_VEC:
     case ir_type::IRTYPE_FUN:
-    case ir_type::IRTYPE_REF:
     case ir_type::IRTYPE_STRUCT:
         if (!eq_type(lhs->m_type.get(), rhs->m_type.get()))
             return false;
@@ -1670,6 +1677,7 @@ shared_ir_type ir_let::check_type(const ir &ref, id2type &vars) {
         if (p->m_expr->m_type->m_irtype == ir_type::IRTYPE_STRUCT) {
             auto r = std::make_shared<ir_ref>();
             r->m_type = p->m_expr->m_type;
+            r->m_is_alloca = true;
             p->m_expr->m_type = r;
         }
 
@@ -1716,6 +1724,7 @@ shared_ir_type ir_mkvec::check_type(const ir &ref, id2type &vars) {
     v->m_type = t;
 
     auto reftype = std::make_shared<ir_ref>();
+    reftype->m_is_alloca = true;
     reftype->m_type = v;
 
     m_type = reftype;
@@ -1840,6 +1849,15 @@ shared_ir_type ir_apply::check_elm(const ir &ref, id2type &vars) {
     if (!type)
         return nullptr;
 
+    if (type->m_irtype == ir_type::IRTYPE_STRUCT ||
+        type->m_irtype == ir_type::IRTYPE_VEC) {
+        auto r = std::make_shared<ir_ref>();
+        r->m_is_alloca = true;
+        r->m_type = type;
+        type = r;
+        m_expr[1]->m_type = r;
+    }
+
     if (type->m_irtype != ir_type::IRTYPE_REF) {
         SEMANTICERR(ref, m_expr[1],
                     "elm requires a reference type at the first argument");
@@ -1869,9 +1887,9 @@ shared_ir_type ir_apply::check_elm(const ir &ref, id2type &vars) {
         auto idx = it->second;
         auto ret = std::make_shared<ir_ref>();
         ret->m_type = st->m_member[idx];
+        ret->m_is_alloca = reftype->m_is_alloca;
 
         m_type = ret;
-
         return ret;
     }
     case ir_type::IRTYPE_VEC: {
@@ -1883,8 +1901,9 @@ shared_ir_type ir_apply::check_elm(const ir &ref, id2type &vars) {
                 auto vec = (ir_vec *)reftype->m_type.get();
 
                 ret->m_type = vec->m_type;
-                m_type = ret;
+                ret->m_is_alloca = reftype->m_is_alloca;
 
+                m_type = ret;
                 return ret;
             }
         }
@@ -2021,6 +2040,7 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
             if ((*it)->m_type->m_irtype == ir_type::IRTYPE_STRUCT) {
                 auto r = std::make_shared<ir_ref>();
                 r->m_type = (*it)->m_type;
+                r->m_is_alloca = true;
                 (*it)->m_type = r;
             }
 
@@ -2029,6 +2049,15 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
             tmp.m_type = shared_ir_type(fun->second->m_args[n]->clone());
             if (!unify_type(&tmp, it->get())) {
                 return nullptr;
+            }
+
+            // if an argument is reference type and it refers
+            // memory which is located in the stack space of the function,
+            // disable tail call
+            if ((*it)->m_type->m_irtype == ir_type::IRTYPE_REF) {
+                auto reftype = (ir_ref *)(*it)->m_type.get();
+                if (reftype->m_is_alloca)
+                    m_is_tailcall = false;
             }
         }
 
@@ -2039,7 +2068,7 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
         // structure construction
         if (m_expr.size() - 1 != s->second->m_member.size()) {
             SEMANTICERR(ref, this,
-                        "%s requres %lu arguments, but %lu arguments are "
+                        "%s requires %lu arguments, but %lu arguments are "
                         "actually passed",
                         id.c_str(), s->second->m_member.size(),
                         m_expr.size() - 1);
@@ -2063,6 +2092,7 @@ shared_ir_type ir_apply::check_call(const ir &ref, id2type &vars,
 
             ir_id tmp;
             if (member->m_irtype == ir_type::IRTYPE_VEC) {
+                // vector creation
                 auto r = std::make_shared<ir_ref>();
                 r->m_type = shared_ir_type(s->second->m_member[n]);
                 tmp.m_type = r;
@@ -3134,7 +3164,8 @@ llvm::Value *ir_apply::codegen_call(ir &ref, id2val &vals,
 
     if (fun->getCallingConv() == llvm::CallingConv::Fast) {
         ret->setCallingConv(llvm::CallingConv::Fast);
-        ret->setTailCall();
+        if (m_is_tailcall)
+            ret->setTailCall();
     }
 
     return ret;
