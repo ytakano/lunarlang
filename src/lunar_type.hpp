@@ -15,20 +15,26 @@ class kind {
     bool m_is_star;
 };
 
+typedef std::shared_ptr<kind> ptr_kind;
+
 class star : public kind {
   public:
     star() { m_is_star = true; }
     virtual ~star() {}
 };
 
-class kind_sub : public kind {
-  public:
-    kind_sub() { m_is_star = false; }
-    virtual ~kind_sub() {}
+typedef std::shared_ptr<star> ptr_star;
 
-    std::unique_ptr<kind> m_left;
-    std::unique_ptr<kind> m_right;
+class kfun : public kind {
+  public:
+    kfun() { m_is_star = false; }
+    virtual ~kfun() {}
+
+    ptr_kind m_left;
+    ptr_kind m_right;
 };
+
+typedef std::shared_ptr<kfun> ptr_kfun;
 
 bool cmp_kind(const kind *lhs, const kind *rhs);
 
@@ -47,6 +53,8 @@ class type {
     subtype m_subtype;
 };
 
+typedef std::shared_ptr<type> ptr_type;
+
 // primitive datatypes
 class type_const : public type {
   public:
@@ -58,7 +66,7 @@ class type_const : public type {
     }
 
     std::string m_id;
-    std::unique_ptr<kind> m_kind;
+    ptr_kind m_kind;
 };
 
 // type variable
@@ -72,7 +80,7 @@ class type_var : public type {
     }
 
     std::string m_id;
-    std::unique_ptr<kind> m_kind;
+    ptr_kind m_kind;
 };
 
 // function application
@@ -81,9 +89,11 @@ class type_app : public type {
     type_app() { m_subtype = TYPE_APP; }
     virtual ~type_app() {}
 
-    std::unique_ptr<type> m_left;
-    std::unique_ptr<type> m_right;
+    ptr_type m_left;
+    ptr_type m_right;
 };
+
+ptr_type mk_funtype(ptr_type lhs, ptr_type rhs);
 
 } // namespace lunar
 
