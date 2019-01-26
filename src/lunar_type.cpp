@@ -2,10 +2,10 @@
 
 namespace lunar {
 
-static inline ptr_star mk_star() { return std::make_unique<star>(); }
-static inline ptr_kfun mk_kfun() { return std::make_unique<kfun>(); }
+static inline shared_star mk_star() { return std::make_unique<star>(); }
+static inline shared_kfun mk_kfun() { return std::make_unique<kfun>(); }
 
-static inline ptr_type mk_kind1(std::string id) {
+static inline shared_type mk_kind1(const std::string &id) {
     auto arr = std::make_shared<type_const>();
     arr->m_id = id;
 
@@ -18,7 +18,7 @@ static inline ptr_type mk_kind1(std::string id) {
     return arr;
 }
 
-static inline ptr_type mk_kind2(std::string id) {
+static inline shared_type mk_kind2(const std::string &id) {
     auto arr = std::make_shared<type_const>();
     arr->m_id = id;
 
@@ -34,9 +34,9 @@ static inline ptr_type mk_kind2(std::string id) {
     return arr;
 }
 
-static inline ptr_type mk_vec() { mk_kind1("vec"); }
-static inline ptr_type mk_arrow() { mk_kind2("fun"); }
-static inline ptr_type mk_tuple2() { mk_kind2("tuple"); }
+static inline shared_type mk_vec() { return mk_kind1("vec"); }
+static inline shared_type mk_arrow() { return mk_kind2("fun"); }
+static inline shared_type mk_tuple2() { return mk_kind2("tuple"); }
 
 bool cmp_kind(const kind *lhs, const kind *rhs) {
     if (lhs->m_is_star == rhs->m_is_star)
@@ -49,17 +49,30 @@ bool cmp_kind(const kind *lhs, const kind *rhs) {
            cmp_kind(lsub->m_right.get(), rsub->m_right.get());
 }
 
-ptr_type mk_funtype(ptr_type lhs, ptr_type rhs) {
-    auto app = std::make_shared<type_app>();
-    auto arr = std::make_shared<type_app>();
+#define MK_TYPE2(RET, FUN, LHS, RHS)                                           \
+    do {                                                                       \
+        auto app = std::make_shared<type_app>();                               \
+        auto arr = std::make_shared<type_app>();                               \
+                                                                               \
+        arr->m_left = FUN();                                                   \
+        arr->m_right = LHS;                                                    \
+                                                                               \
+        app->m_left = arr;                                                     \
+        app->m_right = RHS;                                                    \
+                                                                               \
+        RET = app;                                                             \
+    } while (0);
 
-    arr->m_left = mk_arrow();
-    arr->m_right = lhs;
+shared_type mk_funtype(shared_type lhs, shared_type rhs) {
+    shared_type ret;
+    MK_TYPE2(ret, mk_arrow, lhs, rhs);
+    return ret;
+}
 
-    app->m_left = arr;
-    app->m_right = rhs;
-
-    return app;
+shared_type mk_tuple(shared_type lhs, shared_type rhs) {
+    shared_type ret;
+    MK_TYPE2(ret, mk_tuple2, lhs, rhs);
+    return ret;
 }
 
 } // namespace lunar
