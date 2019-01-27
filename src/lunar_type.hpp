@@ -72,7 +72,7 @@ typedef std::shared_ptr<type> shared_type;
 // e.g.
 //   num : *
 //   vec : * -> *
-//   fn : * -> (* -> *)
+//   fn  : * -> (* -> *)
 class type_const : public type {
   public:
     type_const() { m_subtype = TYPE_CONST; }
@@ -205,9 +205,20 @@ class typeclass : public qual {
     typeclass() {}
     virtual ~typeclass() {}
 
-    std::string m_id;                 // class name
+    std::string m_id; // class name
+
+    // satisfy
+    // 1.
+    // x ∈ {m_args}
+    // ∀x x->m_subtype = TYPE_VAR
+    //
+    // 2.
+    // x ∈ tv(m_args)
+    // y, z ∈ tv(m_funcs)
+    // ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
+    // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
     std::vector<shared_type> m_args;  // arguments
-    std::vector<shared_type> m_funcs; // interface functions
+    std::vector<shared_type> m_funcs; // interfaces
 
     bool apply(std::vector<shared_type> &args);
 };
@@ -242,13 +253,17 @@ class classenv {
     virtual ~classenv() {}
 
   private:
-    // satisfy
-    // ∀x x ∈ {class names of m_instances} -> x ∈ {class names of m_classes}
+    struct env {
+        shared_typeclass m_class; // class declaration
 
-    // class name -> class declarations
-    std::unordered_map<std::string, shared_typeclass> m_classes;
-    // class name -> instance declarations
-    std::unordered_map<std::string, std::vector<shared_inst>> m_instances;
+        // satisfy
+        // i, j ∈ {0..m_insts.size() - 1}
+        // ∀i ∀j (i != j -> mgu(m_insts[i].args, m_insts[j].args) = false)
+        std::vector<shared_inst> m_insts; // instance declarations
+    };
+
+    // class name -> (class declarations, class instance declarations)
+    std::unordered_map<std::string, env> m_env;
 };
 
 } // namespace lunar

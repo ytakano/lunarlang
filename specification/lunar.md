@@ -3,13 +3,15 @@
 ## Infix Operator
 
 ```
-$INFIX := + | - | = | < | > | != | >>=
+$INFIX := + | - | = | < | > | != | * | / | . | >>= | :=
 ```
 
 ## Reserved Words
 
 ```
-$RESERVED := class | type | if | let | inst | where | fn | return | $INFIX
+$RESERVED := class | type | if | let | inst | where | fn |
+             match | module | import | return | as |
+             infix | $INFIX
 ```
 
 ## Identifier
@@ -31,14 +33,16 @@ $IDS := $ID | $ID , $IDS
 ### Class Declaration
 
 ```
-$CLASSDECL := class $ID $TVARSP $PREDS? { $FUNHEADS }
-$FUNHEADS := $FUNHEAD | $FUNHEAD $NEWLINE $FUNHEAD
+$CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES }
+$INTERFACES := $INTERFACE | $INTERFACE $NEWLINE $INTERFACES
+$INTERFAE := fn $INTNAME ( $TYPES ) -> $TYPE
+$INTNAME := $ID | infix $INFIX
 ```
 
 Example:
 ```
 class ord<`a> where eq<`a> {
-    infix < (x : `a, y : `a) -> bool
+    infix < (`a, `a) -> bool
 }
 ```
 This class definition define a class "ord" taking
@@ -86,6 +90,13 @@ respectively.
 
 ## Type
 
+### Kind
+
+```
+$KIND := $STAR | $STAR -> $KIND
+$STAR := *
+```
+
 ### Type Variable
 
 The leading character of a type variable must be ` (backslash).
@@ -93,6 +104,9 @@ The leading character of a type variable must be ` (backslash).
 $TVAR := `$ID
 $TVARS := $TVAR | $TVAR , $TVARS
 $TVARSP := <$TVARS>
+$TVARKIND := `$ID | `$ID : $KIND
+$TVARKINDS := $TVARKIND | $TVARKIND , $TVARKINDS
+$TVARKINDSP := <$TVARKINDS>
 ```
 
 ### Type
@@ -111,7 +125,7 @@ $TYPESPEC := : $TYPE
 ### User Defined Type
 
 ```
-$DEFTYPE := type $ID $TVARSP? { $INTYPE }
+$DEFTYPE := type $ID $TVARKINDSP? { $INTYPE }
 $INTYPE := $SUM | $PROD
 $SUM := $SUMTYPE | $SUMTYPE "|" $SUM
 $SUMTYPE := $ID | $ID $TYPESPEC | $ID : { $INTYPE }
@@ -131,8 +145,8 @@ type foo { bar : { x | y } |
 ## Function Definition
 
 ```
-$DEFUN := $FUNHEAD { $EXPR }
-$FUNHEAD := fn $ID ( $ARGS? ) $RETTYPE $PREDS
+$DEFUN := fn $ID ( $ARGS? ) $RETTYPE $PREDS { $EXPRS }
+$DEFUNS := $DEFUN | $DEFUNS $WHITESPACE+ $DEFUN
 $ARGS := $ARG | $ARG , $ARGS
 $ARG := $ID $TYPESPEC?
 $RETTYPE := -> $TYPE
