@@ -47,7 +47,7 @@ a type variable "\`a" which is a member of the class "eq".
 ### Class Instance Declaration
 
 ```
-$INST := inst $ID <$TYPES> { $EXPRS }
+$INST := inst $ID <$TYPES> $PREDS? { $EXPRS }
 ```
 
 Example:
@@ -56,8 +56,15 @@ inst ord<u32> {
     infix < (x, y) { ltU32(x, y) }
 }
 
-inst ord<either `a> {
-    infix < (just x, just y) { lt(x, y) }
+inst ord<either `a> where ord<'a> {
+    infix < (x, y) {
+        match (x, y) {
+        just a, just b:
+            lt(a, b)
+        _:
+            false
+        }
+    }
 }
 ```
 

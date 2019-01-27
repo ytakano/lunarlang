@@ -1,10 +1,13 @@
 #include "lunar_type.hpp"
 
+#include <assert.h>
+
 namespace lunar {
 
 static inline shared_star mk_star() { return std::make_unique<star>(); }
 static inline shared_kfun mk_kfun() { return std::make_unique<kfun>(); }
 
+// * -> *
 static inline shared_type mk_kind1(const std::string &id) {
     auto arr = std::make_shared<type_const>();
     arr->m_id = id;
@@ -18,6 +21,7 @@ static inline shared_type mk_kind1(const std::string &id) {
     return arr;
 }
 
+// * -> (* -> *)
 static inline shared_type mk_kind2(const std::string &id) {
     auto arr = std::make_shared<type_const>();
     arr->m_id = id;
@@ -35,7 +39,7 @@ static inline shared_type mk_kind2(const std::string &id) {
 }
 
 static inline shared_type mk_vec() { return mk_kind1("vec"); }
-static inline shared_type mk_arrow() { return mk_kind2("fun"); }
+static inline shared_type mk_fn() { return mk_kind2("fn"); }
 static inline shared_type mk_tuple2() { return mk_kind2("tuple"); }
 
 bool cmp_kind(const kind *lhs, const kind *rhs) {
@@ -65,7 +69,7 @@ bool cmp_kind(const kind *lhs, const kind *rhs) {
 
 shared_type mk_funtype(shared_type lhs, shared_type rhs) {
     shared_type ret;
-    MK_TYPE2(ret, mk_arrow, lhs, rhs);
+    MK_TYPE2(ret, mk_fn, lhs, rhs);
     return ret;
 }
 
@@ -73,6 +77,64 @@ shared_type mk_tuple(shared_type lhs, shared_type rhs) {
     shared_type ret;
     MK_TYPE2(ret, mk_tuple2, lhs, rhs);
     return ret;
+}
+
+shared_type substitution::apply(shared_type type) {
+    switch (type->m_subtype) {
+    case type::TYPE_CONST:
+        return type;
+    case type::TYPE_VAR: {
+        auto tvar = std::static_pointer_cast<type_var>(type);
+        auto s = m_subst.find(tvar->m_id);
+        if (s == m_subst.end())
+            return type;
+
+        if (!cmp_kind(type->get_kind().get(), s->second->m_kind.get())) {
+            // TODO: print error
+            return nullptr;
+        }
+
+        return s->second->m_type;
+    }
+    case type::TYPE_APP:
+        auto tapp = std::static_pointer_cast<type_app>(type);
+        auto lhs = apply(tapp->m_left);
+        if (!lhs)
+            return nullptr;
+
+        tapp->m_left = lhs;
+
+        auto rhs = apply(tapp->m_right);
+        if (!rhs)
+            return nullptr;
+
+        tapp->m_right = rhs;
+
+        return tapp;
+    }
+
+    return nullptr; // never reach here
+}
+
+bool typeclass::apply(std::vector<shared_type> &args) {
+    if (args.size() != m_args.size()) {
+        // TODO: print error
+        return false;
+    }
+
+    // check kind
+    for (int i = 0; i < args.size(); i++) {
+        if (cmp_kind(m_args[i]->get_kind().get(), args[i]->get_kind().get())) {
+            // TODO: print error
+            return false;
+        }
+    }
+
+    // check predicates
+
+    // check functions
+
+    return true;
 }
 
 } // namespace lunar
