@@ -101,29 +101,19 @@ shared_type substitution::apply(shared_type type) {
         return type;
     case type::TYPE_VAR: {
         auto tvar = std::static_pointer_cast<type_var>(type);
-        auto s = m_subst.find(tvar->m_id);
+        auto s = m_subst.find(*tvar);
         if (s == m_subst.end())
             return type;
 
-        if (cmp_kind(type->get_kind().get(), s->second->m_kind.get()) != 0) {
-            // TODO: print error
-            return nullptr;
-        }
-
-        return s->second->m_type;
+        return s->second;
     }
     case type::TYPE_APP:
         auto tapp = std::static_pointer_cast<type_app>(type);
-        auto lhs = apply(tapp->m_left);
-        if (!lhs)
-            return nullptr;
 
+        auto lhs = apply(tapp->m_left);
         tapp->m_left = lhs;
 
         auto rhs = apply(tapp->m_right);
-        if (!rhs)
-            return nullptr;
-
         tapp->m_right = rhs;
 
         return tapp;

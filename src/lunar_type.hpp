@@ -1,6 +1,7 @@
 #ifndef LUNAR_TYPE_HPP
 #define LUNAR_TYPE_HPP
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -143,7 +144,12 @@ shared_type mk_funtype(shared_type lhs, shared_type rhs);
 // substitution from (id, kind) to type
 // type variable -> type
 // e.g.
-//    (`a : *) -> `a
+//   substitution:
+//     {(`a : *) -> int}
+//   apply:
+//     {(`a : *) -> int} `a : * -> int
+//   composition:
+//     {`b : * -> int} {(`a : *) -> vec (`b : *)} -> {(`a : *) -> vec int}
 class substitution {
   public:
     substitution() {}
@@ -161,22 +167,10 @@ class substitution {
 
     typedef std::unique_ptr<subst> ptr_subst;
 
-    bool add_subst(const std::string &id, shared_kind k, shared_type t) {
-        auto s = std::make_unique<subst>(k, t);
-        m_subst[id] = std::move(s);
-        return true;
-    }
-
     // substitute type variables in the argument
-    // Applying a substituton of
-    // (`a : *) -> int
-    // to a type
-    // (`a : * -> *)
-    // fails because the kinds are different.
-    // nullptr is returned when substitution was failed.
     shared_type apply(shared_type type);
 
-    std::unordered_map<std::string, ptr_subst> m_subst;
+    std::map<type_var, shared_type> m_subst;
 };
 
 // predicate that m_types are members of the class named m_id
