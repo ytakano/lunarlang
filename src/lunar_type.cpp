@@ -42,15 +42,31 @@ static inline shared_type mk_vec() { return mk_kind1("vec"); }
 static inline shared_type mk_fn() { return mk_kind2("fn"); }
 static inline shared_type mk_tuple2() { return mk_kind2("tuple"); }
 
-bool cmp_kind(const kind *lhs, const kind *rhs) {
-    if (lhs->m_is_star == rhs->m_is_star)
-        return true;
+// if * , * then 0
+// if * , (* -> *) then -1
+// if * -> * , * then 1
+int cmp_kind(const kind *lhs, const kind *rhs) {
+    if (lhs->m_is_star == true) {
+        if (rhs->m_is_star == true)
+            return 0;
+    } else {
+        if (rhs->m_is_star == false) {
+            auto lsub = (kfun *)lhs;
+            auto rsub = (kfun *)rhs;
 
-    auto lsub = (kfun *)lhs;
-    auto rsub = (kfun *)rhs;
+            int ret = cmp_kind(lsub->m_left.get(), rsub->m_left.get());
+            if (ret != 0)
+                return ret;
 
-    return cmp_kind(lsub->m_left.get(), rsub->m_left.get()) &&
-           cmp_kind(lsub->m_right.get(), rsub->m_right.get());
+            return cmp_kind(lsub->m_right.get(), rsub->m_right.get());
+        }
+    }
+
+    // lhs->m_is_star xor rhs->m_is_star
+    if (lhs->m_is_star)
+        return -1;
+    else
+        return 1;
 }
 
 #define MK_TYPE2(RET, FUN, LHS, RHS)                                           \
@@ -89,7 +105,7 @@ shared_type substitution::apply(shared_type type) {
         if (s == m_subst.end())
             return type;
 
-        if (!cmp_kind(type->get_kind().get(), s->second->m_kind.get())) {
+        if (cmp_kind(type->get_kind().get(), s->second->m_kind.get()) != 0) {
             // TODO: print error
             return nullptr;
         }
@@ -124,7 +140,8 @@ bool typeclass::apply(std::vector<shared_type> &args) {
 
     // check kind
     for (int i = 0; i < args.size(); i++) {
-        if (cmp_kind(m_args[i]->get_kind().get(), args[i]->get_kind().get())) {
+        if (cmp_kind(m_args[i]->get_kind().get(), args[i]->get_kind().get()) ==
+            0) {
             // TODO: print error
             return false;
         }

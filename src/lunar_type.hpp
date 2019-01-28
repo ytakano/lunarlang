@@ -46,7 +46,7 @@ class kfun : public kind {
 
 typedef std::shared_ptr<kfun> shared_kfun;
 
-bool cmp_kind(const kind *lhs, const kind *rhs);
+int cmp_kind(const kind *lhs, const kind *rhs);
 
 // type
 class type {
@@ -79,7 +79,8 @@ class type_const : public type {
     virtual ~type_const() {}
 
     bool operator==(const type_const &lhs) const {
-        return m_id == lhs.m_id && cmp_kind(m_kind.get(), lhs.m_kind.get());
+        return m_id == lhs.m_id &&
+               cmp_kind(m_kind.get(), lhs.m_kind.get()) == 0;
     }
 
     virtual shared_kind get_kind() { return m_kind; }
@@ -95,7 +96,17 @@ class type_var : public type {
     virtual ~type_var() {}
 
     bool operator==(const type_var &lhs) const {
-        return m_id == lhs.m_id && cmp_kind(m_kind.get(), lhs.m_kind.get());
+        return m_id == lhs.m_id &&
+               cmp_kind(m_kind.get(), lhs.m_kind.get()) == 0;
+    }
+
+    bool operator<(const type_var &lhs) const {
+        int ret = m_id.compare(lhs.m_id);
+        if (ret == 0) {
+            return cmp_kind(m_kind.get(), lhs.m_kind.get()) == -1;
+        } else {
+            return ret == -1;
+        }
     }
 
     virtual shared_kind get_kind() { return m_kind; }
