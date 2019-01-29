@@ -249,8 +249,15 @@ shared_subst mgu(shared_type lhs, shared_type rhs) {
     if (lhs->m_subtype == type::TYPE_APP && rhs->m_subtype == type::TYPE_APP) {
         auto l = std::static_pointer_cast<type_app>(lhs);
         auto r = std::static_pointer_cast<type_app>(rhs);
+
         auto s1 = mgu(l->m_left, r->m_left);
+        if (!s1)
+            return nullptr;
+
         auto s2 = mgu(s1->apply(l->m_right), s1->apply(r->m_right));
+        if (!s2)
+            return nullptr;
+
         return compose(*s2, *s1);
     } else if (lhs->m_subtype == type::TYPE_VAR) {
         return var_bind(lhs, rhs);
