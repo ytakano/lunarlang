@@ -71,6 +71,8 @@ class type {
 
 typedef std::shared_ptr<type> shared_type;
 
+bool eq_type(type *lhs, type *rhs);
+
 // constant type
 // e.g.
 //   num : *
@@ -126,6 +128,11 @@ class type_app : public type {
   public:
     type_app() { m_subtype = TYPE_APP; }
     virtual ~type_app() {}
+
+    bool operator==(const type_app &lhs) const {
+        return eq_type(m_left.get(), m_right.get()) &&
+               eq_type(lhs.m_left.get(), lhs.m_right.get());
+    }
 
     virtual shared_kind get_kind() {
         auto k = m_left->get_kind();

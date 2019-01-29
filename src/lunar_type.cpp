@@ -95,6 +95,29 @@ shared_type mk_tuple(shared_type lhs, shared_type rhs) {
     return ret;
 }
 
+bool eq_type(type *lhs, type *rhs) {
+    if (lhs->m_subtype != rhs->m_subtype)
+        return false;
+
+    switch (lhs->m_subtype) {
+    case type::TYPE_APP: {
+        auto lapp = (type_app *)lhs;
+        auto rapp = (type_app *)rhs;
+        return *lapp == *rapp;
+    }
+    case type::TYPE_CONST: {
+        auto lc = (type_const *)lhs;
+        auto rc = (type_const *)rhs;
+        return *lc == *rc;
+    }
+    case type::TYPE_VAR: {
+        auto lv = (type_var *)lhs;
+        auto rv = (type_var *)rhs;
+        return *lv == *rv;
+    }
+    }
+}
+
 shared_type substitution::apply(shared_type type) {
     switch (type->m_subtype) {
     case type::TYPE_CONST:
@@ -152,10 +175,10 @@ bool typeclass::apply(std::vector<shared_type> &args) {
 //   s4 = {s | s ∈ s1 ∧ ¬(dom(s) ∈ dom(s2))}
 // 3.
 //   s3 ∪ s4
-static shared_subst compose(shared_subst s1, shared_subst s2) {
+static shared_subst compose(substitution &s1, substitution &s2) {
     auto ret = std::make_shared<substitution>();
-    for (auto &y : s2->m_subst) {
-        auto t = s1->apply(y.second);
+    for (auto &y : s2.m_subst) {
+        auto t = s1.apply(y.second);
         if (t->m_subtype == type::TYPE_VAR) {
             auto tvar = (type_var *)t.get();
             if (*tvar != y.first)
@@ -163,8 +186,8 @@ static shared_subst compose(shared_subst s1, shared_subst s2) {
         }
     }
 
-    for (auto &x : s1->m_subst) {
-        if (!HASKEY(s2->m_subst, x.first))
+    for (auto &x : s1.m_subst) {
+        if (!HASKEY(s2.m_subst, x.first))
             ret->m_subst[x.first] = x.second;
     }
 
@@ -219,7 +242,7 @@ static shared_subst var_bind(shared_type var, shared_type ty) {
 
 // L, R ∈ {types}
 // s ∈ {subsutitutions}
-// if ∃s L s = R s
+// if ∃s (s L) = (s R)
 // then s (s is the most general unifier)
 // else nullptr
 shared_subst mgu(shared_type lhs, shared_type rhs) {
@@ -228,7 +251,7 @@ shared_subst mgu(shared_type lhs, shared_type rhs) {
         auto r = std::static_pointer_cast<type_app>(rhs);
         auto s1 = mgu(l->m_left, r->m_left);
         auto s2 = mgu(s1->apply(l->m_right), s1->apply(r->m_right));
-        return compose(s2, s1);
+        return compose(*s2, *s1);
     } else if (lhs->m_subtype == type::TYPE_VAR) {
         return var_bind(lhs, rhs);
     } else if (rhs->m_subtype == type::TYPE_VAR) {
@@ -241,9 +264,33 @@ shared_subst mgu(shared_type lhs, shared_type rhs) {
     return nullptr;
 }
 
+// s1, s2: substitution
+// x ∈ dom(s1)
+// y ∈ dom(s2)
+// if ∀x ∀y (x = y) -> (s1 x = s2 x)
+// then s1 ∪ s2
+// else nullptr
+static shared_subst merge(substitution &s1, substitution &s2) {
+    auto ret = std::make_shared<substitution>();
+    for (auto &it1 : s1.m_subst) {
+        auto it2 = s2.m_subst.find(it1.first);
+        if (it2 != s2.m_subst.end()) {
+            if (!eq_type(it1.second.get(), it2->second.get()))
+                return nullptr;
+        }
+        ret->m_subst[it1.first] = it1.second;
+    }
+
+    for (auto s : s2.m_subst) {
+        ret->m_subst[s.first] = s.second;
+    }
+
+    return ret;
+}
+
 // L, R ∈ {types}
 // s ∈ {subsutitutions}
-// if ∃s L s = R
+// if ∃s (s L) = R
 // then s
 // else nullptr
 shared_subst match(shared_type lhs, shared_type rhs) { return nullptr; }
