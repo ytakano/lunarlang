@@ -152,7 +152,7 @@ bool typeclass::apply(std::vector<shared_type> &args) {
 //   s4 = {s | s ∈ s1 ∧ ¬(dom(s) ∈ dom(s2))}
 // 3.
 //   s3 ∪ s4
-shared_subst compose(shared_subst s1, shared_subst s2) {
+static shared_subst compose(shared_subst s1, shared_subst s2) {
     auto ret = std::make_shared<substitution>();
     for (auto &y : s2->m_subst) {
         auto t = s1->apply(y.second);
@@ -171,12 +171,75 @@ shared_subst compose(shared_subst s1, shared_subst s2) {
     return ret;
 }
 
+// if tvar ∈ tv(ty)
+// then true
+// else false
+static bool occurs_check(type_var &tvar, type *ty) {
+    switch (ty->m_subtype) {
+    case type::TYPE_VAR: {
+        auto tv2 = (type_var *)ty;
+        if (tvar == *tv2)
+            return true;
+        break;
+    }
+    case type::TYPE_CONST:
+        return false;
+    case type::TYPE_APP: {
+        auto tapp = (type_app *)ty;
+        return occurs_check(tvar, tapp->m_left.get()) ||
+               occurs_check(tvar, tapp->m_right.get());
+    }
+    }
+
+    return false;
+}
+
+static shared_subst var_bind(shared_type var, shared_type ty) {
+    auto tv1 = std::static_pointer_cast<type_var>(var);
+    if (ty->m_subtype == type::TYPE_VAR) {
+        auto tv2 = std::static_pointer_cast<type_var>(ty);
+        if (*tv1 == *tv2)
+            return std::make_shared<substitution>();
+    }
+
+    if (occurs_check(*tv1, ty.get())) {
+        // TODO: print error
+        return nullptr;
+    }
+
+    if (var->get_kind() != ty->get_kind()) {
+        // TODO: print error
+        return nullptr;
+    }
+
+    auto s = std::make_shared<substitution>();
+    s->m_subst[*tv1] = ty;
+    return s;
+}
+
 // L, R ∈ {types}
 // s ∈ {subsutitutions}
 // if ∃s L s = R s
 // then s (s is the most general unifier)
 // else nullptr
-shared_subst mgu(shared_type lhs, shared_type rhs) { return nullptr; }
+shared_subst mgu(shared_type lhs, shared_type rhs) {
+    if (lhs->m_subtype == type::TYPE_APP && rhs->m_subtype == type::TYPE_APP) {
+        auto l = std::static_pointer_cast<type_app>(lhs);
+        auto r = std::static_pointer_cast<type_app>(rhs);
+        auto s1 = mgu(l->m_left, r->m_left);
+        auto s2 = mgu(s1->apply(l->m_right), s1->apply(r->m_right));
+        return compose(s2, s1);
+    } else if (lhs->m_subtype == type::TYPE_VAR) {
+        return var_bind(lhs, rhs);
+    } else if (rhs->m_subtype == type::TYPE_VAR) {
+        return var_bind(rhs, lhs);
+    } else if (lhs->m_subtype == type::TYPE_CONST &&
+               rhs->m_subtype == type::TYPE_CONST) {
+        return std::make_shared<substitution>();
+    }
+
+    return nullptr;
+}
 
 // L, R ∈ {types}
 // s ∈ {subsutitutions}
