@@ -144,4 +144,45 @@ bool typeclass::apply(std::vector<shared_type> &args) {
     return true;
 }
 
+// s1 = {x1 -> t1, ..., xn -> tn}
+// s2 = {y1 -> u1, ..., ym -> um}
+// 1.
+//   s3 = {y1 -> s1 u1, ..., ym -> s1 um}
+// 2.
+//   s4 = {s | s ∈ s1 ∧ ¬(dom(s) ∈ dom(s2))}
+// 3.
+//   s3 ∪ s4
+shared_subst compose(shared_subst s1, shared_subst s2) {
+    auto ret = std::make_shared<substitution>();
+    for (auto &y : s2->m_subst) {
+        auto t = s1->apply(y.second);
+        if (t->m_subtype == type::TYPE_VAR) {
+            auto tvar = (type_var *)t.get();
+            if (*tvar != y.first)
+                ret->m_subst[y.first] = t;
+        }
+    }
+
+    for (auto &x : s1->m_subst) {
+        if (!HASKEY(s2->m_subst, x.first))
+            ret->m_subst[x.first] = x.second;
+    }
+
+    return ret;
+}
+
+// L, R ∈ {types}
+// s ∈ {subsutitutions}
+// if ∃s L s = R s
+// then s (s is the most general unifier)
+// else nullptr
+shared_subst mgu(shared_type lhs, shared_type rhs) { return nullptr; }
+
+// L, R ∈ {types}
+// s ∈ {subsutitutions}
+// if ∃s L s = R
+// then s
+// else nullptr
+shared_subst match(shared_type lhs, shared_type rhs) { return nullptr; }
+
 } // namespace lunar

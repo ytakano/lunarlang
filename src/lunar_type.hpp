@@ -1,6 +1,8 @@
 #ifndef LUNAR_TYPE_HPP
 #define LUNAR_TYPE_HPP
 
+#include "lunar_common.hpp"
+
 #include <map>
 #include <memory>
 #include <string>
@@ -101,6 +103,8 @@ class type_var : public type {
                cmp_kind(m_kind.get(), lhs.m_kind.get()) == 0;
     }
 
+    bool operator!=(const type_var &lhs) const { return !(*this == lhs); }
+
     bool operator<(const type_var &lhs) const {
         int ret = m_id.compare(lhs.m_id);
         if (ret == 0) {
@@ -155,23 +159,13 @@ class substitution {
     substitution() {}
     virtual ~substitution() {}
 
-    class subst {
-      public:
-        subst(shared_kind kind, shared_type type)
-            : m_kind(kind), m_type(type) {}
-        virtual ~subst() {}
-
-        shared_kind m_kind;
-        shared_type m_type;
-    };
-
-    typedef std::unique_ptr<subst> ptr_subst;
-
     // substitute type variables in the argument
     shared_type apply(shared_type type);
 
     std::map<type_var, shared_type> m_subst;
 };
+
+typedef std::shared_ptr<substitution> shared_subst;
 
 // predicate that m_types are members of the class named m_id
 // e.g.
@@ -214,14 +208,13 @@ class typeclass : public qual {
 
     // satisfy
     // 1.
-    // x ∈ {m_args}
-    // ∀x x->m_subtype = TYPE_VAR
-    //
+    //   x ∈ {m_args}
+    //   ∀x x->m_subtype = TYPE_VAR
     // 2.
-    // x ∈ tv(m_args)
-    // y, z ∈ tv(m_funcs)
-    // ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
-    // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
+    //   x ∈ tv(m_args)
+    //   y, z ∈ tv(m_funcs)
+    //   ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
+    //   ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
     std::vector<shared_type> m_args;  // arguments
     std::vector<shared_type> m_funcs; // interfaces
 
