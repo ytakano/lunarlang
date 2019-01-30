@@ -39,8 +39,7 @@ static inline shared_type mk_kind2(const std::string &id) {
 }
 
 static inline shared_type mk_vec() { return mk_kind1("vec"); }
-static inline shared_type mk_fn() { return mk_kind2("fn"); }
-static inline shared_type mk_tuple2() { return mk_kind2("tuple"); }
+static inline shared_type mk_dict() { return mk_kind2("dict"); }
 
 // if * , * then 0
 // if * , (* -> *) then -1
@@ -67,32 +66,6 @@ int cmp_kind(const kind *lhs, const kind *rhs) {
         return -1;
     else
         return 1;
-}
-
-#define MK_TYPE2(RET, FUN, LHS, RHS)                                           \
-    do {                                                                       \
-        auto app = std::make_shared<type_app>();                               \
-        auto arr = std::make_shared<type_app>();                               \
-                                                                               \
-        arr->m_left = FUN();                                                   \
-        arr->m_right = LHS;                                                    \
-                                                                               \
-        app->m_left = arr;                                                     \
-        app->m_right = RHS;                                                    \
-                                                                               \
-        RET = app;                                                             \
-    } while (0);
-
-shared_type mk_funtype(shared_type lhs, shared_type rhs) {
-    shared_type ret;
-    MK_TYPE2(ret, mk_fn, lhs, rhs);
-    return ret;
-}
-
-shared_type mk_tuple(shared_type lhs, shared_type rhs) {
-    shared_type ret;
-    MK_TYPE2(ret, mk_tuple2, lhs, rhs);
-    return ret;
 }
 
 bool eq_type(type *lhs, type *rhs) {

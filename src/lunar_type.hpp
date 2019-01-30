@@ -123,6 +123,8 @@ class type_var : public type {
     shared_kind m_kind;
 };
 
+typedef std::shared_ptr<type_var> shared_type_var;
+
 // higher order type application
 class type_app : public type {
   public:
@@ -214,16 +216,12 @@ class typeclass : public qual {
     std::string m_id; // class name
 
     // satisfy
-    // 1.
-    //   x ∈ {m_args}
-    //   ∀x x->m_subtype = TYPE_VAR
-    // 2.
-    //   x ∈ tv(m_args)
-    //   y, z ∈ tv(m_funcs)
-    //   ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
-    //   ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
-    std::vector<shared_type> m_args;  // arguments
-    std::vector<shared_type> m_funcs; // interfaces
+    // x ∈ tv(m_args)
+    // y, z ∈ tv(m_funcs)
+    // ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
+    // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
+    std::vector<shared_type_var> m_args;                  // arguments
+    std::unordered_map<std::string, shared_type> m_funcs; // interfaces
 
     bool apply(std::vector<shared_type> &args);
 };
@@ -236,19 +234,21 @@ class inst : public qual {
     inst() {}
     virtual ~inst() {}
 
-    std::string m_id;                 // class name
-    std::vector<shared_type> m_args;  // arguments
-    std::vector<shared_type> m_funcs; // interface functions
+    std::string m_id;                                     // name
+    std::vector<shared_type> m_args;                      // arguments
+    std::unordered_map<std::string, shared_type> m_funcs; // interfaces
 };
 
 typedef std::shared_ptr<inst> shared_inst;
 
 // qualified type
+// TODO
 class qtype : public qual {
   public:
     qtype() {}
     virtual ~qtype() {}
 
+    std::vector<shared_type_var> m_args; // arguments
     shared_type m_type;
 };
 
@@ -261,14 +261,18 @@ class classenv {
     struct env {
         shared_typeclass m_class; // class declaration
 
-        // satisfy
-        // i, j ∈ {0..m_insts.size() - 1}
-        // ∀i ∀j (i != j -> mgu(m_insts[i].args, m_insts[j].args) = false)
+        // multiply defined instances are prohibited
+        // 0 <= i, j < m_insts.size()
+        // s: substitution (mgu)
+        // ∀i ∀j ∃s (s m_insts[i].m_args = s m_insts[j].m_args) -> error
         std::vector<shared_inst> m_insts; // instance declarations
     };
 
     // class name -> (class declarations, class instance declarations)
     std::unordered_map<std::string, env> m_env;
+
+    // function name -> class name
+    std::unordered_map<std::string, std::string> m_func2class;
 };
 
 } // namespace lunar
