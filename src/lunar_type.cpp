@@ -300,6 +300,32 @@ static shared_subst merge(substitution &s1, substitution &s2) {
 // if ∃s (s L) = R
 // then s
 // else nullptr
-shared_subst match(shared_type lhs, shared_type rhs) { return nullptr; }
+shared_subst match(shared_type lhs, shared_type rhs) {
+    if (lhs->m_subtype == type::TYPE_APP && rhs->m_subtype == type::TYPE_APP) {
+        auto lapp = std::static_pointer_cast<type_app>(lhs);
+        auto rapp = std::static_pointer_cast<type_app>(rhs);
+        auto sl = match(lapp->m_left, rapp->m_left);
+        auto sr = match(lapp->m_right, rapp->m_right);
+        return merge(*sl, *sr);
+    }
+
+    if (lhs->m_subtype == type::TYPE_VAR) {
+        auto tv = std::static_pointer_cast<type_var>(lhs);
+        if (cmp_kind(tv->get_kind().get(), rhs->get_kind().get()) == 0) {
+            auto s = std::make_shared<substitution>();
+            s->m_subst[*tv] = rhs;
+            return s;
+        }
+    }
+
+    if (lhs->m_subtype == type::TYPE_CONST &&
+        rhs->m_subtype == type::TYPE_CONST) {
+        if (eq_type(lhs.get(), rhs.get()) == 0)
+            return std::make_shared<substitution>();
+    }
+
+    // TODO: print error
+    return nullptr;
+}
 
 } // namespace lunar
