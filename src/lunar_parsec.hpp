@@ -6,6 +6,8 @@
 #include <string>
 #include <unordered_set>
 
+#include <boost/algorithm/string.hpp>
+
 #define PMANY(P, RET, X)                                                       \
     for (;;) {                                                                 \
         std::size_t pos, line, column;                                         \
@@ -213,8 +215,8 @@ class parsec {
     bool is_fail() { return m_fail; }
     void set_fail(bool is_fail) { m_fail = is_fail; }
     bool is_eof() { return m_pos == m_str.size(); }
-    std::size_t get_line() { return m_line; }
-    std::size_t get_column() { return m_column; }
+    std::size_t get_line() const { return m_line; }
+    std::size_t get_column() const { return m_column; }
     const std::string &get_str() const { return m_str; }
 
   private:
@@ -226,6 +228,19 @@ class parsec {
 
     std::unordered_set<char> m_spaces;
 };
+
+void print_err(std::size_t line, std::size_t column, const std::string &str) {
+    std::vector<std::string> lines;
+
+    boost::split(lines, str, boost::is_any_of("\n"));
+
+    std::cerr << lines[line - 1] << std::endl;
+
+    for (size_t i = 1; i < column; i++) {
+        std::cerr << " ";
+    }
+    std::cerr << "^" << std::endl;
+}
 
 } // namespace lunar
 

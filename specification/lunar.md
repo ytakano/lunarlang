@@ -1,5 +1,9 @@
 # The Specification of Lunar Language
 
+```
+$TOP := $CLASSDECL | $INST | $DEFUN
+```
+
 ## Infix Operator
 
 ```

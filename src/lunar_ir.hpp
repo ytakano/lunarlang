@@ -373,7 +373,6 @@ class ir {
     shared_ir_type resolve_type(shared_ir_type type) const;
     std::string codegen();
     void print();
-    void print_err(std::size_t line, std::size_t column) const;
 
     llvm::LLVMContext &get_llvm_ctx() { return m_llvm_ctx; }
     llvm::Module &get_llvm_module() { return m_llvm_module; }
@@ -382,6 +381,7 @@ class ir {
     llvm::Function *get_llvm_memcpy() { return m_memcpy; }
 
     std::string get_filename() const { return m_filename; }
+    const std::string &get_content() const { return m_parsec.get_str(); }
     const std::unordered_map<std::string, std::shared_ptr<ir_funtype>> &
     get_funs() const {
         return m_id2fun;

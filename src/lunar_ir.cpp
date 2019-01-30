@@ -4,7 +4,6 @@
 
 #include <iostream>
 
-#include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 
 #define SYNTAXERR(M)                                                           \
@@ -12,14 +11,15 @@
         fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
                 m_filename.c_str(), m_parsec.get_line(),                       \
                 m_parsec.get_column(), __LINE__);                              \
-        print_err(m_parsec.get_line(), m_parsec.get_column());                 \
+        print_err(m_parsec.get_line(), m_parsec.get_column(),                  \
+                  m_parsec.get_str());                                         \
     } while (0)
 
 #define SYNTAXERR2(M, LINE, COLUMN)                                            \
     do {                                                                       \
         fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
                 m_filename.c_str(), LINE, COLUMN, __LINE__);                   \
-        print_err(LINE, COLUMN);                                               \
+        print_err(LINE, COLUMN, m_parsec.get_str());                           \
     } while (0)
 
 #define SEMANTICERR(IR, AST, M, ...)                                           \
@@ -27,7 +27,7 @@
         fprintf(stderr, "%s:%lu:%lu:(%d) semantic error: " M "\n",             \
                 (IR).get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
                 __LINE__, ##__VA_ARGS__);                                      \
-        (IR).print_err((AST)->m_line, (AST)->m_column);                        \
+        print_err((AST)->m_line, (AST)->m_column, (IR).get_content());         \
     } while (0)
 
 #define TYPEERR(IR, AST, M1, M2, ...)                                          \
@@ -35,7 +35,7 @@
         fprintf(stderr, "%s:%lu:%lu:(%d) type error: " M1 "\n",                \
                 (IR).get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
                 __LINE__);                                                     \
-        (IR).print_err((AST)->m_line, (AST)->m_column);                        \
+        print_err((AST)->m_line, (AST)->m_column, (IR).get_content());         \
         fprintf(stderr, M2 "\n", ##__VA_ARGS__);                               \
     } while (0)
 
@@ -3169,19 +3169,6 @@ llvm::Value *ir_apply::codegen_call(ir &ref, id2val &vals,
     }
 
     return ret;
-}
-
-void ir::print_err(std::size_t line, std::size_t column) const {
-    std::vector<std::string> lines;
-
-    boost::split(lines, m_parsec.get_str(), boost::is_any_of("\n"));
-
-    std::cerr << lines[line - 1] << std::endl;
-
-    for (size_t i = 1; i < column; i++) {
-        std::cerr << " ";
-    }
-    std::cerr << "^" << std::endl;
 }
 
 void ir::print() {
