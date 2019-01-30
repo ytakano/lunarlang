@@ -3,7 +3,7 @@
 ## Infix Operator
 
 ```
-$INFIX := + | - | = | < | > | != | * | / | . | >>= | :=
+$INFIX := + | - | = | < | > | != | * | / | . | >>= | := | ^
 ```
 
 ## Reserved Words
@@ -104,7 +104,7 @@ The leading character of a type variable must be ` (backslash).
 $TVAR := `$ID
 $TVARS := $TVAR | $TVAR , $TVARS
 $TVARSP := <$TVARS>
-$TVARKIND := `$ID | `$ID : $KIND
+$TVARKIND := `$ID | `$ID :: $KIND
 $TVARKINDS := $TVARKIND | $TVARKIND , $TVARKINDS
 $TVARKINDSP := <$TVARKINDS>
 ```
