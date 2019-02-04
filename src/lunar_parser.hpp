@@ -23,6 +23,7 @@ struct ast {
         AST_CLASS,
         AST_KFUN,  // kind
         AST_KSTAR, // kind
+        AST_TVARS, // arguments of type variable
     };
 
     std::size_t m_line;
@@ -73,6 +74,20 @@ struct ast_class : public ast {
 
 typedef std::unique_ptr<ast_class> ptr_ast_class;
 
+struct ast_tvars : public ast {
+    ast_tvars() {}
+    virtual ~ast_tvars() {}
+
+    struct arg {
+        ptr_ast_id m_id;
+        ptr_ast_kind m_kind;
+    };
+
+    std::vector<arg> m_args;
+};
+
+typedef std::unique_ptr<ast_tvars> ptr_ast_tvars;
+
 struct ast_inst : public ast {};
 
 class parser;
@@ -90,9 +105,9 @@ class module {
 
     bool parse();
     ptr_ast_class parse_class();
-
     ptr_ast_id parse_id();
     ptr_ast_id parse_tvar();
+    ptr_ast_tvars parse_tvars();
     ptr_ast_kind parse_kind();
 };
 

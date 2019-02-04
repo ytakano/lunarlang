@@ -180,13 +180,19 @@ ptr_ast_kind module::parse_kind() {
 
         ks.push_back(std::move(kfun));
     }
+
+    return nullptr; // not reach here
 }
+
+ptr_ast_tvars module::parse_tvars() {}
 
 ptr_ast_class module::parse_class() {
     SPACEPLUS(m_parsec);
 
     ptr_ast_id id;
     PARSEID(id, m_parsec);
+
+    m_parsec.spaces();
 
     ptr_ast_id tvar;
 }
