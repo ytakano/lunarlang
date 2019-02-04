@@ -18,23 +18,60 @@ struct ast {
         m_column = p.get_column();
     }
 
+    enum asttype {
+        AST_ID,
+        AST_CLASS,
+        AST_KFUN,  // kind
+        AST_KSTAR, // kind
+    };
+
     std::size_t m_line;
     std::size_t m_column;
+    asttype m_asttype;
 };
 
 struct ast_id : public ast {
+    ast_id() { m_asttype = AST_ID; }
+    virtual ~ast_id() {}
     std::string m_id;
 };
 
 typedef std::unique_ptr<ast_id> ptr_ast_id;
 
+struct ast_kind : public ast {
+    ast_kind() {}
+    virtual ~ast_kind() {}
+};
+
+typedef std::unique_ptr<ast_kind> ptr_ast_kind;
+
+struct ast_kfun : public ast_kind {
+    ast_kfun() { m_asttype = AST_KFUN; }
+    virtual ~ast_kfun() {}
+
+    ptr_ast_kind m_left;
+    ptr_ast_kind m_right;
+};
+
+typedef std::unique_ptr<ast_kfun> ptr_ast_kfun;
+
+struct ast_kstar : public ast_kind {
+    ast_kstar() { m_asttype = AST_KSTAR; }
+    virtual ~ast_kstar() {}
+};
+
+typedef std::unique_ptr<ast_kstar> ptr_ast_kstar;
+
 struct ast_interface : public ast {};
 
 struct ast_class : public ast {
-  public:
-    ast_class() {}
+    ast_class() { m_asttype = AST_CLASS; }
     virtual ~ast_class() {}
+
+    ptr_ast_id m_id;
 };
+
+typedef std::unique_ptr<ast_class> ptr_ast_class;
 
 struct ast_inst : public ast {};
 
@@ -52,7 +89,11 @@ class module {
     parser &m_parser;
 
     bool parse();
+    ptr_ast_class parse_class();
+
     ptr_ast_id parse_id();
+    ptr_ast_id parse_tvar();
+    ptr_ast_kind parse_kind();
 };
 
 typedef std::unique_ptr<module> ptr_module;

@@ -1,4 +1,5 @@
 #include "lunar_parser.hpp"
+#include "lunar_print.hpp"
 
 #define SYNTAXERR(M)                                                           \
     do {                                                                       \
@@ -13,7 +14,7 @@
     do {                                                                       \
         (PARSEC).space();                                                      \
         if ((PARSEC).is_fail()) {                                              \
-            SYNTAXERR("expected whitespace");                                  \
+            SYNTAXERR("expected whitespaces");                                 \
             return nullptr;                                                    \
         }                                                                      \
         (PARSEC).spaces();                                                     \
@@ -23,7 +24,16 @@
     do {                                                                       \
         (ID) = parse_id();                                                     \
         if ((PARSEC).is_fail()) {                                              \
-            SYNTAXERR("expected identifier");                                  \
+            SYNTAXERR("expected an identifier");                               \
+            return nullptr;                                                    \
+        }                                                                      \
+    } while (0)
+
+#define PARSETVAR(ID, PARSEC)                                                  \
+    do {                                                                       \
+        (ID) = parse_tvar();                                                   \
+        if ((PARSEC).is_fail()) {                                              \
+            SYNTAXERR("expected a type variable");                             \
             return nullptr;                                                    \
         }                                                                      \
     } while (0)
@@ -101,6 +111,84 @@ ptr_ast_id module::parse_id() {
         return nullptr;
 
     return ret;
+}
+
+ptr_ast_id module::parse_tvar() {
+    auto ret = std::make_unique<ast_id>();
+
+    ret->set_pos(m_parsec);
+
+    m_parsec.character('`');
+    ret->m_id.push_back('`');
+
+    PMANYONE(m_parsec, ret->m_id, m_parsec.oneof_not(m_parser.m_no_id_char));
+
+    if (m_parsec.is_fail())
+        return nullptr;
+
+    return ret;
+}
+
+ptr_ast_kind module::parse_kind() {
+    std::deque<ptr_ast_kind> ks;
+
+    auto k = std::make_unique<ast_kstar>();
+    k->set_pos(m_parsec);
+
+    char c;
+    m_parsec.character('*');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected *");
+        return nullptr;
+    }
+
+    ks.push_back(std::move(k));
+
+    for (;;) {
+        m_parsec.spaces();
+
+        std::string ar;
+        PTRY(m_parsec, ar, m_parsec.str("->"));
+        if (m_parsec.is_fail())
+            break;
+
+        m_parsec.spaces();
+
+        auto k = std::make_unique<ast_kstar>();
+        k->set_pos(m_parsec);
+
+        m_parsec.character('*');
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected *");
+            return nullptr;
+        }
+
+        ks.push_back(std::move(k));
+    }
+
+    for (;;) {
+        auto rhs = std::move(ks.back());
+        ks.pop_back();
+        if (ks.empty())
+            return rhs;
+
+        auto lhs = std::move(ks.back());
+
+        auto kfun = std::make_unique<ast_kfun>();
+        kfun->m_left = std::move(lhs);
+        kfun->m_right = std::move(rhs);
+
+        ks.push_back(std::move(kfun));
+    }
+}
+
+ptr_ast_class module::parse_class() {
+    SPACEPLUS(m_parsec);
+
+    ptr_ast_id id;
+    PARSEID(id, m_parsec);
+
+    ptr_ast_id tvar;
 }
 
 } // namespace lunar

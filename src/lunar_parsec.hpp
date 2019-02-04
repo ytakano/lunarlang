@@ -6,8 +6,6 @@
 #include <string>
 #include <unordered_set>
 
-#include <boost/algorithm/string.hpp>
-
 #define PMANY(P, RET, X)                                                       \
     for (;;) {                                                                 \
         std::size_t pos, line, column;                                         \
@@ -228,19 +226,6 @@ class parsec {
 
     std::unordered_set<char> m_spaces;
 };
-
-void print_err(std::size_t line, std::size_t column, const std::string &str) {
-    std::vector<std::string> lines;
-
-    boost::split(lines, str, boost::is_any_of("\n"));
-
-    std::cerr << lines[line - 1] << std::endl;
-
-    for (size_t i = 1; i < column; i++) {
-        std::cerr << " ";
-    }
-    std::cerr << "^" << std::endl;
-}
 
 } // namespace lunar
 

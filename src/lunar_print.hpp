@@ -5,6 +5,10 @@
 
 #define PRINTBUFSIZE 4096
 
+#include <string>
+
+#include <boost/algorithm/string.hpp>
+
 namespace lunar {
 
 class print {
@@ -26,6 +30,8 @@ class print {
     char m_buf[PRINTBUFSIZE];
     int m_pos;
 };
+
+void print_err(std::size_t line, std::size_t column, const std::string &str);
 
 } // namespace lunar
 

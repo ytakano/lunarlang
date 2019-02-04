@@ -1,6 +1,7 @@
 #include "lunar_ir.hpp"
 
 #include "lunar_string.hpp"
+#include "lunar_print.hpp"
 
 #include <iostream>
 
@@ -43,7 +44,7 @@
     do {                                                                       \
         (PARSEC).space();                                                      \
         if ((PARSEC).is_fail()) {                                              \
-            SYNTAXERR("expected whitespace");                                  \
+            SYNTAXERR("expected whitespaces");                                  \
             return nullptr;                                                    \
         }                                                                      \
         (PARSEC).spaces();                                                     \
@@ -53,7 +54,7 @@
     do {                                                                       \
         (ID) = parse_id();                                                     \
         if ((PARSEC).is_fail()) {                                              \
-            SYNTAXERR("expected identifier");                                  \
+            SYNTAXERR("expected an identifier");                                  \
             return nullptr;                                                    \
         }                                                                      \
     } while (0)

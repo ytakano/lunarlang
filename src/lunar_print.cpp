@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <iostream>
+
 namespace lunar {
 
 void print::unum(uint64_t var) {
@@ -108,6 +110,19 @@ void print::fp32(float var) {
 
 void print::fp64(double var) {
     snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "%lf", var);
+}
+
+void print_err(std::size_t line, std::size_t column, const std::string &str) {
+    std::vector<std::string> lines;
+
+    boost::split(lines, str, boost::is_any_of("\n"));
+
+    std::cerr << lines[line - 1] << std::endl;
+
+    for (size_t i = 1; i < column; i++) {
+        std::cerr << " ";
+    }
+    std::cerr << "^" << std::endl;
 }
 
 } // namespace lunar
