@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace lunar {
 
@@ -65,15 +66,6 @@ typedef std::unique_ptr<ast_kstar> ptr_ast_kstar;
 
 struct ast_interface : public ast {};
 
-struct ast_class : public ast {
-    ast_class() { m_asttype = AST_CLASS; }
-    virtual ~ast_class() {}
-
-    ptr_ast_id m_id;
-};
-
-typedef std::unique_ptr<ast_class> ptr_ast_class;
-
 struct ast_tvars : public ast {
     ast_tvars() {}
     virtual ~ast_tvars() {}
@@ -83,10 +75,22 @@ struct ast_tvars : public ast {
         ptr_ast_kind m_kind;
     };
 
-    std::vector<arg> m_args;
+    typedef std::unique_ptr<arg> ptr_arg;
+
+    std::vector<ptr_arg> m_args;
 };
 
 typedef std::unique_ptr<ast_tvars> ptr_ast_tvars;
+
+struct ast_class : public ast {
+    ast_class() { m_asttype = AST_CLASS; }
+    virtual ~ast_class() {}
+
+    ptr_ast_id m_id;
+    ptr_ast_tvars m_tvars;
+};
+
+typedef std::unique_ptr<ast_class> ptr_ast_class;
 
 struct ast_inst : public ast {};
 

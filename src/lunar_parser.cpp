@@ -38,6 +38,15 @@
         }                                                                      \
     } while (0)
 
+#define PEEK(C, PARSEC)                                                        \
+    do {                                                                       \
+        C = (PARSEC).peek();                                                   \
+        if (m_parsec.is_fail()) {                                              \
+            SYNTAXERR("unexpected EOF");                                       \
+            return nullptr;                                                    \
+        }                                                                      \
+    } while (0);
+
 namespace lunar {
 
 parser::parser() {
@@ -184,17 +193,76 @@ ptr_ast_kind module::parse_kind() {
     return nullptr; // not reach here
 }
 
-ptr_ast_tvars module::parse_tvars() {}
+ptr_ast_tvars module::parse_tvars() {
+    auto tvars = std::make_unique<ast_tvars>();
+
+    tvars->set_pos(m_parsec);
+
+    m_parsec.character('<');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected <");
+        return nullptr;
+    }
+
+    m_parsec.spaces();
+
+    for (;;) {
+        ast_tvars::ptr_arg arg;
+        PARSETVAR(arg->m_id, m_parsec);
+
+        m_parsec.spaces();
+
+        char c;
+        PEEK(c, m_parsec);
+
+        if (c == ':') {
+            m_parsec.str("::");
+            if (m_parsec.is_fail()) {
+                SYNTAXERR("expected ::");
+                return nullptr;
+            }
+            m_parsec.spaces();
+
+            arg->m_kind = parse_kind();
+            if (!arg->m_kind)
+                return nullptr;
+
+            m_parsec.spaces();
+        }
+
+        tvars->m_args.push_back(std::move(arg));
+
+        PEEK(c, m_parsec);
+
+        if (c == '>')
+            break;
+
+        m_parsec.character(',');
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected ,");
+            return nullptr;
+        }
+        m_parsec.spaces();
+    }
+
+    m_parsec.character('>');
+    return tvars;
+}
 
 ptr_ast_class module::parse_class() {
     SPACEPLUS(m_parsec);
 
-    ptr_ast_id id;
-    PARSEID(id, m_parsec);
+    auto cls = std::make_unique<ast_class>();
+
+    PARSEID(cls->m_id, m_parsec);
 
     m_parsec.spaces();
 
-    ptr_ast_id tvar;
+    cls->m_tvars = parse_tvars();
+    if (!cls->m_tvars)
+        return nullptr;
+
+    return cls;
 }
 
 } // namespace lunar

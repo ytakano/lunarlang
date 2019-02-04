@@ -183,6 +183,15 @@ class parsec {
 
     char space() { return oneof(m_spaces); }
 
+    char peek() {
+        if (m_pos >= m_str.size()) {
+            m_fail = true;
+            return '\0';
+        }
+
+        return m_str[m_pos];
+    }
+
     std::string spaces() {
         std::string s;
         PMANY((*this), s, space());
