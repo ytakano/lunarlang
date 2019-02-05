@@ -175,6 +175,7 @@ ptr_ast_kind module::parse_kind() {
         ks.push_back(std::move(k));
     }
 
+    // make syntax tree from bottom
     for (;;) {
         auto rhs = std::move(ks.back());
         ks.pop_back();
@@ -254,13 +255,30 @@ ptr_ast_class module::parse_class() {
 
     auto cls = std::make_unique<ast_class>();
 
+    // parse class name
     PARSEID(cls->m_id, m_parsec);
 
     m_parsec.spaces();
 
+    // parse type variable arguments
     cls->m_tvars = parse_tvars();
     if (!cls->m_tvars)
         return nullptr;
+
+    m_parsec.spaces();
+
+    char c;
+    PTRY(m_parsec, c, m_parsec.character('{'));
+
+    if (m_parsec.is_fail()) {
+        // parse predicates
+
+        m_parsec.spaces();
+        m_parsec.character('{');
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected {");
+        }
+    }
 
     return cls;
 }

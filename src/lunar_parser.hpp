@@ -25,6 +25,7 @@ struct ast {
         AST_KFUN,  // kind
         AST_KSTAR, // kind
         AST_TVARS, // arguments of type variable
+        AST_PRED,  // predicate
     };
 
     std::size_t m_line;
@@ -92,7 +93,12 @@ struct ast_class : public ast {
 
 typedef std::unique_ptr<ast_class> ptr_ast_class;
 
-struct ast_inst : public ast {};
+struct ast_pred : public ast {
+    ast_pred() { m_asttype = AST_PRED; }
+    virtual ~ast_pred() {}
+
+    ptr_ast_id m_id;
+};
 
 class parser;
 
