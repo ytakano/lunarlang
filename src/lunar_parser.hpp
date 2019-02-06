@@ -26,6 +26,9 @@ struct ast {
         AST_KSTAR, // kind
         AST_TVARS, // arguments of type variable
         AST_PRED,  // predicate
+        AST_PREDS, // predicates
+        AST_TYPE,  // type
+        AST_TYPES, // types
     };
 
     std::size_t m_line;
@@ -83,21 +86,55 @@ struct ast_tvars : public ast {
 
 typedef std::unique_ptr<ast_tvars> ptr_ast_tvars;
 
+struct ast_preds;
+typedef std::unique_ptr<ast_preds> ptr_ast_preds;
+
 struct ast_class : public ast {
     ast_class() { m_asttype = AST_CLASS; }
     virtual ~ast_class() {}
 
     ptr_ast_id m_id;
     ptr_ast_tvars m_tvars;
+    ptr_ast_preds m_preds;
 };
 
 typedef std::unique_ptr<ast_class> ptr_ast_class;
+
+struct ast_type;
+typedef std::unique_ptr<ast_type> ptr_ast_type;
+
+struct ast_type : public ast {
+    ast_type() { m_asttype = AST_TYPE; }
+    virtual ~ast_type() {}
+
+    ptr_ast_id m_id;
+    std::vector<ptr_ast_type> m_args;
+};
+
+struct ast_types : public ast {
+    ast_types() { m_asttype = AST_TYPES; }
+    virtual ~ast_types() {}
+
+    std::vector<ptr_ast_type> m_types;
+};
+
+typedef std::unique_ptr<ast_types> ptr_ast_types;
 
 struct ast_pred : public ast {
     ast_pred() { m_asttype = AST_PRED; }
     virtual ~ast_pred() {}
 
     ptr_ast_id m_id;
+    std::vector<ptr_ast_type> m_args;
+};
+
+typedef std::unique_ptr<ast_pred> ptr_ast_pred;
+
+struct ast_preds : public ast {
+    ast_preds() { m_asttype = AST_PREDS; }
+    virtual ~ast_preds() {}
+
+    std::vector<ptr_ast_pred> m_preds;
 };
 
 class parser;
