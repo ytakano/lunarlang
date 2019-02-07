@@ -100,16 +100,18 @@ struct ast_class : public ast {
 
 typedef std::unique_ptr<ast_class> ptr_ast_class;
 
-struct ast_type;
-typedef std::unique_ptr<ast_type> ptr_ast_type;
+struct ast_types;
+typedef std::unique_ptr<ast_types> ptr_ast_types;
 
 struct ast_type : public ast {
     ast_type() { m_asttype = AST_TYPE; }
     virtual ~ast_type() {}
 
     ptr_ast_id m_id;
-    std::vector<ptr_ast_type> m_args;
+    ptr_ast_types m_args;
 };
+
+typedef std::unique_ptr<ast_type> ptr_ast_type;
 
 struct ast_types : public ast {
     ast_types() { m_asttype = AST_TYPES; }
@@ -118,14 +120,12 @@ struct ast_types : public ast {
     std::vector<ptr_ast_type> m_types;
 };
 
-typedef std::unique_ptr<ast_types> ptr_ast_types;
-
 struct ast_pred : public ast {
     ast_pred() { m_asttype = AST_PRED; }
     virtual ~ast_pred() {}
 
     ptr_ast_id m_id;
-    std::vector<ptr_ast_type> m_args;
+    ptr_ast_types m_args;
 };
 
 typedef std::unique_ptr<ast_pred> ptr_ast_pred;
@@ -136,6 +136,8 @@ struct ast_preds : public ast {
 
     std::vector<ptr_ast_pred> m_preds;
 };
+
+typedef std::unique_ptr<ast_preds> ptr_ast_preds;
 
 class parser;
 
@@ -156,6 +158,9 @@ class module {
     ptr_ast_id parse_tvar();
     ptr_ast_tvars parse_tvars();
     ptr_ast_kind parse_kind();
+    ptr_ast_pred parse_pred();
+    ptr_ast_type parse_type();
+    ptr_ast_types parse_types();
 };
 
 typedef std::unique_ptr<module> ptr_module;
