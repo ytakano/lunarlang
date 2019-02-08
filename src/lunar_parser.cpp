@@ -296,6 +296,8 @@ ptr_ast_types module::parse_types() {
 
         m_parsec.spaces();
     }
+
+    return ret;
 }
 
 ptr_ast_pred module::parse_pred() {
@@ -318,19 +320,45 @@ ptr_ast_pred module::parse_pred() {
     return ret;
 }
 
+ptr_ast_preds module::parse_preds() {
+    auto ret = std::make_unique<ast_preds>();
+
+    ret->set_pos(m_parsec);
+    PARSESTR("where", m_parsec);
+    SPACEPLUS(m_parsec);
+
+    for (;;) {
+        auto pred = parse_pred();
+        if (!pred)
+            return nullptr;
+
+        ret->m_preds.push_back(std::move(pred));
+        m_parsec.spaces();
+
+        char c;
+        PTRY(m_parsec, c, m_parsec.character(','));
+        if (m_parsec.is_fail())
+            break;
+
+        m_parsec.spaces();
+    }
+
+    return ret;
+}
+
 ptr_ast_class module::parse_class() {
     SPACEPLUS(m_parsec);
 
-    auto cls = std::make_unique<ast_class>();
+    auto ret = std::make_unique<ast_class>();
 
     // parse class name
-    PARSEID(cls->m_id, m_parsec);
+    PARSEID(ret->m_id, m_parsec);
 
     m_parsec.spaces();
 
     // parse type variable arguments
-    cls->m_tvars = parse_tvars();
-    if (!cls->m_tvars)
+    ret->m_tvars = parse_tvars();
+    if (!ret->m_tvars)
         return nullptr;
 
     m_parsec.spaces();
@@ -340,12 +368,18 @@ ptr_ast_class module::parse_class() {
 
     if (m_parsec.is_fail()) {
         // parse predicates
+        ret->m_preds = parse_preds();
 
-        m_parsec.spaces();
         PARSECHAR('{', m_parsec);
     }
 
-    return cls;
+    m_parsec.spaces();
+
+    // interfaces
+
+    PARSECHAR('}', m_parsec);
+
+    return ret;
 }
 
 } // namespace lunar

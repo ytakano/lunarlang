@@ -159,6 +159,7 @@ class module {
     ptr_ast_tvars parse_tvars();
     ptr_ast_kind parse_kind();
     ptr_ast_pred parse_pred();
+    ptr_ast_preds parse_preds();
     ptr_ast_type parse_type();
     ptr_ast_types parse_types();
 };
