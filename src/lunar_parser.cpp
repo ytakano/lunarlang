@@ -127,6 +127,7 @@ bool module::parse() {
     return true;
 }
 
+// $ID := [^0-9$WHITESPACE][^$WHITESPACE]+
 ptr_ast_id module::parse_id() {
     auto ret = std::make_unique<ast_id>();
 
@@ -140,6 +141,7 @@ ptr_ast_id module::parse_id() {
     return ret;
 }
 
+// $TVAR := `$ID
 ptr_ast_id module::parse_tvar() {
     auto ret = std::make_unique<ast_id>();
 
@@ -156,6 +158,8 @@ ptr_ast_id module::parse_tvar() {
     return ret;
 }
 
+// $KIND := $STAR | $STAR -> $KIND
+// $STAR := *
 ptr_ast_kind module::parse_kind() {
     std::deque<ptr_ast_kind> ks;
 
@@ -203,6 +207,9 @@ ptr_ast_kind module::parse_kind() {
     return nullptr; // not reach here
 }
 
+// $TVARKIND := `$ID | `$ID :: $KIND
+// $TVARKINDS := $TVARKIND | $TVARKIND , $TVARKINDS
+// $TVARS := <$TVARKINDS>
 ptr_ast_tvars module::parse_tvars() {
     auto tvars = std::make_unique<ast_tvars>();
 
@@ -247,6 +254,7 @@ ptr_ast_tvars module::parse_tvars() {
     return tvars;
 }
 
+// $TYPE := $ID <$TYPES>? | $TVAR
 ptr_ast_type module::parse_type() {
     char c;
     PEEK(c, m_parsec);
@@ -277,6 +285,7 @@ ptr_ast_type module::parse_type() {
     return ret;
 }
 
+// $TYPES := $TYPE | $TYPE , $TYPES
 ptr_ast_types module::parse_types() {
     auto ret = std::make_unique<ast_types>();
     ret->set_pos(m_parsec);
@@ -300,6 +309,7 @@ ptr_ast_types module::parse_types() {
     return ret;
 }
 
+// $PRED := $ID <$TYPES>
 ptr_ast_pred module::parse_pred() {
     auto ret = std::make_unique<ast_pred>();
 
@@ -320,6 +330,8 @@ ptr_ast_pred module::parse_pred() {
     return ret;
 }
 
+// $PREDS := where $PREDS_
+// $PREDS_ := $PRED | $PRED, $PRED
 ptr_ast_preds module::parse_preds() {
     auto ret = std::make_unique<ast_preds>();
 
@@ -346,6 +358,7 @@ ptr_ast_preds module::parse_preds() {
     return ret;
 }
 
+// $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES }
 ptr_ast_class module::parse_class() {
     SPACEPLUS(m_parsec);
 

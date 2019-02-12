@@ -47,6 +47,7 @@ Example:
 ```
 class ord<`a> where eq<`a> {
     infix < (`a, `a) -> bool
+    funcA (`a) -> `a
 }
 ```
 This class definition define a class "ord" taking
@@ -108,7 +109,7 @@ The leading character of a type variable must be ` (backslash).
 $TVAR := `$ID
 $TVARKIND := `$ID | `$ID :: $KIND
 $TVARKINDS := $TVARKIND | $TVARKIND , $TVARKINDS
-$TVARKINDSP := <$TVARKINDS>
+$TVARS := <$TVARKINDS>
 ```
 
 ### Type

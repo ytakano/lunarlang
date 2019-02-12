@@ -22,13 +22,15 @@ struct ast {
     enum asttype {
         AST_ID,
         AST_CLASS,
-        AST_KFUN,  // kind
-        AST_KSTAR, // kind
-        AST_TVARS, // arguments of type variable
-        AST_PRED,  // predicate
-        AST_PREDS, // predicates
-        AST_TYPE,  // type
-        AST_TYPES, // types
+        AST_KFUN,       // kind
+        AST_KSTAR,      // kind
+        AST_TVARS,      // arguments of type variable
+        AST_PRED,       // predicate
+        AST_PREDS,      // predicates
+        AST_TYPE,       // type
+        AST_TYPES,      // types
+        AST_INTERFACE,  // interface
+        AST_INTERFACES, // interfaces
     };
 
     std::size_t m_line;
@@ -138,6 +140,17 @@ struct ast_preds : public ast {
 };
 
 typedef std::unique_ptr<ast_preds> ptr_ast_preds;
+
+struct ast_interface : public ast {
+    ast_interface() { m_asttype = AST_INTERFACE; }
+    virtual ~ast_interface() {}
+
+    ptr_ast_id m_id;
+    ptr_ast_types m_args;
+    ptr_ast_type m_ret;
+};
+
+typedef std::unique_ptr<ast_interface> ptr_ast_interface;
 
 class parser;
 
