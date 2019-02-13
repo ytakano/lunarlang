@@ -450,7 +450,7 @@ ptr_ast_interfaces module::parse_interfaces() {
         if (!intf)
             return nullptr;
 
-        ret->m_interfaces.push_back(intf);
+        ret->m_interfaces.push_back(std::move(intf));
 
         char c;
         PTRY(m_parsec, c, [](parsec &p, std::unordered_set<char> &cs) {

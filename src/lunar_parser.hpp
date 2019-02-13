@@ -70,7 +70,7 @@ struct ast_kstar : public ast_kind {
 
 typedef std::unique_ptr<ast_kstar> ptr_ast_kstar;
 
-struct ast_interface : public ast {};
+struct ast_interface;
 
 struct ast_tvars : public ast {
     ast_tvars() {}
