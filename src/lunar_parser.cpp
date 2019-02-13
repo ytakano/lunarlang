@@ -102,6 +102,15 @@ parser::parser() {
     m_no_id_char.insert('^');
     m_no_id_char.insert('&');
     m_no_id_char.insert('=');
+
+    m_wsp2.insert(' ');
+    m_wsp2.insert('\t');
+
+    m_wsp3.insert(' ');
+    m_wsp3.insert('\t');
+    m_wsp3.insert('\r');
+    m_wsp3.insert('\n');
+    m_wsp3.insert(';');
 }
 
 bool module::parse() {
@@ -358,7 +367,7 @@ ptr_ast_preds module::parse_preds() {
     return ret;
 }
 
-// $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES }
+// $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
 ptr_ast_class module::parse_class() {
     SPACEPLUS(m_parsec);
 
@@ -389,10 +398,93 @@ ptr_ast_class module::parse_class() {
     m_parsec.spaces();
 
     // interfaces
-
-    PARSECHAR('}', m_parsec);
+    ret->m_interfaces = parse_interfaces();
+    if (!ret->m_interfaces)
+        return nullptr;
 
     return ret;
+}
+
+// $INTERFAE := fn $INTNAME ( $TYPES ) -> $TYPE
+// $INTNAME := $ID | infix $INFIX
+ptr_ast_interface module::parse_interface() {
+    auto ret = std::make_unique<ast_interface>();
+
+    ret->set_pos(m_parsec);
+
+    PARSESTR("fn", m_parsec);
+    SPACEPLUS(m_parsec);
+
+    PARSEID(ret->m_id, m_parsec);
+    if (ret->m_id->m_id == "infix") {
+        m_parsec.spaces();
+        // TODO: parse infix
+    }
+
+    PARSECHAR('(', m_parsec);
+    m_parsec.spaces();
+
+    ret->m_args = parse_types();
+    if (!ret->m_args)
+        return nullptr;
+
+    PARSECHAR(')', m_parsec);
+    m_parsec.spaces();
+
+    PARSESTR("->", m_parsec);
+    m_parsec.spaces();
+
+    ret->m_ret = parse_type();
+
+    return ret;
+}
+
+// $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
+ptr_ast_interfaces module::parse_interfaces() {
+    auto ret = std::make_unique<ast_interfaces>();
+
+    ret->set_pos(m_parsec);
+
+    for (;;) {
+        auto intf = parse_interface();
+        if (!intf)
+            return nullptr;
+
+        ret->m_interfaces.push_back(intf);
+
+        char c;
+        PTRY(m_parsec, c, [](parsec &p, std::unordered_set<char> &cs) {
+            std::string tmp;
+            PMANY(p, tmp, p.oneof(cs));
+            return p.character('}');
+        }(m_parsec, m_parser.m_wsp3));
+        if (!m_parsec.is_fail())
+            return ret;
+
+        if (!parse_sep())
+            return nullptr;
+    }
+}
+
+// $NEWLINE := \r | \n | ;
+// $WHITESPACE2 := space | tab
+// $WHITESPACE3 := space | tab | \r | \n | \r\n | ;
+// $SEP := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
+bool module::parse_sep() {
+    std::string tmp;
+    PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp2));
+
+    tmp.clear();
+    PMANYONE(m_parsec, tmp, m_parsec.oneof(m_parser.m_newline));
+    if (!m_parsec.is_fail()) {
+        SYNTAXERR("expected a newline");
+        return false;
+    }
+
+    tmp.clear();
+    PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp3));
+
+    return true;
 }
 
 } // namespace lunar

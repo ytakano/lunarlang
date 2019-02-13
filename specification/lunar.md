@@ -22,8 +22,11 @@ $RESERVED := class | type | if | let | inst | where | fn |
 
 ```
 $ID := [^0-9$WHITESPACE][^$WHITESPACE]+
-$WHITESPACE = space | tab | \r | \n | \r\n
-$NEWLINE = \r | \n | ;
+$WHITESPACE := space | tab | \r | \n | \r\n
+$NEWLINE := \r | \n | ;
+$WHITESPACE2 := space | tab
+$WHITESPACE3 := space | tab | \r | \n | \r\n | ;
+$SEP := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
 ```
 
 $ID must not be reserved words.
@@ -37,8 +40,8 @@ $IDS := $ID | $ID , $IDS
 ### Class Declaration
 
 ```
-$CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES }
-$INTERFACES := $INTERFACE | $INTERFACE $NEWLINE $INTERFACES
+$CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
+$INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
 $INTERFAE := fn $INTNAME ( $TYPES ) -> $TYPE
 $INTNAME := $ID | infix $INFIX
 ```

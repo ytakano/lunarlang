@@ -91,6 +91,9 @@ typedef std::unique_ptr<ast_tvars> ptr_ast_tvars;
 struct ast_preds;
 typedef std::unique_ptr<ast_preds> ptr_ast_preds;
 
+struct ast_interfaces;
+typedef std::unique_ptr<ast_interfaces> ptr_ast_interfaces;
+
 struct ast_class : public ast {
     ast_class() { m_asttype = AST_CLASS; }
     virtual ~ast_class() {}
@@ -98,6 +101,7 @@ struct ast_class : public ast {
     ptr_ast_id m_id;
     ptr_ast_tvars m_tvars;
     ptr_ast_preds m_preds;
+    ptr_ast_interfaces m_interfaces;
 };
 
 typedef std::unique_ptr<ast_class> ptr_ast_class;
@@ -152,6 +156,13 @@ struct ast_interface : public ast {
 
 typedef std::unique_ptr<ast_interface> ptr_ast_interface;
 
+struct ast_interfaces : public ast {
+    ast_interfaces() { m_asttype = AST_INTERFACES; }
+    virtual ~ast_interfaces() {}
+
+    std::vector<ptr_ast_interface> m_interfaces;
+};
+
 class parser;
 
 class module {
@@ -175,6 +186,9 @@ class module {
     ptr_ast_preds parse_preds();
     ptr_ast_type parse_type();
     ptr_ast_types parse_types();
+    ptr_ast_interface parse_interface();
+    ptr_ast_interfaces parse_interfaces();
+    bool parse_sep();
 };
 
 typedef std::unique_ptr<module> ptr_module;
@@ -187,6 +201,9 @@ class parser {
   private:
     std::unordered_map<std::string, ptr_module> m_modules;
     std::unordered_set<char> m_no_id_char;
+    std::unordered_set<char> m_wsp2;
+    std::unordered_set<char> m_wsp3;
+    std::unordered_set<char> m_newline;
 
     friend class module;
 };
