@@ -1,12 +1,8 @@
-class foo<`a> {
-	{
-		(a
-			b
-			c
-
-			aa
-			bb
-			cc
-		)
-	}
+class monad< `ab :: * -> *> { // monad
+    infix =() ->
+    func
+    {
+        {
+            aa}
+    }
 }
