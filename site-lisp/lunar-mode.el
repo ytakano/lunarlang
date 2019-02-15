@@ -1,9 +1,9 @@
 (defvar lunar-highlights nil "")
 
 (setq lunar-highlights
-      '(("\\<\\(class\\|where\\|fn\\|infix\\|inst\\|let\\|if\\)\\>" . font-lock-keyword-face)
-	("//.*" . font-lock-comment-face)
+      '(("//.*" . font-lock-comment-face)
 	("`\\<\\w+\\>" . font-lock-variable-name-face)
+	("\\<\\(class\\|where\\|fn\\|infix\\|inst\\|let\\|if\\)\\>" . font-lock-keyword-face)
         ("\\<\\(true\\|false\\)\\>" . font-lock-constant-face)))
 
 (define-derived-mode lunar-mode prog-mode "lunar"

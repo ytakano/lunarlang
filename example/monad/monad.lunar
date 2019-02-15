@@ -1,8 +1,4 @@
-class monad< `ab :: * -> *> { // monad
-    infix =() ->
-    func
-    {
-        {
-            aa}
-    }
+// monad
+class monad<`a :: * -> *> {
+    infix >>=(`b -> `a<`b>) -> `a
 }
