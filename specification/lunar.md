@@ -42,7 +42,7 @@ $IDS := $ID | $ID , $IDS
 ```
 $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
-$INTERFAE := fn $INTNAME ( $TYPES ) -> $TYPE
+$INTERFAE := fn $INTNAME $TYPESP -> $TYPESP
 $INTNAME := $ID | infix $INFIX
 ```
 
@@ -118,8 +118,9 @@ $TVARS := <$TVARKINDS>
 ### Type
 
 ```
-$TYPE := $ID <$TYPES>? | $TVAR
+$TYPE := $ID <$TYPES>? | $TVAR | $TYPESP -> $TYPESP
 $TYPES := $TYPE | $TYPE , $TYPES
+$TYPESP := $TYPE | ( $TYPES )
 ```
 
 ### Type Specifier

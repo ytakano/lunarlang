@@ -112,12 +112,41 @@ typedef std::unique_ptr<ast_types> ptr_ast_types;
 struct ast_type : public ast {
     ast_type() { m_asttype = AST_TYPE; }
     virtual ~ast_type() {}
+    enum type {
+        TYPE_NORMAL,
+        TYPE_FUN,
+        TYPE_TUPLE,
+    };
+
+    type m_type;
+};
+
+typedef std::unique_ptr<ast_type> ptr_ast_type;
+
+struct ast_normaltype : public ast_type {
+    ast_normaltype() { m_type = TYPE_NORMAL; }
+    virtual ~ast_normaltype() {}
 
     ptr_ast_id m_id;
     ptr_ast_types m_args;
 };
 
-typedef std::unique_ptr<ast_type> ptr_ast_type;
+typedef std::unique_ptr<ast_normaltype> ptr_ast_normaltype;
+
+struct ast_funtype : public ast_type {
+    ast_funtype() { m_type = TYPE_FUN; }
+    virtual ~ast_funtype() {}
+
+    ptr_ast_types m_args;
+    ptr_ast_types m_ret;
+};
+
+struct ast_tupletype : public ast_type {
+    ast_tupletype() { m_type = TYPE_TUPLE; }
+    virtual ~ast_tupletype() {}
+
+    ptr_ast_types m_types;
+};
 
 struct ast_types : public ast {
     ast_types() { m_asttype = AST_TYPES; }
@@ -151,7 +180,7 @@ struct ast_interface : public ast {
 
     ptr_ast_id m_id;
     ptr_ast_types m_args;
-    ptr_ast_type m_ret;
+    ptr_ast_types m_ret;
 };
 
 typedef std::unique_ptr<ast_interface> ptr_ast_interface;
@@ -184,8 +213,9 @@ class module {
     ptr_ast_kind parse_kind();
     ptr_ast_pred parse_pred();
     ptr_ast_preds parse_preds();
-    ptr_ast_type parse_type();
+    ptr_ast_type parse_type(bool is_funret);
     ptr_ast_types parse_types();
+    ptr_ast_types parse_typesp();
     ptr_ast_interface parse_interface();
     ptr_ast_interfaces parse_interfaces();
     bool parse_sep();

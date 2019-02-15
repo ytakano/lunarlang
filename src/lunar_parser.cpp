@@ -263,8 +263,10 @@ ptr_ast_tvars module::parse_tvars() {
     return tvars;
 }
 
-// $TYPE := $ID <$TYPES>? | $TVAR
-ptr_ast_type module::parse_type() {
+// $TYPE := $ID <$TYPES>? $FUNRET? | $TVAR $FUNRET? | ($TYPES) $FUNRET?
+// $TYPE_ := $ID <$TYPES>? | $TVAR | ($TYPES)
+// $FUNRET := -> $TYPE_
+ptr_ast_type module::parse_type(bool is_funret = false) {
     char c;
     PEEK(c, m_parsec);
 
@@ -274,6 +276,8 @@ ptr_ast_type module::parse_type() {
     if (c == '`') {
         // type variable
         PARSETVAR(ret->m_id, m_parsec);
+    } else if (c == '(') {
+        // TODO: ($TYPES)
     } else {
         // identifier
         PARSEID(ret->m_id, m_parsec);
@@ -289,6 +293,11 @@ ptr_ast_type module::parse_type() {
 
             PARSECHAR('>', m_parsec);
         }
+    }
+
+    // TODO: -> $TYPESP
+    if (!is_funret) {
+        m_parsec.spaces();
     }
 
     return ret;
@@ -314,6 +323,30 @@ ptr_ast_types module::parse_types() {
 
         m_parsec.spaces();
     }
+
+    return ret;
+}
+
+// $TYPESP := $TYPE | ( $TYPES )
+ptr_ast_types module::parse_typesp() {
+    char c;
+    PTRY(m_parsec, c, m_parsec.character('('));
+    if (!m_parsec.is_fail()) {
+        auto ret = parse_types();
+        if (!ret)
+            return nullptr;
+
+        m_parsec.spaces();
+        PARSECHAR(')', m_parsec);
+        return ret;
+    }
+
+    auto t = parse_type();
+    if (!t)
+        return nullptr;
+
+    auto ret = std::make_unique<ast_types>();
+    ret->m_types.push_back(std::move(t));
 
     return ret;
 }
@@ -405,13 +438,14 @@ ptr_ast_class module::parse_class() {
     return ret;
 }
 
-// $INTERFAE := fn $INTNAME ( $TYPES ) -> $TYPE
+// $INTERFAE := fn $INTNAME $TYPESP -> $TYPESP
 // $INTNAME := $ID | infix $INFIX
 ptr_ast_interface module::parse_interface() {
     auto ret = std::make_unique<ast_interface>();
 
     ret->set_pos(m_parsec);
 
+    // fn $INTNAME
     PARSESTR("fn", m_parsec);
     SPACEPLUS(m_parsec);
 
@@ -421,20 +455,16 @@ ptr_ast_interface module::parse_interface() {
         // TODO: parse infix
     }
 
-    PARSECHAR('(', m_parsec);
-    m_parsec.spaces();
-
-    ret->m_args = parse_types();
+    // $TYPESP -> $TYPES
+    ret->m_args = parse_typesp();
     if (!ret->m_args)
         return nullptr;
 
-    PARSECHAR(')', m_parsec);
     m_parsec.spaces();
-
     PARSESTR("->", m_parsec);
     m_parsec.spaces();
 
-    ret->m_ret = parse_type();
+    ret->m_ret = parse_typesp();
 
     return ret;
 }
