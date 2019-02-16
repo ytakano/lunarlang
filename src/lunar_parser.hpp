@@ -230,6 +230,8 @@ class module {
     ptr_ast_interface parse_interface();
     ptr_ast_interfaces parse_interfaces();
     ptr_ast_infix parse_infix();
+    void parse_spaces();
+    bool parse_spaces_plus();
     bool parse_sep();
 };
 
@@ -246,6 +248,7 @@ class parser {
     std::unordered_set<char> m_wsp2;
     std::unordered_set<char> m_wsp3;
     std::unordered_set<char> m_newline;
+    std::unordered_set<char> m_newline_sc;
     std::unordered_set<char> m_infix;
 
     friend class module;

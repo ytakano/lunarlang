@@ -10,14 +10,10 @@
                   m_parsec.get_str());                                         \
     } while (0)
 
-#define SPACEPLUS(PARSEC)                                                      \
+#define SPACEPLUS()                                                            \
     do {                                                                       \
-        (PARSEC).space();                                                      \
-        if ((PARSEC).is_fail()) {                                              \
-            SYNTAXERR("expected whitespaces");                                 \
+        if (!parse_spaces_plus())                                              \
             return nullptr;                                                    \
-        }                                                                      \
-        (PARSEC).spaces();                                                     \
     } while (0)
 
 #define PARSEID(ID, PARSEC)                                                    \
@@ -127,11 +123,18 @@ parser::parser() {
     m_infix.insert('=');
     m_infix.insert('=');
     m_infix.insert('.');
+
+    m_newline.insert('\r');
+    m_newline.insert('\n');
+
+    m_newline_sc.insert('\r');
+    m_newline_sc.insert('\n');
+    m_newline_sc.insert(';');
 }
 
 bool module::parse() {
     for (;;) {
-        m_parsec.spaces();
+        parse_spaces();
         if (m_parsec.is_eof())
             break;
 
@@ -196,14 +199,14 @@ ptr_ast_kind module::parse_kind() {
     ks.push_back(std::move(k));
 
     for (;;) {
-        m_parsec.spaces();
+        parse_spaces();
 
         std::string ar;
         PTRY(m_parsec, ar, m_parsec.str("->"));
         if (m_parsec.is_fail())
             break;
 
-        m_parsec.spaces();
+        parse_spaces();
 
         auto k = std::make_unique<ast_kstar>();
         k->set_pos(m_parsec);
@@ -242,26 +245,26 @@ ptr_ast_tvars module::parse_tvars() {
 
     PARSECHAR('<', m_parsec);
 
-    m_parsec.spaces();
+    parse_spaces();
 
     for (;;) {
         ast_tvars::ptr_arg arg;
         PARSETVAR(arg->m_id, m_parsec);
 
-        m_parsec.spaces();
+        parse_spaces();
 
         char c;
         PEEK(c, m_parsec);
 
         if (c == ':') {
             PARSESTR("::", m_parsec);
-            m_parsec.spaces();
+            parse_spaces();
 
             arg->m_kind = parse_kind();
             if (!arg->m_kind)
                 return nullptr;
 
-            m_parsec.spaces();
+            parse_spaces();
         }
 
         tvars->m_args.push_back(std::move(arg));
@@ -272,7 +275,7 @@ ptr_ast_tvars module::parse_tvars() {
             break;
 
         PARSECHAR(',', m_parsec);
-        m_parsec.spaces();
+        parse_spaces();
     }
 
     m_parsec.character('>');
@@ -291,7 +294,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
         auto ret = std::make_unique<ast_normaltype>();
         PARSETVAR(ret->m_id, m_parsec);
 
-        m_parsec.spaces();
+        parse_spaces();
         if (!parse_arg_types(ret->m_args))
             return nullptr;
 
@@ -299,7 +302,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     }
     case '(': {
         // ( $TYPES? )
-        m_parsec.spaces();
+        parse_spaces();
         auto ret = std::make_unique<ast_tupletype>();
 
         PTRY(m_parsec, c, m_parsec.character(')'));
@@ -307,7 +310,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             ret->m_types = parse_types();
             if (!ret->m_types)
                 return nullptr;
-            m_parsec.spaces();
+            parse_spaces();
             PARSECHAR(')', m_parsec);
         }
 
@@ -322,9 +325,9 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
 
         if (id->m_id == "fn") {
             // fn ( $TYPES? ) : $TYPE
-            m_parsec.spaces();
+            parse_spaces();
             PARSECHAR('(', m_parsec);
-            m_parsec.spaces();
+            parse_spaces();
 
             auto ret = std::make_unique<ast_funtype>();
 
@@ -335,13 +338,13 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
                 if (!ret->m_args)
                     return nullptr;
 
-                m_parsec.spaces();
+                parse_spaces();
                 PARSECHAR(')', m_parsec);
             }
 
-            m_parsec.spaces();
+            parse_spaces();
             PARSECHAR(':', m_parsec);
-            m_parsec.spaces();
+            parse_spaces();
 
             ret->m_ret = parse_type();
             if (!ret->m_ret)
@@ -353,7 +356,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             auto ret = std::make_unique<ast_normaltype>();
             ret->m_id = std::move(id);
 
-            m_parsec.spaces();
+            parse_spaces();
             if (!parse_arg_types(ret->m_args))
                 return nullptr;
 
@@ -371,13 +374,13 @@ bool module::parse_arg_types(ptr_ast_types &types) {
     if (m_parsec.is_fail())
         return true;
 
-    m_parsec.spaces();
+    parse_spaces();
 
     types = parse_types();
     if (!types)
         return false;
 
-    m_parsec.spaces();
+    parse_spaces();
     m_parsec.character('>');
     if (m_parsec.is_fail()) {
         SYNTAXERR("expected '>'");
@@ -399,13 +402,13 @@ ptr_ast_types module::parse_types() {
 
         ret->m_types.push_back(std::move(t));
 
-        m_parsec.spaces();
+        parse_spaces();
         char c;
         PTRY(m_parsec, c, m_parsec.character(','));
         if (m_parsec.is_fail())
             break;
 
-        m_parsec.spaces();
+        parse_spaces();
     }
 
     return ret;
@@ -418,9 +421,9 @@ ptr_ast_pred module::parse_pred() {
     ret->set_pos(m_parsec);
     PARSEID(ret->m_id, m_parsec);
 
-    m_parsec.spaces();
+    parse_spaces();
     PARSECHAR('<', m_parsec);
-    m_parsec.spaces();
+    parse_spaces();
 
     // arguments
     ret->m_args = parse_types();
@@ -439,7 +442,7 @@ ptr_ast_preds module::parse_preds() {
 
     ret->set_pos(m_parsec);
     PARSESTR("where", m_parsec);
-    SPACEPLUS(m_parsec);
+    SPACEPLUS();
 
     for (;;) {
         auto pred = parse_pred();
@@ -447,14 +450,14 @@ ptr_ast_preds module::parse_preds() {
             return nullptr;
 
         ret->m_preds.push_back(std::move(pred));
-        m_parsec.spaces();
+        parse_spaces();
 
         char c;
         PTRY(m_parsec, c, m_parsec.character(','));
         if (m_parsec.is_fail())
             break;
 
-        m_parsec.spaces();
+        parse_spaces();
     }
 
     return ret;
@@ -462,21 +465,21 @@ ptr_ast_preds module::parse_preds() {
 
 // $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
 ptr_ast_class module::parse_class() {
-    SPACEPLUS(m_parsec);
+    SPACEPLUS();
 
     auto ret = std::make_unique<ast_class>();
 
     // parse class name
     PARSEID(ret->m_id, m_parsec);
 
-    m_parsec.spaces();
+    parse_spaces();
 
     // parse type variable arguments
     ret->m_tvars = parse_tvars();
     if (!ret->m_tvars)
         return nullptr;
 
-    m_parsec.spaces();
+    parse_spaces();
 
     char c;
     PTRY(m_parsec, c, m_parsec.character('{'));
@@ -488,7 +491,7 @@ ptr_ast_class module::parse_class() {
         PARSECHAR('{', m_parsec);
     }
 
-    m_parsec.spaces();
+    parse_spaces();
 
     // interfaces
     ret->m_interfaces = parse_interfaces();
@@ -507,19 +510,19 @@ ptr_ast_interface module::parse_interface() {
 
     // fn $INTNAME
     PARSESTR("fn", m_parsec);
-    SPACEPLUS(m_parsec);
+    SPACEPLUS();
 
     PARSEID(ret->m_id, m_parsec);
     if (ret->m_id->m_id == "infix") {
-        m_parsec.spaces();
+        parse_spaces();
         ret->m_infix = parse_infix();
         if (!ret->m_infix)
             return nullptr;
     }
 
-    m_parsec.spaces();
+    parse_spaces();
     PARSECHAR('(', m_parsec);
-    m_parsec.spaces();
+    parse_spaces();
 
     char c;
     PTRY(m_parsec, c, m_parsec.character(')'));
@@ -528,13 +531,13 @@ ptr_ast_interface module::parse_interface() {
         if (!ret->m_args)
             return nullptr;
 
-        m_parsec.spaces();
+        parse_spaces();
         PARSECHAR(')', m_parsec);
     }
 
-    m_parsec.spaces();
+    parse_spaces();
     PARSECHAR(':', m_parsec);
-    m_parsec.spaces();
+    parse_spaces();
 
     ret->m_ret = parse_type();
     if (!ret->m_ret)
@@ -589,18 +592,69 @@ ptr_ast_interfaces module::parse_interfaces() {
 // $WHITESPACE3 := space | tab | \r | \n | \r\n | ;
 // $SEP := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
 bool module::parse_sep() {
+    // skip comment
+    std::string s;
+    PTRY(m_parsec, s, m_parsec.str("//"));
+    if (!m_parsec.is_fail())
+        PMANY(m_parsec, s, m_parsec.oneof_not(m_parser.m_newline));
+
+    // $WHITESPACE2*
     std::string tmp;
     PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp2));
 
+    // $NEWLINE+
     tmp.clear();
-    PMANYONE(m_parsec, tmp, m_parsec.oneof(m_parser.m_newline));
+    PMANYONE(m_parsec, tmp, m_parsec.oneof(m_parser.m_newline_sc));
     if (!m_parsec.is_fail()) {
-        SYNTAXERR("expected a newline");
+        SYNTAXERR("expected a newline or ';'");
         return false;
     }
 
-    tmp.clear();
-    PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp3));
+    // $WHITESPACE3*
+    char c;
+    for (;;) {
+        PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp3));
+
+        PTRY(m_parsec, s, m_parsec.str("//"));
+        if (m_parsec.is_fail())
+            return true;
+
+        PMANY(m_parsec, s, m_parsec.oneof_not(m_parser.m_newline));
+    }
+
+    return true;
+}
+
+void module::parse_spaces() {
+    char c;
+
+    for (;;) {
+        m_parsec.spaces();
+
+        std::string s;
+        PTRY(m_parsec, s, m_parsec.str("//"));
+        if (m_parsec.is_fail())
+            return;
+
+        PMANY(m_parsec, s, m_parsec.oneof_not(m_parser.m_newline));
+    }
+}
+
+bool module::parse_spaces_plus() {
+    char c;
+    std::string s;
+
+    PTRY(m_parsec, s, m_parsec.str("//"));
+    if (!m_parsec.is_fail())
+        PMANY(m_parsec, s, m_parsec.oneof_not(m_parser.m_newline));
+
+    m_parsec.space();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected whitespaces");
+        return false;
+    }
+
+    parse_spaces();
 
     return true;
 }
