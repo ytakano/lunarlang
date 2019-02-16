@@ -211,12 +211,14 @@ class module {
         : m_parsec(str), m_filename(filename), m_parser(p) {}
     virtual ~module() {}
 
+    bool parse();
+
   private:
     parsec m_parsec;
     const std::string m_filename;
     parser &m_parser;
+    std::unordered_map<std::string, ptr_ast_class> m_id2class;
 
-    bool parse();
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();
     ptr_ast_id parse_tvar();
@@ -241,6 +243,9 @@ class parser {
   public:
     parser();
     virtual ~parser() {}
+
+    bool add_module(const char *filename);
+    bool compile();
 
   private:
     std::unordered_map<std::string, ptr_module> m_modules;

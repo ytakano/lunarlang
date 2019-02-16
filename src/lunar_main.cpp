@@ -1,9 +1,12 @@
 #include "lunar_green_thread.hpp"
 #include "lunar_ir.hpp"
+#include "lunar_opt.hpp"
+#include "lunar_parser.hpp"
 #include "lunar_string.hpp"
 
 #include <sstream>
 
+#include <getopt.h>
 #include <stdio.h>
 
 const char *e1 = "(defun fun u32 ((u32 arg1) (u32 arg2))\n"
@@ -165,9 +168,15 @@ void hello(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
-    init_thread();
-    spawn_green_thread(hello, nullptr);
-    run_green_thread();
+    //    init_thread();
+    //    spawn_green_thread(hello, nullptr);
+    //    run_green_thread();
+
+    lunar::opt opt;
+    if (!opt.parse(argc, argv))
+        return 1;
+
+    lunar::parser parser;
 
     return 0;
 }

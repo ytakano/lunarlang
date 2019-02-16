@@ -1,6 +1,8 @@
 #include "lunar_parser.hpp"
 #include "lunar_print.hpp"
 
+#include <fstream>
+
 #define SYNTAXERR(M, ...)                                                      \
     do {                                                                       \
         fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
@@ -121,8 +123,9 @@ parser::parser() {
     m_infix.insert('^');
     m_infix.insert('@');
     m_infix.insert('=');
-    m_infix.insert('=');
     m_infix.insert('.');
+    m_infix.insert('!');
+    m_infix.insert('?');
 
     m_newline.insert('\r');
     m_newline.insert('\n');
@@ -149,6 +152,15 @@ bool module::parse() {
         } else if (id->m_id == "inst") {
 
         } else if (id->m_id == "class") {
+            auto cls = parse_class();
+            if (!cls)
+                return false;
+
+            cls->m_line = id->m_line;
+            cls->m_column = id->m_column;
+
+            // TODO: check multiply defined
+            m_id2class[cls->m_id->m_id] = std::move(cls);
         }
     }
 
@@ -546,6 +558,9 @@ ptr_ast_interface module::parse_interface() {
     return ret;
 }
 
+// $INFIX := $INFIXCHAR+
+// $INFIXCHAR := + | - | < | > | / | % | : | & |
+//               * | ^ | @ | = | . | ! | ? | ~
 ptr_ast_infix module::parse_infix() {
     auto ret = std::make_unique<ast_infix>();
 
@@ -658,5 +673,22 @@ bool module::parse_spaces_plus() {
 
     return true;
 }
+
+bool parser::add_module(const char *filename) {
+    std::ifstream ifs(filename);
+    if (ifs.fail())
+        return false;
+
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                        (std::istreambuf_iterator<char>()));
+
+    auto m = std::make_unique<module>(filename, content, *this);
+
+    m_modules[filename] = std::move(m);
+
+    return true;
+}
+
+bool parser::compile() { return true; }
 
 } // namespace lunar

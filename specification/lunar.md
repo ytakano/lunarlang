@@ -7,7 +7,9 @@ $TOP := $CLASSDECL | $INST | $DEFUN
 ## Infix Operator
 
 ```
-$INFIX := + | - | = | < | > | != | * | / | . | >>= | := | ^
+$INFIX := $INFIXCHAR+
+$INFIXCHAR := + | - | < | > | / | % | : | & |
+              * | ^ | @ | = | . | ! | ? | ~
 ```
 
 ## Reserved Words
