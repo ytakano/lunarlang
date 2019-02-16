@@ -42,15 +42,15 @@ $IDS := $ID | $ID , $IDS
 ```
 $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
-$INTERFAE := fn $INTNAME $TYPESP -> $TYPESP
+$INTERFAE := fn $INTNAME ( $TYPES ) : $TYPE
 $INTNAME := $ID | infix $INFIX
 ```
 
 Example:
 ```
 class ord<`a> where eq<`a> {
-    infix < (`a, `a) -> bool
-    funcA (`a) -> `a
+    fn infix < (`a, `a) -> bool
+    fn funcA (`a) -> `a
 }
 ```
 This class definition define a class "ord" taking
@@ -65,11 +65,11 @@ $INST := inst $ID <$TYPES> $PREDS? { $EXPRS }
 Example:
 ```
 inst ord<u32> {
-    infix < (x, y) { ltU32(x, y) }
+    fn infix < (x, y) { ltU32(x, y) }
 }
 
 inst ord<either `a> where ord<'a> {
-    infix < (x, y) {
+    fn infix < (x, y) {
         match (x, y) {
         just a, just b:
             lt(a, b)
@@ -118,9 +118,9 @@ $TVARS := <$TVARKINDS>
 ### Type
 
 ```
-$TYPE := $ID <$TYPES>? | $TVAR | $TYPESP -> $TYPESP
+$TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) : $TYPE | ( $TYPES? )
+$IDTVAR := $ID | $TVAR
 $TYPES := $TYPE | $TYPE , $TYPES
-$TYPESP := $TYPE | ( $TYPES )
 ```
 
 ### Type Specifier
@@ -160,7 +160,7 @@ $RETTYPE := -> $TYPE
 ```
 
 ```
-fn myfun (x : `a, y : `b) -> `a where num<`a>, bool<`b> { x }
+fn myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
 ```
 
 ## Expression

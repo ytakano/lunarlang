@@ -1,5 +1,5 @@
 // monad
 class monad<`a :: * -> *> {
-    infix >>=(`a<`b>, `b -> `c) -> `a<`c>
-    return(`b) -> `a<`b>
+    fn infix >>=(`a<`b>, fn (`b) : `c) : `a<`c>
+    fn return(`b) : `a<`b>
 }

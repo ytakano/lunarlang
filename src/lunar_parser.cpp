@@ -111,6 +111,22 @@ parser::parser() {
     m_wsp3.insert('\r');
     m_wsp3.insert('\n');
     m_wsp3.insert(';');
+
+    m_infix.insert('+');
+    m_infix.insert('-');
+    m_infix.insert('<');
+    m_infix.insert('>');
+    m_infix.insert('/');
+    m_infix.insert('%');
+    m_infix.insert(':');
+    m_infix.insert('|');
+    m_infix.insert('&');
+    m_infix.insert('*');
+    m_infix.insert('^');
+    m_infix.insert('@');
+    m_infix.insert('=');
+    m_infix.insert('=');
+    m_infix.insert('.');
 }
 
 bool module::parse() {
@@ -263,44 +279,112 @@ ptr_ast_tvars module::parse_tvars() {
     return tvars;
 }
 
-// $TYPE := $ID <$TYPES>? $FUNRET? | $TVAR $FUNRET? | ($TYPES) $FUNRET?
-// $TYPE_ := $ID <$TYPES>? | $TVAR | ($TYPES)
-// $FUNRET := -> $TYPE_
+// $TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) : $TYPE | ( $TYPES? )
+// $IDTVAR := $ID | $TVAR
 ptr_ast_type module::parse_type(bool is_funret = false) {
     char c;
     PEEK(c, m_parsec);
 
-    auto ret = std::make_unique<ast_type>();
-    ret->set_pos(m_parsec);
-
-    if (c == '`') {
-        // type variable
+    switch (c) {
+    case '`': {
+        // $TVAR <$TYPES>?
+        auto ret = std::make_unique<ast_normaltype>();
         PARSETVAR(ret->m_id, m_parsec);
-    } else if (c == '(') {
-        // TODO: ($TYPES)
-    } else {
-        // identifier
-        PARSEID(ret->m_id, m_parsec);
-        m_parsec.spaces();
 
-        // arguments
-        PTRY(m_parsec, c, m_parsec.character('<'));
-        if (!m_parsec.is_fail()) {
+        m_parsec.spaces();
+        if (!parse_arg_types(ret->m_args))
+            return nullptr;
+
+        return ret;
+    }
+    case '(': {
+        // ( $TYPES? )
+        m_parsec.spaces();
+        auto ret = std::make_unique<ast_tupletype>();
+
+        PTRY(m_parsec, c, m_parsec.character(')'));
+        if (m_parsec.is_fail()) {
+            ret->m_types = parse_types();
+            if (!ret->m_types)
+                return nullptr;
             m_parsec.spaces();
-            ret->m_args = parse_types();
-            if (!ret->m_args)
+            PARSECHAR(')', m_parsec);
+        }
+
+        return ret;
+    }
+    default:
+        auto id = parse_id();
+        if (!id) {
+            SYNTAXERR("expected a type specifier");
+            return nullptr;
+        }
+
+        if (id->m_id == "fn") {
+            // fn ( $TYPES? ) : $TYPE
+            m_parsec.spaces();
+            PARSECHAR('(', m_parsec);
+            m_parsec.spaces();
+
+            auto ret = std::make_unique<ast_funtype>();
+
+            // $TYPES?
+            PTRY(m_parsec, c, m_parsec.character(')'));
+            if (m_parsec.is_fail()) {
+                ret->m_args = parse_types();
+                if (!ret->m_args)
+                    return nullptr;
+
+                m_parsec.spaces();
+                PARSECHAR(')', m_parsec);
+            }
+
+            m_parsec.spaces();
+            PARSECHAR(':', m_parsec);
+            m_parsec.spaces();
+
+            ret->m_ret = parse_type();
+            if (!ret->m_ret)
                 return nullptr;
 
-            PARSECHAR('>', m_parsec);
+            return ret;
+        } else {
+            // $TYPE <$TYPES>?
+            auto ret = std::make_unique<ast_normaltype>();
+            ret->m_id = std::move(id);
+
+            m_parsec.spaces();
+            if (!parse_arg_types(ret->m_args))
+                return nullptr;
+
+            return ret;
         }
     }
 
-    // TODO: -> $TYPESP
-    if (!is_funret) {
-        m_parsec.spaces();
+    return nullptr; // never reach here
+}
+
+// <$TYPES>?
+bool module::parse_arg_types(ptr_ast_types &types) {
+    char c;
+    PTRY(m_parsec, c, m_parsec.character('<'));
+    if (m_parsec.is_fail())
+        return true;
+
+    m_parsec.spaces();
+
+    types = parse_types();
+    if (!types)
+        return false;
+
+    m_parsec.spaces();
+    m_parsec.character('>');
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("expected '>'");
+        return false;
     }
 
-    return ret;
+    return true;
 }
 
 // $TYPES := $TYPE | $TYPE , $TYPES
@@ -323,30 +407,6 @@ ptr_ast_types module::parse_types() {
 
         m_parsec.spaces();
     }
-
-    return ret;
-}
-
-// $TYPESP := $TYPE | ( $TYPES )
-ptr_ast_types module::parse_typesp() {
-    char c;
-    PTRY(m_parsec, c, m_parsec.character('('));
-    if (!m_parsec.is_fail()) {
-        auto ret = parse_types();
-        if (!ret)
-            return nullptr;
-
-        m_parsec.spaces();
-        PARSECHAR(')', m_parsec);
-        return ret;
-    }
-
-    auto t = parse_type();
-    if (!t)
-        return nullptr;
-
-    auto ret = std::make_unique<ast_types>();
-    ret->m_types.push_back(std::move(t));
 
     return ret;
 }
@@ -438,7 +498,7 @@ ptr_ast_class module::parse_class() {
     return ret;
 }
 
-// $INTERFAE := fn $INTNAME $TYPESP -> $TYPESP
+// $INTERFAE := fn $INTNAME ( $TYPES ) : $TYPE
 // $INTNAME := $ID | infix $INFIX
 ptr_ast_interface module::parse_interface() {
     auto ret = std::make_unique<ast_interface>();
@@ -452,19 +512,47 @@ ptr_ast_interface module::parse_interface() {
     PARSEID(ret->m_id, m_parsec);
     if (ret->m_id->m_id == "infix") {
         m_parsec.spaces();
-        // TODO: parse infix
+        ret->m_infix = parse_infix();
+        if (!ret->m_infix)
+            return nullptr;
     }
 
-    // $TYPESP -> $TYPES
-    ret->m_args = parse_typesp();
-    if (!ret->m_args)
+    m_parsec.spaces();
+    PARSECHAR('(', m_parsec);
+    m_parsec.spaces();
+
+    char c;
+    PTRY(m_parsec, c, m_parsec.character(')'));
+    if (m_parsec.is_fail()) {
+        ret->m_args = parse_types();
+        if (!ret->m_args)
+            return nullptr;
+
+        m_parsec.spaces();
+        PARSECHAR(')', m_parsec);
+    }
+
+    m_parsec.spaces();
+    PARSECHAR(':', m_parsec);
+    m_parsec.spaces();
+
+    ret->m_ret = parse_type();
+    if (!ret->m_ret)
         return nullptr;
 
-    m_parsec.spaces();
-    PARSESTR("->", m_parsec);
-    m_parsec.spaces();
+    return ret;
+}
 
-    ret->m_ret = parse_typesp();
+ptr_ast_infix module::parse_infix() {
+    auto ret = std::make_unique<ast_infix>();
+
+    PMANYONE(m_parsec, ret->m_infix,
+             [](parsec &p, std::unordered_set<char> &s) {
+                 return p.oneof(s);
+             }(m_parsec, m_parser.m_infix));
+
+    if (m_parsec.is_fail())
+        return nullptr;
 
     return ret;
 }

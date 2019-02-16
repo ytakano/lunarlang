@@ -31,6 +31,7 @@ struct ast {
         AST_TYPES,      // types
         AST_INTERFACE,  // interface
         AST_INTERFACES, // interfaces
+        AST_INFIX,      // infix
     };
 
     std::size_t m_line;
@@ -138,7 +139,7 @@ struct ast_funtype : public ast_type {
     virtual ~ast_funtype() {}
 
     ptr_ast_types m_args;
-    ptr_ast_types m_ret;
+    ptr_ast_type m_ret;
 };
 
 struct ast_tupletype : public ast_type {
@@ -174,13 +175,23 @@ struct ast_preds : public ast {
 
 typedef std::unique_ptr<ast_preds> ptr_ast_preds;
 
+struct ast_infix : public ast {
+    ast_infix() { m_asttype = AST_INFIX; }
+    virtual ~ast_infix() {}
+
+    std::string m_infix;
+};
+
+typedef std::unique_ptr<ast_infix> ptr_ast_infix;
+
 struct ast_interface : public ast {
     ast_interface() { m_asttype = AST_INTERFACE; }
     virtual ~ast_interface() {}
 
     ptr_ast_id m_id;
     ptr_ast_types m_args;
-    ptr_ast_types m_ret;
+    ptr_ast_type m_ret;
+    ptr_ast_infix m_infix;
 };
 
 typedef std::unique_ptr<ast_interface> ptr_ast_interface;
@@ -215,9 +226,10 @@ class module {
     ptr_ast_preds parse_preds();
     ptr_ast_type parse_type(bool is_funret);
     ptr_ast_types parse_types();
-    ptr_ast_types parse_typesp();
+    bool parse_arg_types(ptr_ast_types &types);
     ptr_ast_interface parse_interface();
     ptr_ast_interfaces parse_interfaces();
+    ptr_ast_infix parse_infix();
     bool parse_sep();
 };
 
@@ -234,6 +246,7 @@ class parser {
     std::unordered_set<char> m_wsp2;
     std::unordered_set<char> m_wsp3;
     std::unordered_set<char> m_newline;
+    std::unordered_set<char> m_infix;
 
     friend class module;
 };
