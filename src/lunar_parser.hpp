@@ -42,6 +42,9 @@ struct ast {
 struct ast_id : public ast {
     ast_id() { m_asttype = AST_ID; }
     virtual ~ast_id() {}
+
+    virtual void print();
+
     std::string m_id;
 };
 
@@ -50,6 +53,7 @@ typedef std::unique_ptr<ast_id> ptr_ast_id;
 struct ast_kind : public ast {
     ast_kind() {}
     virtual ~ast_kind() {}
+    virtual void print() = 0;
 };
 
 typedef std::unique_ptr<ast_kind> ptr_ast_kind;
@@ -57,6 +61,8 @@ typedef std::unique_ptr<ast_kind> ptr_ast_kind;
 struct ast_kfun : public ast_kind {
     ast_kfun() { m_asttype = AST_KFUN; }
     virtual ~ast_kfun() {}
+
+    virtual void print();
 
     ptr_ast_kind m_left;
     ptr_ast_kind m_right;
@@ -67,6 +73,8 @@ typedef std::unique_ptr<ast_kfun> ptr_ast_kfun;
 struct ast_kstar : public ast_kind {
     ast_kstar() { m_asttype = AST_KSTAR; }
     virtual ~ast_kstar() {}
+
+    virtual void print();
 };
 
 typedef std::unique_ptr<ast_kstar> ptr_ast_kstar;
@@ -76,6 +84,8 @@ struct ast_interface;
 struct ast_tvars : public ast {
     ast_tvars() {}
     virtual ~ast_tvars() {}
+
+    virtual void print();
 
     struct arg {
         ptr_ast_id m_id;
@@ -99,6 +109,8 @@ struct ast_class : public ast {
     ast_class() { m_asttype = AST_CLASS; }
     virtual ~ast_class() {}
 
+    virtual void print();
+
     ptr_ast_id m_id;
     ptr_ast_tvars m_tvars;
     ptr_ast_preds m_preds;
@@ -113,6 +125,9 @@ typedef std::unique_ptr<ast_types> ptr_ast_types;
 struct ast_type : public ast {
     ast_type() { m_asttype = AST_TYPE; }
     virtual ~ast_type() {}
+
+    virtual void print() = 0;
+
     enum type {
         TYPE_NORMAL,
         TYPE_FUN,
@@ -128,6 +143,8 @@ struct ast_normaltype : public ast_type {
     ast_normaltype() { m_type = TYPE_NORMAL; }
     virtual ~ast_normaltype() {}
 
+    virtual void print();
+
     ptr_ast_id m_id;
     ptr_ast_types m_args;
 };
@@ -138,6 +155,8 @@ struct ast_funtype : public ast_type {
     ast_funtype() { m_type = TYPE_FUN; }
     virtual ~ast_funtype() {}
 
+    virtual void print();
+
     ptr_ast_types m_args;
     ptr_ast_type m_ret;
 };
@@ -146,6 +165,8 @@ struct ast_tupletype : public ast_type {
     ast_tupletype() { m_type = TYPE_TUPLE; }
     virtual ~ast_tupletype() {}
 
+    virtual void print();
+
     ptr_ast_types m_types;
 };
 
@@ -153,12 +174,16 @@ struct ast_types : public ast {
     ast_types() { m_asttype = AST_TYPES; }
     virtual ~ast_types() {}
 
+    virtual void print();
+
     std::vector<ptr_ast_type> m_types;
 };
 
 struct ast_pred : public ast {
     ast_pred() { m_asttype = AST_PRED; }
     virtual ~ast_pred() {}
+
+    virtual void print();
 
     ptr_ast_id m_id;
     ptr_ast_types m_args;
@@ -170,6 +195,8 @@ struct ast_preds : public ast {
     ast_preds() { m_asttype = AST_PREDS; }
     virtual ~ast_preds() {}
 
+    virtual void print();
+
     std::vector<ptr_ast_pred> m_preds;
 };
 
@@ -178,6 +205,8 @@ typedef std::unique_ptr<ast_preds> ptr_ast_preds;
 struct ast_infix : public ast {
     ast_infix() { m_asttype = AST_INFIX; }
     virtual ~ast_infix() {}
+
+    virtual void print();
 
     std::string m_infix;
 };
@@ -188,10 +217,12 @@ struct ast_interface : public ast {
     ast_interface() { m_asttype = AST_INTERFACE; }
     virtual ~ast_interface() {}
 
+    virtual void print();
+
     ptr_ast_id m_id;
+    ptr_ast_infix m_infix;
     ptr_ast_types m_args;
     ptr_ast_type m_ret;
-    ptr_ast_infix m_infix;
 };
 
 typedef std::unique_ptr<ast_interface> ptr_ast_interface;
@@ -199,6 +230,8 @@ typedef std::unique_ptr<ast_interface> ptr_ast_interface;
 struct ast_interfaces : public ast {
     ast_interfaces() { m_asttype = AST_INTERFACES; }
     virtual ~ast_interfaces() {}
+
+    virtual void print();
 
     std::vector<ptr_ast_interface> m_interfaces;
 };
@@ -212,6 +245,7 @@ class module {
     virtual ~module() {}
 
     bool parse();
+    void print();
 
   private:
     parsec m_parsec;
@@ -244,8 +278,9 @@ class parser {
     parser();
     virtual ~parser() {}
 
-    bool add_module(const char *filename);
-    bool compile();
+    bool add_module(const std::string &filename);
+    bool parse();
+    void print();
 
   private:
     std::unordered_map<std::string, ptr_module> m_modules;

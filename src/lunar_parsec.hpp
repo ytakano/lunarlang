@@ -189,6 +189,7 @@ class parsec {
             return '\0';
         }
 
+        m_fail = false;
         return m_str[m_pos];
     }
 

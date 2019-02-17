@@ -178,5 +178,16 @@ int main(int argc, char *argv[]) {
 
     lunar::parser parser;
 
+    for (auto &filename : opt.m_files) {
+        parser.add_module(filename);
+    }
+
+    if (!parser.parse())
+        return 1;
+
+    if (opt.m_is_ast) {
+        parser.print();
+    }
+
     return 0;
 }

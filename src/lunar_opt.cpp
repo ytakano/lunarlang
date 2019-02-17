@@ -9,9 +9,12 @@
 namespace lunar {
 
 bool opt::parse(int argc, char *argv[]) {
-    for (int n = 0; n < argc; n++) {
+    for (int n = 1; n < argc; n++) {
         if (C(argv[n], "-l") || C(argv[n], "--lisp")) {
             m_is_lisp = true;
+        }
+        if (C(argv[n], "-a") || C(argv[n], "--ast")) {
+            m_is_ast = true;
         } else {
             if (argv[n][0] == '-') {
                 std::cerr << argv[n] << " is illegal" << std::endl;

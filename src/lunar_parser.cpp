@@ -236,6 +236,7 @@ ptr_ast_kind module::parse_kind() {
             return rhs;
 
         auto lhs = std::move(ks.back());
+        ks.pop_back();
 
         auto kfun = std::make_unique<ast_kfun>();
         kfun->m_left = std::move(lhs);
@@ -260,7 +261,7 @@ ptr_ast_tvars module::parse_tvars() {
     parse_spaces();
 
     for (;;) {
-        ast_tvars::ptr_arg arg;
+        auto arg = std::make_unique<ast_tvars::arg>();
         PARSETVAR(arg->m_id, m_parsec);
 
         parse_spaces();
@@ -620,7 +621,7 @@ bool module::parse_sep() {
     // $NEWLINE+
     tmp.clear();
     PMANYONE(m_parsec, tmp, m_parsec.oneof(m_parser.m_newline_sc));
-    if (!m_parsec.is_fail()) {
+    if (m_parsec.is_fail()) {
         SYNTAXERR("expected a newline or ';'");
         return false;
     }
@@ -674,10 +675,12 @@ bool module::parse_spaces_plus() {
     return true;
 }
 
-bool parser::add_module(const char *filename) {
+bool parser::add_module(const std::string &filename) {
     std::ifstream ifs(filename);
     if (ifs.fail())
         return false;
+
+    // TODO: check file size
 
     std::string content((std::istreambuf_iterator<char>(ifs)),
                         (std::istreambuf_iterator<char>()));
@@ -689,6 +692,179 @@ bool parser::add_module(const char *filename) {
     return true;
 }
 
-bool parser::compile() { return true; }
+bool parser::parse() {
+    for (auto &p : m_modules) {
+        if (!p.second->parse())
+            return false;
+    }
+    return true;
+}
+
+void parser::print() {
+    for (auto &p : m_modules) {
+        p.second->print();
+    }
+}
+
+void module::print() {
+    std::cout << "{\"classes\":[";
+    int n = 1;
+    for (auto &p : m_id2class) {
+        p.second->print();
+        if (n < m_id2class.size())
+            std::cout << ",";
+
+        n++;
+    }
+    std::cout << "]";
+
+    std::cout << "}";
+}
+
+void ast_id::print() { std::cout << "\"" << m_id << "\""; }
+
+void ast_kfun::print() {
+    std::cout << "{\"left\":";
+    m_left->print();
+    std::cout << ",\"right\":";
+    m_right->print();
+    std::cout << "}";
+}
+
+void ast_kstar::print() { std::cout << "\"*\""; }
+
+void ast_tvars::print() {
+    std::cout << "[";
+    int n = 1;
+    for (auto &v : m_args) {
+        std::cout << "{\"id\":";
+        v->m_id->print();
+        if (v->m_kind) {
+            std::cout << ",\"kind\":";
+            v->m_kind->print();
+        }
+
+        std::cout << "}";
+        if (n < m_args.size())
+            std::cout << ",";
+
+        n++;
+    }
+    std::cout << "]";
+}
+
+void ast_class::print() {
+    std::cout << "{\"id\":";
+    m_id->print();
+
+    std::cout << ",\"type variables\":";
+    m_tvars->print();
+
+    if (m_preds) {
+        std::cout << ",\"predicates\":";
+        m_preds->print();
+    }
+
+    std::cout << ",\"interfaces\":";
+    m_interfaces->print();
+
+    std::cout << "}";
+}
+
+void ast_normaltype::print() {
+    std::cout << "{\"type\": \"normal\",\"id\":";
+    m_id->print();
+
+    if (m_args) {
+        std::cout << ",\"type arguments\":";
+        m_args->print();
+    }
+
+    std::cout << "}";
+}
+
+void ast_funtype::print() {
+    std::cout << "{\"type\": \"function\",\"arguments\":";
+    m_args->print();
+
+    std::cout << ",\"return\":";
+    m_ret->print();
+
+    std::cout << "}";
+}
+
+void ast_tupletype::print() {
+    std::cout << "{\"type\": \"tuple\",\"types\":";
+    m_types->print();
+    std::cout << "}";
+}
+
+void ast_types::print() {
+    std::cout << "[";
+    int n = 1;
+    for (auto &p : m_types) {
+        p->print();
+        if (n < m_types.size())
+            std::cout << ",";
+
+        n++;
+    }
+    std::cout << "]";
+}
+
+void ast_pred::print() {
+    std::cout << "{\"id\":";
+    m_id->print();
+
+    std::cout << ",\"arguments\":";
+    m_args->print();
+
+    std::cout << "}";
+}
+
+void ast_preds::print() {
+    std::cout << "[";
+    int n = 1;
+    for (auto &p : m_preds) {
+        p->print();
+        if (n < m_preds.size())
+            std::cout << ",";
+
+        n++;
+    }
+    std::cout << "]";
+}
+
+void ast_infix::print() { std::cout << "\"" << m_infix << "\""; }
+
+void ast_interface::print() {
+    std::cout << "{\"id\":";
+    m_id->print();
+
+    if (m_infix) {
+        std::cout << ",\"infix\":";
+        m_infix->print();
+    }
+
+    std::cout << ",\"arguments\":";
+    m_args->print();
+
+    std::cout << ",\"return\":";
+    m_ret->print();
+    std::cout << "}";
+}
+
+void ast_interfaces::print() {
+    std::cout << "[";
+    int n = 1;
+    for (auto &p : m_interfaces) {
+        p->print();
+        if (n < m_interfaces.size())
+            std::cout << ",";
+
+        n++;
+    }
+    std::cout << "]";
+}
 
 } // namespace lunar

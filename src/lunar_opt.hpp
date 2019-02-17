@@ -8,12 +8,13 @@ namespace lunar {
 
 class opt {
   public:
-    opt() : m_is_lisp(false) {}
+    opt() : m_is_lisp(false), m_is_ast(false) {}
     virtual ~opt() {}
 
     bool parse(int argc, char *argv[]);
 
     bool m_is_lisp;
+    bool m_is_ast;
     std::unordered_set<std::string> m_files;
 };
 
