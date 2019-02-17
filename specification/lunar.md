@@ -51,8 +51,8 @@ $INTNAME := $ID | infix $INFIX
 Example:
 ```
 class ord<`a> where eq<`a> {
-    fn infix < (`a, `a) -> bool
-    fn funcA (`a) -> `a
+    fn infix < (`a, `a) : bool
+    fn funcA (`a) : `a
 }
 ```
 This class definition define a class "ord" taking
@@ -61,7 +61,7 @@ a type variable "\`a" which is a member of the class "eq".
 ### Class Instance Declaration
 
 ```
-$INST := inst $ID <$TYPES> $PREDS? { $EXPRS }
+$INST := inst $ID <$TYPES> $PREDS? { $DEFUNS }
 ```
 
 Example:
@@ -154,11 +154,11 @@ type foo { bar : { x | y } |
 ## Function Definition
 
 ```
-$DEFUN := fn $ID ( $ARGS? ) $RETTYPE $PREDS { $EXPRS }
-$DEFUNS := $DEFUN | $DEFUNS $WHITESPACE+ $DEFUN
+$DEFUN := fn $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
+$DEFUNS := $DEFUN | $DEFUNS $SEP $DEFUN
 $ARGS := $ARG | $ARG , $ARGS
 $ARG := $ID $TYPESPEC?
-$RETTYPE := -> $TYPE
+$RETTYPE := : $TYPE
 ```
 
 ```
@@ -168,8 +168,10 @@ fn myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
 ## Expression
 
 ```
-$EXPR := $ID
-$EXPRS := $EXPR | $EXPR $NEWLINE $EXPR
+$EXPR := $ID | $APPLY
+$APPLY := $ID ( $EXPRS_? )
+$EXPRS := $EXPR | $EXPR $SEP $EXPR
+$EXPRS := $EXPR | $EXPR , $EXPR
 ```
 
 ### If

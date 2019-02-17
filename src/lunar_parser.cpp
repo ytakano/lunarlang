@@ -704,6 +704,8 @@ void parser::print() {
     for (auto &p : m_modules) {
         p.second->print();
     }
+
+    std::cout << std::endl;
 }
 
 void module::print() {
