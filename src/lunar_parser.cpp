@@ -603,6 +603,103 @@ ptr_ast_interfaces module::parse_interfaces() {
     }
 }
 
+// $DEFUN := fn $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
+ptr_ast_defun module::parse_defun() {
+    SPACEPLUS();
+
+    auto ret = std::make_unique<ast_defun>();
+    ret->set_pos(m_parsec);
+
+    // $ID
+    PARSEID(ret->m_id, m_parsec);
+    parse_spaces();
+
+    // ( $ARGS? )
+    PARSECHAR('(', m_parsec);
+    parse_spaces();
+
+    char c;
+    PTRY(m_parsec, c, m_parsec.character(')'));
+    if (m_parsec.is_fail()) {
+        ret->m_args = parse_args();
+        if (!ret->m_args)
+            return nullptr;
+
+        PARSECHAR(')', m_parsec);
+    }
+
+    // $RETTYPE?
+    parse_spaces();
+    PTRY(m_parsec, c, m_parsec.character(':'));
+    if (!m_parsec.is_fail()) {
+        ret->m_ret = parse_type();
+        if (!ret->m_ret)
+            return nullptr;
+
+        parse_spaces();
+    }
+
+    // $PREDS?
+    PTRY(m_parsec, c, m_parsec.character('{'));
+    if (m_parsec.is_fail()) {
+        // parse predicates
+        ret->m_preds = parse_preds();
+
+        PARSECHAR('{', m_parsec);
+    }
+
+    // TODO: expr
+
+    PARSECHAR('}', m_parsec);
+
+    return ret;
+}
+
+// $ARGS := $ARG | $ARG , $ARGS
+ptr_ast_args module::parse_args() {
+    auto ret = std::make_unique<ast_args>();
+    ret->set_pos(m_parsec);
+
+    char c;
+    for (;;) {
+        auto arg = parse_arg();
+        if (!arg)
+            return nullptr;
+
+        ret->m_args.push_back(std::move(arg));
+
+        parse_spaces();
+        PTRY(m_parsec, c, m_parsec.character(','));
+        if (m_parsec.is_fail()) {
+            return ret;
+        }
+        parse_spaces();
+    }
+
+    return nullptr; // never reach here
+}
+
+// $ARG := $ID $TYPESPEC?
+ptr_ast_arg module::parse_arg() {
+    auto ret = std::make_unique<ast_arg>();
+    ret->set_pos(m_parsec);
+
+    PARSEID(ret->m_id, m_parsec);
+    parse_spaces();
+
+    char c;
+    PEEK(c, m_parsec);
+    if (c != ':')
+        return ret;
+
+    parse_spaces();
+    ret->m_type = parse_type();
+    if (!ret->m_type)
+        return nullptr;
+
+    return ret;
+}
+
 // $NEWLINE := \r | \n | ;
 // $WHITESPACE2 := space | tab
 // $WHITESPACE3 := space | tab | \r | \n | \r\n | ;
@@ -801,18 +898,20 @@ void ast_tupletype::print() {
     std::cout << "}";
 }
 
-void ast_types::print() {
-    std::cout << "[";
-    int n = 1;
-    for (auto &p : m_types) {
-        p->print();
-        if (n < m_types.size())
-            std::cout << ",";
+#define PRINTLIST(LIST)                                                        \
+    do {                                                                       \
+        std::cout << "[";                                                      \
+        int n = 1;                                                             \
+        for (auto &p : LIST) {                                                 \
+            p->print();                                                        \
+            if (n < (LIST).size())                                             \
+                std::cout << ",";                                              \
+            n++;                                                               \
+        }                                                                      \
+        std::cout << "]";                                                      \
+    } while (0)
 
-        n++;
-    }
-    std::cout << "]";
-}
+void ast_types::print() { PRINTLIST(m_types); }
 
 void ast_pred::print() {
     std::cout << "{\"id\":";
@@ -824,18 +923,7 @@ void ast_pred::print() {
     std::cout << "}";
 }
 
-void ast_preds::print() {
-    std::cout << "[";
-    int n = 1;
-    for (auto &p : m_preds) {
-        p->print();
-        if (n < m_preds.size())
-            std::cout << ",";
-
-        n++;
-    }
-    std::cout << "]";
-}
+void ast_preds::print() { PRINTLIST(m_preds); }
 
 void ast_infix::print() { std::cout << "\"" << m_infix << "\""; }
 
@@ -856,17 +944,38 @@ void ast_interface::print() {
     std::cout << "}";
 }
 
-void ast_interfaces::print() {
-    std::cout << "[";
-    int n = 1;
-    for (auto &p : m_interfaces) {
-        p->print();
-        if (n < m_interfaces.size())
-            std::cout << ",";
+void ast_interfaces::print() { PRINTLIST(m_interfaces); }
 
-        n++;
+void ast_arg::print() {
+    std::cout << "{\"id\":";
+    m_id->print();
+    if (m_type) {
+        std::cout << ",\"type\":";
+        m_type->print();
     }
-    std::cout << "]";
+    std::cout << "}";
+}
+
+void ast_args::print() { PRINTLIST(m_args); }
+
+void ast_defun::print() {
+    std::cout << "{\"id\":";
+    m_id->print();
+
+    std::cout << ",\"arguments\":";
+    m_args->print();
+
+    if (m_ret) {
+        std::cout << ",\"return\":";
+        m_ret->print();
+    }
+
+    if (m_preds) {
+        std::cout << ",\"predicates\":";
+        m_preds->print();
+    }
+
+    std::cout << "}";
 }
 
 } // namespace lunar

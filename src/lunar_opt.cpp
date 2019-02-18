@@ -12,14 +12,11 @@ bool opt::parse(int argc, char *argv[]) {
     for (int n = 1; n < argc; n++) {
         if (C(argv[n], "-i") || C(argv[n], "--ir")) {
             m_is_lisp = true;
-        }
-        if (C(argv[n], "-a") || C(argv[n], "--ast")) {
+        } else if (C(argv[n], "-a") || C(argv[n], "--ast")) {
             m_is_ast = true;
-        }
-        if (C(argv[n], "-l") || C(argv[n], "--llvm")) {
+        } else if (C(argv[n], "-l") || C(argv[n], "--llvm")) {
             m_is_llvm = true;
-        }
-        if (C(argv[n], "-h") || C(argv[n], "--help")) {
+        } else if (C(argv[n], "-h") || C(argv[n], "--help")) {
             print_help(argv);
             return false;
         } else {

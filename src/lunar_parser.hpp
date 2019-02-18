@@ -32,6 +32,9 @@ struct ast {
         AST_INTERFACE,  // interface
         AST_INTERFACES, // interfaces
         AST_INFIX,      // infix
+        AST_DEFUN,      // function definition
+        AST_ARG,        // argument
+        AST_ARGS,       // arguments
     };
 
     std::size_t m_line;
@@ -236,6 +239,43 @@ struct ast_interfaces : public ast {
     std::vector<ptr_ast_interface> m_interfaces;
 };
 
+struct ast_arg : public ast {
+    ast_arg() { m_asttype = AST_ARG; }
+    virtual ~ast_arg() {}
+
+    virtual void print();
+
+    ptr_ast_id m_id;
+    ptr_ast_type m_type;
+};
+
+typedef std::unique_ptr<ast_arg> ptr_ast_arg;
+
+struct ast_args : public ast {
+    ast_args() { m_asttype = AST_ARGS; }
+    virtual ~ast_args() {}
+
+    virtual void print();
+
+    std::vector<ptr_ast_arg> m_args;
+};
+
+typedef std::unique_ptr<ast_args> ptr_ast_args;
+
+struct ast_defun : public ast {
+    ast_defun() { m_asttype = AST_DEFUN; }
+    virtual ~ast_defun() {}
+
+    virtual void print();
+
+    ptr_ast_id m_id;
+    ptr_ast_args m_args;
+    ptr_ast_type m_ret;
+    ptr_ast_preds m_preds;
+};
+
+typedef std::unique_ptr<ast_defun> ptr_ast_defun;
+
 class parser;
 
 class module {
@@ -252,6 +292,7 @@ class module {
     const std::string m_filename;
     parser &m_parser;
     std::unordered_map<std::string, ptr_ast_class> m_id2class;
+    std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
 
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();
@@ -266,6 +307,9 @@ class module {
     ptr_ast_interface parse_interface();
     ptr_ast_interfaces parse_interfaces();
     ptr_ast_infix parse_infix();
+    ptr_ast_defun parse_defun();
+    ptr_ast_args parse_args();
+    ptr_ast_arg parse_arg();
     void parse_spaces();
     bool parse_spaces_plus();
     bool parse_sep();
