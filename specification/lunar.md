@@ -9,7 +9,7 @@ $TOP := $CLASSDECL | $INST | $DEFUN
 ```
 $INFIX := $INFIXCHAR+
 $INFIXCHAR := + | - | < | > | / | % | : | & |
-              * | ^ | @ | = | . | ! | ? | ~
+              * | ^ | @ | = | ! | ? | ~
 ```
 
 ## Reserved Words
@@ -44,7 +44,7 @@ $IDS := $ID | $ID , $IDS
 ```
 $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
-$INTERFAE := fn $INTNAME ( $TYPES ) : $TYPE
+$INTERFACE := fn $INTNAME ( $TYPES ) $TYPESPEC
 $INTNAME := $ID | infix $INFIX
 ```
 
@@ -120,7 +120,7 @@ $TVARS := <$TVARKINDS>
 ### Type
 
 ```
-$TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) : $TYPE | ( $TYPES? )
+$TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) $TYPESPEC | ( $TYPES? )
 $IDTVAR := $ID | $TVAR
 $TYPES := $TYPE | $TYPE , $TYPES
 ```
@@ -168,14 +168,31 @@ fn myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
 ## Expression
 
 ```
-$EXPR := $ID | $APPLY
-$APPLY := $ID ( $EXPRS_? )
+$EXPR := $ID | $APPLY | $IF | $LET | ( $EXPRS_? ) | $EXPR . $ID
+         $EXPR $INFIX $EXPR | { EXPRS } | $EXPR [ $EXPR ] | $LITERALS
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
-$EXPRS := $EXPR | $EXPR , $EXPR
+$EXPRS_ := $EXPR | $EXPR , $EXPR
+```
+
+### Apply
+
+```
+$APPLY := $EXPR ( $EXPRS_ ) | $EXPR ( $EXPRS_ , $NAMEDS ) | $EXPR ( $NAMEDS )
+$NAMED := $ID : $EXPR
+$NAMEDS := $NAMED | $NAMED $NAMED
 ```
 
 ### If
 
+```
+$IF := if $EXPR { $EXPRS } $ELSE?
+$ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
+```
+
 ### Let
 
-### Function Call
+```
+$LET := let $DEFVARS
+$DEFVAR := $ID = $EXPR $TYPESPEC?
+$DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
+```

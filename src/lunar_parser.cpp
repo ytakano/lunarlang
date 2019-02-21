@@ -295,8 +295,9 @@ ptr_ast_tvars module::parse_tvars() {
     return tvars;
 }
 
-// $TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) : $TYPE | ( $TYPES? )
+// $TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) $TYPESPEC | ( $TYPES? )
 // $IDTVAR := $ID | $TVAR
+// $TYPESPEC := : $TYPE
 ptr_ast_type module::parse_type(bool is_funret = false) {
     char c;
     PEEK(c, m_parsec);
@@ -514,7 +515,7 @@ ptr_ast_class module::parse_class() {
     return ret;
 }
 
-// $INTERFAE := fn $INTNAME ( $TYPES ) : $TYPE
+// $INTERFACE := fn $INTNAME ( $TYPES ) $TYPESPEC
 // $INTNAME := $ID | infix $INFIX
 ptr_ast_interface module::parse_interface() {
     auto ret = std::make_unique<ast_interface>();

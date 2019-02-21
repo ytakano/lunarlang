@@ -35,6 +35,8 @@ struct ast {
         AST_DEFUN,      // function definition
         AST_ARG,        // argument
         AST_ARGS,       // arguments
+        AST_EXPR,       // expression
+        AST_DEFVAR,     // variable definition
     };
 
     std::size_t m_line;
@@ -275,6 +277,127 @@ struct ast_defun : public ast {
 };
 
 typedef std::unique_ptr<ast_defun> ptr_ast_defun;
+
+struct ast_expr : public ast {
+    ast_expr() { m_asttype = AST_EXPR; }
+    virtual ~ast_expr() {}
+
+    enum ETYPE {
+        EXPR_APPLY,
+        EXPR_IF,
+        EXPR_LET,
+        EXPR_TUPLE,
+        EXPR_BLOCK,
+        EXPR_INDEX,
+        EXPR_BINEXPR,
+        EXPR_NUM,
+        EXPR_STR,
+    };
+
+    ETYPE m_exprtype;
+};
+
+typedef std::unique_ptr<ast_expr> ptr_ast_expr;
+
+struct ast_apply : public ast_expr {
+    ast_apply() { m_exprtype = EXPR_APPLY; }
+    virtual ~ast_apply() {}
+
+    ptr_ast_expr m_func;
+    std::vector<ptr_ast_expr> m_args;
+};
+
+typedef std::unique_ptr<ast_apply> ptr_ast_apply;
+
+struct ast_if;
+
+typedef std::unique_ptr<ast_if> ptr_ast_if;
+
+struct ast_if : public ast_expr {
+    ast_if() { m_exprtype = EXPR_IF; }
+    virtual ~ast_if() {}
+
+    ptr_ast_expr m_cond;
+    std::vector<ptr_ast_expr> m_then;
+    ptr_ast_if m_elif;
+    std::vector<ptr_ast_expr> m_else;
+};
+
+struct ast_defvar : public ast {
+    ast_defvar() { m_asttype = AST_DEFVAR; }
+    virtual ~ast_defvar() {}
+
+    ptr_ast_id m_id;
+    ptr_ast_expr m_expr;
+};
+
+typedef std::unique_ptr<ast_defvar> ptr_ast_defvar;
+
+struct ast_let : public ast_expr {
+    ast_let() { m_exprtype = EXPR_LET; }
+    virtual ~ast_let() {}
+
+    std::vector<ptr_ast_defvar> m_defs;
+};
+
+typedef std::unique_ptr<ast_let> ptr_ast_let;
+
+struct ast_tuple : public ast_expr {
+    ast_tuple() { m_exprtype = EXPR_TUPLE; }
+    virtual ~ast_tuple() {}
+
+    std::vector<ptr_ast_expr> m_exprs;
+};
+
+typedef std::unique_ptr<ast_tuple> ptr_ast_typle;
+
+struct ast_block : public ast_expr {
+    ast_block() { m_exprtype = EXPR_BLOCK; }
+    virtual ~ast_block() {}
+
+    std::vector<ptr_ast_expr> m_exprs;
+};
+
+typedef std::unique_ptr<ast_block> ptr_ast_block;
+
+struct ast_index : public ast_expr {
+    ast_index() { m_exprtype = EXPR_INDEX; }
+    virtual ~ast_index() {}
+
+    ptr_ast_expr m_array;
+    ptr_ast_expr m_index;
+};
+
+typedef std::unique_ptr<ast_index> ptr_ast_index;
+
+struct ast_binexpr : public ast_expr {
+    ast_binexpr() { m_exprtype = EXPR_BINEXPR; }
+    virtual ~ast_binexpr() {}
+
+    std::string m_op;
+    ptr_ast_expr m_left;
+    ptr_ast_expr m_right;
+};
+
+typedef std::unique_ptr<ast_binexpr> ptr_ast_binexpr;
+
+struct ast_num : public ast_expr {
+    ast_num() { m_exprtype = EXPR_NUM; }
+    virtual ~ast_num() {}
+
+    std::string m_num;
+};
+
+typedef std::unique_ptr<ast_num> ptr_ast_num;
+
+struct ast_str : public ast_expr {
+    ast_str() { m_exprtype = EXPR_STR; }
+    virtual ~ast_str() {}
+
+    std::string m_num;
+};
+
+typedef std::unique_ptr<ast_str> ptr_ast_str;
 
 class parser;
 
