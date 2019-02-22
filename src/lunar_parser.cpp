@@ -701,6 +701,153 @@ ptr_ast_arg module::parse_arg() {
     return ret;
 }
 
+// $EXPR0 := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
+//          { $EXPRS } | $LITERALS
+ptr_ast_expr module::parse_expr0() {
+    char c;
+    PEEK(c, m_parsec);
+
+    switch (c) {
+    case '(':
+        // ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? )
+        ;
+    case '{':
+        // { $DICT } | { $EXPRS }
+        ;
+    case '[':
+        // [ $EXPRS_? ]
+        ;
+    case '"':;
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':;
+    }
+
+    auto id = parse_id();
+    if (!id) {
+        SYNTAXERR("unexpected character");
+        return nullptr;
+    }
+
+    if (id->m_id == "if") {
+        // $IF
+        auto ret = parse_if();
+        if (!ret)
+            return nullptr;
+
+        ret->m_line = id->m_line;
+        ret->m_column = id->m_column;
+        return ret;
+    } else if (id->m_id == "let") {
+        // $LET
+        auto ret = parse_let();
+        if (!ret)
+            return nullptr;
+
+        ret->m_line = id->m_line;
+        ret->m_column = id->m_column;
+    } else {
+        // $ID
+        auto ret = std::make_unique<ast_expr_id>();
+        ret->m_line = id->m_line;
+        ret->m_column = id->m_column;
+        ret->m_id = std::move(id);
+        return ret;
+    }
+
+    return nullptr;
+}
+
+// $EXPR := $EXPR0 $EXPR'
+ptr_ast_expr module::parse_expr() { return nullptr; }
+
+// $EXPR' := ∅ | . $ID $EXPR' | $INFIX $EXPR $EXPR' | [ $EXPR ] $EXPR' |
+//          $APPLY $EXPR'
+ptr_ast_expr module::parse_exprp() { return nullptr; }
+
+// $IF := if $EXPR { $EXPRS } $ELSE?
+// $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
+ptr_ast_if module::parse_if() {
+    SPACEPLUS();
+
+    auto ret = std::make_unique<ast_if>();
+
+    ret->m_cond = parse_expr();
+    if (!ret->m_cond)
+        return nullptr;
+
+    parse_spaces();
+    PARSECHAR('{', m_parsec);
+    parse_spaces();
+
+    // then
+    // TODO: EXPRS
+
+    parse_spaces();
+    PARSECHAR('}', m_parsec);
+    parse_spaces();
+
+    struct pos {
+        int line, column;
+    };
+
+    auto func = [](parsec &p, std::unordered_set<char> &ch, const char *str) {
+        std::string ret;
+        p.spaces();
+        int line = p.get_line();
+        int column = p.get_column();
+        ret = p.oneof_not(ch);
+        if (ret != str)
+            p.set_fail(true);
+
+        return pos{line, column};
+    };
+
+    pos p;
+    PTRY(m_parsec, p, func(m_parsec, m_parser.m_no_id_char, "elif"));
+    if (!m_parsec.is_fail()) {
+        // elif
+        ret->m_elif = parse_if();
+        if (!ret->m_elif)
+            return nullptr;
+
+        ret->m_elif->m_line = p.line;
+        ret->m_elif->m_column = p.column;
+
+        return ret;
+    }
+
+    PTRY(m_parsec, p, func(m_parsec, m_parser.m_no_id_char, "else"));
+    if (!m_parsec.is_fail()) {
+        // else
+        parse_spaces();
+        PARSECHAR('{', m_parsec);
+        parse_spaces();
+
+        // TODO: EXPRS
+
+        parse_spaces();
+        PARSECHAR('}', m_parsec);
+        parse_spaces();
+
+        return ret;
+    }
+
+    return ret;
+}
+
+// $LET := let $DEFVARS
+// $DEFVAR := $ID = $EXPR $TYPESPEC?
+// $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
+ptr_ast_let module::parse_let() { return nullptr; }
+
 // $NEWLINE := \r | \n | ;
 // $WHITESPACE2 := space | tab
 // $WHITESPACE3 := space | tab | \r | \n | \r\n | ;

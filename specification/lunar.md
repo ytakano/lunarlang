@@ -168,8 +168,11 @@ fn myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
 ## Expression
 
 ```
-$EXPR := $ID | $APPLY | $IF | $LET | ( $EXPRS_? ) | $EXPR . $ID
-         $EXPR $INFIX $EXPR | { EXPRS } | $EXPR [ $EXPR ] | $LITERALS
+$EXPR0 := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
+          { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERALS
+$EXPR := $EXPR0 $EXPR'
+$EXPR' := ∅ | . $ID $EXPR' | $INFIX $EXPR $EXPR' | [ $EXPR ] $EXPR' |
+          $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
 $EXPRS_ := $EXPR | $EXPR , $EXPR
 ```
@@ -177,7 +180,7 @@ $EXPRS_ := $EXPR | $EXPR , $EXPR
 ### Apply
 
 ```
-$APPLY := $EXPR ( $EXPRS_ ) | $EXPR ( $EXPRS_ , $NAMEDS ) | $EXPR ( $NAMEDS )
+$APPLY := ( $EXPRS_ ) | ( $EXPRS_ , $NAMEDS ) | ( $NAMEDS )
 $NAMED := $ID : $EXPR
 $NAMEDS := $NAMED | $NAMED $NAMED
 ```
@@ -195,4 +198,11 @@ $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
 $LET := let $DEFVARS
 $DEFVAR := $ID = $EXPR $TYPESPEC?
 $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
+```
+
+### Dict
+
+```
+$DICT := $DICTELM | $DICTELM , $DICT
+$DICTELM := $EXPR : $EXPR
 ```

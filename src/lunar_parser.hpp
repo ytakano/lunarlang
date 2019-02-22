@@ -292,12 +292,29 @@ struct ast_expr : public ast {
         EXPR_BINEXPR,
         EXPR_NUM,
         EXPR_STR,
+        EXPRS,
     };
 
     ETYPE m_exprtype;
 };
 
 typedef std::unique_ptr<ast_expr> ptr_ast_expr;
+
+struct ast_exprs : public ast_expr {
+    ast_exprs() { m_exprtype = EXPRS; }
+    virtual ~ast_exprs() {}
+
+    std::vector<ptr_ast_expr> m_exprs;
+};
+
+typedef std::unique_ptr<ast_exprs> ptr_ast_exprs;
+
+struct ast_expr_id : public ast_expr {
+    ast_expr_id() {}
+    virtual ~ast_expr_id() {}
+
+    ptr_ast_id m_id;
+};
 
 struct ast_apply : public ast_expr {
     ast_apply() { m_exprtype = EXPR_APPLY; }
@@ -318,9 +335,9 @@ struct ast_if : public ast_expr {
     virtual ~ast_if() {}
 
     ptr_ast_expr m_cond;
-    std::vector<ptr_ast_expr> m_then;
+    ptr_ast_exprs m_then;
     ptr_ast_if m_elif;
-    std::vector<ptr_ast_expr> m_else;
+    ptr_ast_exprs m_else;
 };
 
 struct ast_defvar : public ast {
@@ -433,6 +450,11 @@ class module {
     ptr_ast_defun parse_defun();
     ptr_ast_args parse_args();
     ptr_ast_arg parse_arg();
+    ptr_ast_expr parse_expr0();
+    ptr_ast_expr parse_expr();
+    ptr_ast_expr parse_exprp();
+    ptr_ast_if parse_if();
+    ptr_ast_let parse_let();
     void parse_spaces();
     bool parse_spaces_plus();
     bool parse_sep();
