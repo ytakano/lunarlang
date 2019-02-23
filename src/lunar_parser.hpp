@@ -37,6 +37,7 @@ struct ast {
         AST_ARGS,       // arguments
         AST_EXPR,       // expression
         AST_DEFVAR,     // variable definition
+        AST_DEFVARS,    // variable definitions
     };
 
     std::size_t m_line;
@@ -346,15 +347,26 @@ struct ast_defvar : public ast {
 
     ptr_ast_id m_id;
     ptr_ast_expr m_expr;
+    ptr_ast_type m_type;
 };
 
 typedef std::unique_ptr<ast_defvar> ptr_ast_defvar;
+
+struct ast_defvars : public ast {
+    ast_defvars() { m_asttype = AST_DEFVARS; }
+    virtual ~ast_defvars() {}
+
+    std::vector<ptr_ast_defvar> m_defs;
+};
+
+typedef std::unique_ptr<ast_defvars> ptr_ast_defvars;
 
 struct ast_let : public ast_expr {
     ast_let() { m_exprtype = EXPR_LET; }
     virtual ~ast_let() {}
 
-    std::vector<ptr_ast_defvar> m_defs;
+    ptr_ast_defvars m_defvars;
+    ptr_ast_expr m_in;
 };
 
 typedef std::unique_ptr<ast_let> ptr_ast_let;
@@ -455,7 +467,11 @@ class module {
     ptr_ast_expr parse_exprp();
     ptr_ast_if parse_if();
     ptr_ast_let parse_let();
+    ptr_ast_defvar parse_defvar();
+    ptr_ast_defvars parse_defvars();
+    ptr_ast_exprs parse_exprs();
     void parse_spaces();
+    void parse_spaces_sep();
     bool parse_spaces_plus();
     bool parse_sep();
 };

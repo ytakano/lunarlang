@@ -195,9 +195,10 @@ $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
 ### Let
 
 ```
-$LET := let $DEFVARS
+$LET := let $DEFVARS $IN?
 $DEFVAR := $ID = $EXPR $TYPESPEC?
 $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
+$IN := in { $EXPRS }
 ```
 
 ### Dict

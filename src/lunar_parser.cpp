@@ -591,11 +591,10 @@ ptr_ast_interfaces module::parse_interfaces() {
         ret->m_interfaces.push_back(std::move(intf));
 
         char c;
-        PTRY(m_parsec, c, [](parsec &p, std::unordered_set<char> &cs) {
-            std::string tmp;
-            PMANY(p, tmp, p.oneof(cs));
+        PTRY(m_parsec, c, [](parsec &p, module &m) {
+            m.parse_spaces_sep();
             return p.character('}');
-        }(m_parsec, m_parser.m_wsp3));
+        }(m_parsec, *this));
         if (!m_parsec.is_fail())
             return ret;
 
@@ -788,10 +787,11 @@ ptr_ast_if module::parse_if() {
     parse_spaces();
 
     // then
-    // TODO: EXPRS
+    // $EXPRS
+    ret->m_then = parse_exprs();
+    if (!ret->m_then)
+        return nullptr;
 
-    parse_spaces();
-    PARSECHAR('}', m_parsec);
     parse_spaces();
 
     struct pos {
@@ -831,10 +831,11 @@ ptr_ast_if module::parse_if() {
         PARSECHAR('{', m_parsec);
         parse_spaces();
 
-        // TODO: EXPRS
+        // $EXPRS
+        ret->m_else = parse_exprs();
+        if (!ret->m_else)
+            return nullptr;
 
-        parse_spaces();
-        PARSECHAR('}', m_parsec);
         parse_spaces();
 
         return ret;
@@ -843,10 +844,123 @@ ptr_ast_if module::parse_if() {
     return ret;
 }
 
-// $LET := let $DEFVARS
+// $LET := let $DEFVARS $IN?
+// $IN := in $EXPR
+ptr_ast_let module::parse_let() {
+    SPACEPLUS();
+    auto ret = std::make_unique<ast_let>();
+
+    // $DEFVARS
+    ret->m_defvars = parse_defvars();
+    if (!ret->m_defvars)
+        return nullptr;
+
+    // $IN?
+    bool flag;
+    PTRY(m_parsec, flag, [](parsec &p, module &m) {
+        p.str("in");
+        if (p.is_fail())
+            return false;
+
+        m.parse_spaces();
+        p.character('{');
+
+        return p.is_fail();
+    }(m_parsec, *this));
+
+    if (!flag)
+        return ret;
+
+    parse_spaces();
+
+    ret->m_in = parse_exprs();
+    if (!ret->m_in)
+        return nullptr;
+
+    return ret;
+}
+
 // $DEFVAR := $ID = $EXPR $TYPESPEC?
+ptr_ast_defvar module::parse_defvar() {
+    auto ret = std::make_unique<ast_defvar>();
+    ret->set_pos(m_parsec);
+
+    // $ID
+    PARSEID(ret->m_id, m_parsec);
+
+    // =
+    parse_spaces();
+    PARSECHAR('=', m_parsec);
+    parse_spaces();
+
+    // $EXPR
+    ret->m_expr = parse_expr();
+    if (!ret->m_expr)
+        return nullptr;
+
+    // $TYPESPEC?
+    parse_spaces();
+    PARSECHAR(':', m_parsec);
+    parse_spaces();
+
+    ret->m_type = parse_type();
+    if (!ret->m_type)
+        return nullptr;
+
+    return ret;
+}
+
 // $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
-ptr_ast_let module::parse_let() { return nullptr; }
+ptr_ast_defvars module::parse_defvars() {
+    auto ret = std::make_unique<ast_defvars>();
+
+    ret->set_pos(m_parsec);
+    for (;;) {
+        // $DEFVAR
+        auto def = parse_defvar();
+        if (!def)
+            return nullptr;
+
+        ret->m_defs.push_back(std::move(def));
+        parse_spaces();
+        char c = m_parsec.peek();
+        if (c != ',')
+            return ret;
+
+        parse_spaces();
+    }
+
+    return nullptr;
+}
+
+// $EXPRS := $EXPR | $EXPR $SEP $EXPR
+ptr_ast_exprs module::parse_exprs() {
+    auto ret = std::make_unique<ast_exprs>();
+
+    ret->set_pos(m_parsec);
+    for (;;) {
+        // $EXPR
+        auto e = parse_expr();
+        if (!e)
+            return nullptr;
+
+        ret->m_exprs.push_back(std::move(e));
+
+        char c;
+        PTRY(m_parsec, c, [](parsec &p, module &m) {
+            m.parse_spaces_sep();
+            return p.character('}');
+        }(m_parsec, *this));
+        if (!m_parsec.is_fail())
+            return ret;
+
+        // $SEP
+        if (!parse_sep())
+            return nullptr;
+    }
+
+    return nullptr; // never reach here
+}
 
 // $NEWLINE := \r | \n | ;
 // $WHITESPACE2 := space | tab
@@ -891,6 +1005,21 @@ void module::parse_spaces() {
 
     for (;;) {
         m_parsec.spaces();
+
+        std::string s;
+        PTRY(m_parsec, s, m_parsec.str("//"));
+        if (m_parsec.is_fail())
+            return;
+
+        PMANY(m_parsec, s, m_parsec.oneof_not(m_parser.m_newline));
+    }
+}
+
+void module::parse_spaces_sep() {
+    std::string tmp;
+
+    for (;;) {
+        PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp3));
 
         std::string s;
         PTRY(m_parsec, s, m_parsec.str("//"));
