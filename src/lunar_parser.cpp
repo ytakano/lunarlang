@@ -709,13 +709,14 @@ ptr_ast_expr module::parse_expr0() {
     switch (c) {
     case '(':
         // ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? )
-        ;
-    case '{':
+        return parse_parentheses();
+    case '{': {
         // { $DICT } | { $EXPRS }
         ;
+    }
     case '[':
         // [ $EXPRS_? ]
-        ;
+        return parse_brackets();
     case '"':;
     case '0':
     case '1':
@@ -957,6 +958,88 @@ ptr_ast_exprs module::parse_exprs() {
         // $SEP
         if (!parse_sep())
             return nullptr;
+    }
+
+    return nullptr; // never reach here
+}
+
+// ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? )
+ptr_ast_expr module::parse_parentheses() {
+    int line = m_parsec.get_line();
+    int column = m_parsec.get_column();
+
+    PARSECHAR('(', m_parsec);
+    parse_spaces();
+    auto e = parse_expr();
+    if (!e)
+        return nullptr;
+
+    // expression
+    parse_spaces();
+    char c;
+    PTRY(m_parsec, c, m_parsec.character(')'));
+    if (!m_parsec.is_fail())
+        return e;
+
+    // tuple
+    PARSECHAR(',', m_parsec);
+    parse_spaces();
+
+    auto tuple = std::make_unique<ast_tuple>();
+    tuple->m_exprs.push_back(std::move(e));
+    tuple->m_line = line;
+    tuple->m_column = column;
+
+    PTRY(m_parsec, c, m_parsec.character(')'));
+    if (!m_parsec.is_fail())
+        return tuple;
+
+    for (;;) {
+        e = parse_expr();
+        if (!e)
+            return nullptr;
+
+        tuple->m_exprs.push_back(std::move(e));
+
+        parse_spaces();
+        PTRY(m_parsec, c, m_parsec.character(')'));
+        if (!m_parsec.is_fail())
+            return tuple;
+
+        PARSECHAR(',', m_parsec);
+        parse_spaces();
+    }
+
+    return nullptr; // never reach here
+}
+
+// [ $EXPRS_? ]
+ptr_ast_vector module::parse_brackets() {
+    auto ret = std::make_unique<ast_vector>();
+    ret->set_pos(m_parsec);
+
+    PARSECHAR('[', m_parsec);
+    parse_spaces();
+
+    char c;
+    PTRY(m_parsec, c, m_parsec.character(']'));
+    if (!m_parsec.is_fail())
+        return ret;
+
+    for (;;) {
+        auto e = parse_expr();
+        if (!e)
+            return nullptr;
+
+        ret->m_exprs.push_back(std::move(e));
+
+        parse_spaces();
+        PTRY(m_parsec, c, m_parsec.character(']'));
+        if (!m_parsec.is_fail())
+            return ret;
+
+        PARSECHAR(',', m_parsec);
+        parse_spaces();
     }
 
     return nullptr; // never reach here

@@ -293,6 +293,7 @@ struct ast_expr : public ast {
         EXPR_BINEXPR,
         EXPR_NUM,
         EXPR_STR,
+        EXPR_VECTOR,
         EXPRS,
     };
 
@@ -378,7 +379,16 @@ struct ast_tuple : public ast_expr {
     std::vector<ptr_ast_expr> m_exprs;
 };
 
-typedef std::unique_ptr<ast_tuple> ptr_ast_typle;
+typedef std::unique_ptr<ast_tuple> ptr_ast_tuple;
+
+struct ast_vector : public ast_expr {
+    ast_vector() { m_exprtype = EXPR_VECTOR; }
+    virtual ~ast_vector() {}
+
+    std::vector<ptr_ast_expr> m_exprs;
+};
+
+typedef std::unique_ptr<ast_vector> ptr_ast_vector;
 
 struct ast_block : public ast_expr {
     ast_block() { m_exprtype = EXPR_BLOCK; }
@@ -470,6 +480,8 @@ class module {
     ptr_ast_defvar parse_defvar();
     ptr_ast_defvars parse_defvars();
     ptr_ast_exprs parse_exprs();
+    ptr_ast_expr parse_parentheses(); // ()
+    ptr_ast_vector parse_brackets();  // []
     void parse_spaces();
     void parse_spaces_sep();
     bool parse_spaces_plus();
