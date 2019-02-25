@@ -710,10 +710,9 @@ ptr_ast_expr module::parse_expr0() {
     case '(':
         // ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? )
         return parse_parentheses();
-    case '{': {
+    case '{':
         // { $DICT } | { $EXPRS }
-        ;
-    }
+        return parse_braces();
     case '[':
         // [ $EXPRS_? ]
         return parse_brackets();
@@ -763,6 +762,105 @@ ptr_ast_expr module::parse_expr0() {
     }
 
     return nullptr;
+}
+
+// { $DICT } | { $EXPRS }
+ptr_ast_expr module::parse_braces() {
+    int line = m_parsec.get_line();
+    int column = m_parsec.get_column();
+    PARSECHAR('{', m_parsec);
+    parse_spaces();
+
+    auto e = parse_expr();
+    if (!e)
+        return nullptr;
+
+    parse_spaces();
+
+    char c;
+    PTRY(m_parsec, c, [](module &m) {
+        m.parse_spaces();
+        return m.m_parsec.character(':');
+    }(*this));
+
+    if (m_parsec.is_fail()) {
+        // $EXPRS
+        auto ret = std::make_unique<ast_exprs>();
+
+        ret->m_line = e->m_line;
+        ret->m_column = e->m_column;
+        ret->m_exprs.push_back(std::move(e));
+
+        for (;;) {
+            // $EXPR
+            char c;
+            PTRY(m_parsec, c, [](parsec &p, module &m) {
+                m.parse_spaces_sep();
+                return p.character('}');
+            }(m_parsec, *this));
+            if (!m_parsec.is_fail())
+                return ret;
+
+            // $SEP
+            if (!parse_sep())
+                return nullptr;
+
+            auto e = parse_expr();
+            if (!e)
+                return nullptr;
+
+            ret->m_exprs.push_back(std::move(e));
+        }
+    } else {
+        // $DICT
+        parse_spaces();
+        auto v = parse_expr();
+        if (!v)
+            return nullptr;
+
+        auto elm = std::make_unique<ast_dictelm>();
+        elm->m_line = e->m_line;
+        elm->m_column = e->m_column;
+        elm->m_key = std::move(e);
+        elm->m_val = std::move(v);
+
+        auto ret = std::make_unique<ast_dict>();
+        ret->m_elms.push_back(std::move(elm));
+        ret->m_line = line;
+        ret->m_column = column;
+
+        for (;;) {
+            // $DICTELM
+            char c;
+            PTRY(m_parsec, c, [](parsec &p, module &m) {
+                m.parse_spaces_sep();
+                return p.character('}');
+            }(m_parsec, *this));
+            if (!m_parsec.is_fail())
+                return ret;
+
+            parse_spaces();
+            PARSECHAR(',', m_parsec);
+            parse_spaces();
+
+            auto e = std::make_unique<ast_dictelm>();
+            e->set_pos(m_parsec);
+
+            e->m_key = parse_expr();
+            if (!e->m_key)
+                return nullptr;
+
+            parse_spaces();
+            PARSECHAR(':', m_parsec);
+            parse_spaces();
+
+            e->m_val = parse_expr();
+            if (!e->m_val)
+                return nullptr;
+        }
+    }
+
+    return nullptr; // never reach here
 }
 
 // $EXPR := $EXPR0 $EXPR'

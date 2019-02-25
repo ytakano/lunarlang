@@ -38,6 +38,7 @@ struct ast {
         AST_EXPR,       // expression
         AST_DEFVAR,     // variable definition
         AST_DEFVARS,    // variable definitions
+        AST_DICTELM,    // element of dictionary
     };
 
     std::size_t m_line;
@@ -294,6 +295,7 @@ struct ast_expr : public ast {
         EXPR_NUM,
         EXPR_STR,
         EXPR_VECTOR,
+        EXPR_DICT,
         EXPRS,
     };
 
@@ -390,6 +392,25 @@ struct ast_vector : public ast_expr {
 
 typedef std::unique_ptr<ast_vector> ptr_ast_vector;
 
+struct ast_dictelm : public ast {
+    ast_dictelm() { m_asttype = AST_DICTELM; }
+    virtual ~ast_dictelm() {}
+
+    ptr_ast_expr m_key;
+    ptr_ast_expr m_val;
+};
+
+typedef std::unique_ptr<ast_dictelm> ptr_ast_dictelm;
+
+struct ast_dict : public ast_expr {
+    ast_dict() { m_exprtype = EXPR_DICT; }
+    virtual ~ast_dict() {}
+
+    std::vector<ptr_ast_dictelm> m_elms;
+};
+
+typedef std::unique_ptr<ast_dict> ptr_ast_dict;
+
 struct ast_block : public ast_expr {
     ast_block() { m_exprtype = EXPR_BLOCK; }
     virtual ~ast_block() {}
@@ -482,6 +503,7 @@ class module {
     ptr_ast_exprs parse_exprs();
     ptr_ast_expr parse_parentheses(); // ()
     ptr_ast_vector parse_brackets();  // []
+    ptr_ast_expr parse_braces();      // {}
     void parse_spaces();
     void parse_spaces_sep();
     bool parse_spaces_plus();
