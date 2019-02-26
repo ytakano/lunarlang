@@ -445,6 +445,7 @@ struct ast_num : public ast_expr {
     ast_num() { m_exprtype = EXPR_NUM; }
     virtual ~ast_num() {}
 
+    parsec::numtype m_numtype;
     std::string m_num;
 };
 
@@ -505,6 +506,7 @@ class module {
     ptr_ast_vector parse_brackets();  // []
     ptr_ast_expr parse_braces();      // {}
     ptr_ast_str parse_str();
+    ptr_ast_num parse_num();
     void parse_spaces();
     void parse_spaces_sep();
     bool parse_spaces_plus();

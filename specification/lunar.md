@@ -175,7 +175,7 @@ $EXPR' := ∅ | . $ID $EXPR' | $INFIX $EXPR $EXPR' | [ $EXPR ] $EXPR' |
           $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
 $EXPRS_ := $EXPR | $EXPR , $EXPR
-$LITERAL := $STR
+$LITERAL := $STR | $DECIMAL | $FLOAT
 ```
 
 ### Apply
@@ -215,4 +215,18 @@ $DICTELM := $EXPR : $EXPR
 $STR := " $CHAR* "
 $ESCAPE := \a | \b | \f | \r | \n | \t | \v | \\ | \? | \' | \" | \0 | \UXXXXXXXX | \uXXXX
 $CHAR := $ESCAPE | characters not in $ESCAPE
+```
+
+## Decimal Number Literal
+
+```
+$DECIMAL := [1-9][0-9]* | 0
+```
+
+## Floating Point Number Literal
+
+```
+$FLOAT := $DECIMAL.[0-9]* $EXP? f?
+$EXP := e $PLUSMINUS [0-9]+
+$PLUSMINUS := + | -
 ```

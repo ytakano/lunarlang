@@ -722,6 +722,7 @@ ptr_ast_expr module::parse_expr0() {
 
     if ('0' <= c && c <= '9') {
         // number
+        return parse_num();
     }
 
     auto id = parse_id();
@@ -759,8 +760,23 @@ ptr_ast_expr module::parse_expr0() {
     return nullptr;
 }
 
+ptr_ast_num module::parse_num() {
+    auto ret = std::make_unique<ast_num>();
+    ret->set_pos(m_parsec);
+
+    ret->m_numtype = m_parsec.num_literal(ret->m_num);
+    if (ret->m_numtype == parsec::NUM_FAIL) {
+        SYNTAXERR("unexpected character");
+        return nullptr;
+    }
+
+    return ret;
+}
+
 ptr_ast_str module::parse_str() {
     auto ret = std::make_unique<ast_str>();
+    ret->set_pos(m_parsec);
+
     if (m_parsec.str_literal(ret->m_str)) {
         SYNTAXERR("unexpected character");
         return nullptr;

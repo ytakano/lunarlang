@@ -169,6 +169,10 @@ class parsec {
         return ret;
     }
 
+    char decimal() {
+        return satisfy([&](char c) { return ('0' <= c && c <= '9'); });
+    }
+
     char hex() {
         return satisfy([&](char c) {
             return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') ||
@@ -177,6 +181,10 @@ class parsec {
     }
 
     bool str_literal(std::string &ret);
+
+    enum numtype { NUM_INT, NUM_FLOAT, NUM_DOUBLE, NUM_FAIL };
+
+    numtype num_literal(std::string &ret);
 
     char space() { return oneof(m_spaces); }
 
