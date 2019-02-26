@@ -454,7 +454,7 @@ struct ast_str : public ast_expr {
     ast_str() { m_exprtype = EXPR_STR; }
     virtual ~ast_str() {}
 
-    std::string m_num;
+    std::string m_str;
 };
 
 typedef std::unique_ptr<ast_str> ptr_ast_str;
@@ -504,6 +504,7 @@ class module {
     ptr_ast_expr parse_parentheses(); // ()
     ptr_ast_vector parse_brackets();  // []
     ptr_ast_expr parse_braces();      // {}
+    ptr_ast_str parse_str();
     void parse_spaces();
     void parse_spaces_sep();
     bool parse_spaces_plus();

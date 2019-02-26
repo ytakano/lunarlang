@@ -169,12 +169,13 @@ fn myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
 
 ```
 $EXPR0 := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
-          { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERALS
+          { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
 $EXPR := $EXPR0 $EXPR'
 $EXPR' := ∅ | . $ID $EXPR' | $INFIX $EXPR $EXPR' | [ $EXPR ] $EXPR' |
           $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
 $EXPRS_ := $EXPR | $EXPR , $EXPR
+$LITERAL := $STR
 ```
 
 ### Apply
@@ -206,4 +207,12 @@ $IN := in { $EXPRS }
 ```
 $DICT := $DICTELM | $DICTELM , $DICT
 $DICTELM := $EXPR : $EXPR
+```
+
+## String Literal
+
+```
+$STR := " $CHAR* "
+$ESCAPE := \a | \b | \f | \r | \n | \t | \v | \\ | \? | \' | \" | \0 | \UXXXXXXXX | \uXXXX
+$CHAR := $ESCAPE | characters not in $ESCAPE
 ```

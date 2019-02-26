@@ -4,6 +4,7 @@
 #include <functional>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #define PMANY(P, RET, X)                                                       \
@@ -70,13 +71,7 @@
 namespace lunar {
 class parsec {
   public:
-    parsec(const std::string &str)
-        : m_str(str), m_pos(0), m_line(1), m_column(1), m_fail(false) {
-        m_spaces.insert(' ');
-        m_spaces.insert('\t');
-        m_spaces.insert('\r');
-        m_spaces.insert('\n');
-    }
+    parsec(const std::string &str);
     virtual ~parsec() {}
 
     std::string str(std::string match) {
@@ -181,6 +176,8 @@ class parsec {
         });
     }
 
+    bool str_literal(std::string &ret);
+
     char space() { return oneof(m_spaces); }
 
     char peek() {
@@ -235,6 +232,8 @@ class parsec {
     bool m_fail;
 
     std::unordered_set<char> m_spaces;
+    std::unordered_map<char, char> m_esc_char;
+    std::unordered_map<char, char> m_hex2num;
 };
 
 } // namespace lunar

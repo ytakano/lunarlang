@@ -1,7 +1,7 @@
 #include "lunar_ir.hpp"
 
-#include "lunar_string.hpp"
 #include "lunar_print.hpp"
+#include "lunar_string.hpp"
 
 #include <iostream>
 
@@ -44,7 +44,7 @@
     do {                                                                       \
         (PARSEC).space();                                                      \
         if ((PARSEC).is_fail()) {                                              \
-            SYNTAXERR("expected whitespaces");                                  \
+            SYNTAXERR("expected whitespaces");                                 \
             return nullptr;                                                    \
         }                                                                      \
         (PARSEC).spaces();                                                     \
@@ -54,7 +54,7 @@
     do {                                                                       \
         (ID) = parse_id();                                                     \
         if ((PARSEC).is_fail()) {                                              \
-            SYNTAXERR("expected an identifier");                                  \
+            SYNTAXERR("expected an identifier");                               \
             return nullptr;                                                    \
         }                                                                      \
     } while (0)
@@ -275,44 +275,6 @@ ir::ir(const std::string &filename, const std::string &str)
     m_1to9.insert('7');
     m_1to9.insert('8');
     m_1to9.insert('9');
-
-    m_esc_char['a'] = '\a';
-    m_esc_char['b'] = '\b';
-    m_esc_char['f'] = '\f';
-    m_esc_char['r'] = '\r';
-    m_esc_char['n'] = '\n';
-    m_esc_char['t'] = '\t';
-    m_esc_char['v'] = '\v';
-    m_esc_char['\\'] = '\\';
-    m_esc_char['?'] = '\?';
-    m_esc_char['\''] = '\'';
-    m_esc_char['\"'] = '"';
-    m_esc_char['\0'] = '\0';
-    m_esc_char['U'] = 'U';
-    m_esc_char['u'] = 'u';
-
-    m_hex2num['0'] = 0;
-    m_hex2num['1'] = 1;
-    m_hex2num['2'] = 2;
-    m_hex2num['3'] = 3;
-    m_hex2num['4'] = 4;
-    m_hex2num['5'] = 5;
-    m_hex2num['6'] = 6;
-    m_hex2num['7'] = 7;
-    m_hex2num['8'] = 8;
-    m_hex2num['9'] = 9;
-    m_hex2num['a'] = 10;
-    m_hex2num['A'] = 10;
-    m_hex2num['b'] = 11;
-    m_hex2num['B'] = 11;
-    m_hex2num['c'] = 12;
-    m_hex2num['C'] = 12;
-    m_hex2num['d'] = 13;
-    m_hex2num['D'] = 13;
-    m_hex2num['e'] = 14;
-    m_hex2num['e'] = 14;
-    m_hex2num['f'] = 15;
-    m_hex2num['F'] = 15;
 }
 
 bool ir::parse() {
@@ -464,8 +426,13 @@ ptr_ir_expr ir::parse_expr() {
     }
 
     // string
-    PTRY(m_parsec, tmp, m_parsec.character('"'));
-    if (!m_parsec.is_fail()) {
+    tmp = m_parsec.peek();
+    if (m_parsec.is_fail()) {
+        SYNTAXERR("unexpected EOF");
+        return nullptr;
+    }
+
+    if (tmp == '"') {
         ptr_ir_str str = parse_str();
         if (str) {
             str->m_line = line;
@@ -474,10 +441,9 @@ ptr_ir_expr ir::parse_expr() {
         } else {
             return nullptr;
         }
-    }
+    } else if (tmp == '(') {
+        m_parsec.character('(');
 
-    PTRY(m_parsec, tmp, m_parsec.character('('));
-    if (!m_parsec.is_fail()) {
         line = m_parsec.get_line();
         column = m_parsec.get_column();
         PTRY(m_parsec, id, m_parsec.str("let"));
@@ -1004,55 +970,13 @@ std::string ir::parse_id() {
 }
 
 ptr_ir_str ir::parse_str() {
-    std::string ret;
-
-    for (;;) {
-        char c = m_parsec.any();
-        if (m_parsec.is_fail()) {
-            return nullptr;
-        }
-
-        if (c == '\"')
-            break;
-
-        if (c == '\\') {
-            // parse escape character
-            char esc = m_parsec.satisfy(
-                [&](char c) { return m_esc_char.find(c) != m_esc_char.end(); });
-
-            if (m_parsec.is_fail()) {
-                SYNTAXERR("unexpected character");
-                return nullptr;
-            }
-
-            if (esc == 'u' || esc == 'U') {
-                for (int i = 0; i < (esc == 'u') ? 2 : 4; i++) {
-                    char h0 = m_parsec.hex();
-                    if (m_parsec.is_fail()) {
-                        SYNTAXERR("unexpected character");
-                        return nullptr;
-                    }
-
-                    char h1 = m_parsec.hex();
-                    if (m_parsec.is_fail()) {
-                        SYNTAXERR("unexpected character");
-                        return nullptr;
-                    }
-
-                    ret.push_back(m_hex2num[h0] << 4 | m_hex2num[h1]);
-                }
-            } else {
-                ret.push_back(m_esc_char[esc]);
-            }
-        } else {
-            ret.push_back(c);
-        }
+    auto ret = std::make_unique<ir_str>();
+    if (!m_parsec.str_literal(ret->m_str)) {
+        SYNTAXERR("unexpected character");
+        return nullptr;
     }
 
-    auto ptr = std::make_unique<ir_str>();
-    ptr->m_str = ret;
-
-    return ptr;
+    return ret;
 }
 
 ptr_ir_decimal ir::parse_decimal() {

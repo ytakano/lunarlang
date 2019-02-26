@@ -716,17 +716,12 @@ ptr_ast_expr module::parse_expr0() {
     case '[':
         // [ $EXPRS_? ]
         return parse_brackets();
-    case '"':;
-    case '0':
-    case '1':
-    case '2':
-    case '3':
-    case '4':
-    case '5':
-    case '6':
-    case '7':
-    case '8':
-    case '9':;
+    case '"':
+        return parse_str();
+    }
+
+    if ('0' <= c && c <= '9') {
+        // number
     }
 
     auto id = parse_id();
@@ -762,6 +757,16 @@ ptr_ast_expr module::parse_expr0() {
     }
 
     return nullptr;
+}
+
+ptr_ast_str module::parse_str() {
+    auto ret = std::make_unique<ast_str>();
+    if (m_parsec.str_literal(ret->m_str)) {
+        SYNTAXERR("unexpected character");
+        return nullptr;
+    }
+
+    return ret;
 }
 
 // { $DICT } | { $EXPRS }

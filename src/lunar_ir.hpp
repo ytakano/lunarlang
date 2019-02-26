@@ -412,8 +412,6 @@ class ir {
     std::unordered_set<char> m_no_id_char;
     std::unordered_set<char> m_0to9;
     std::unordered_set<char> m_1to9;
-    std::unordered_map<char, char> m_esc_char;
-    std::unordered_map<char, uint8_t> m_hex2num;
     std::unordered_map<std::string, std::shared_ptr<ir_funtype>> m_id2fun;
     std::unordered_map<std::string, std::shared_ptr<ir_struct>> m_id2struct;
     std::unordered_map<std::string, llvm::Function *> m_funs_prot;
