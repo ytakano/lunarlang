@@ -181,10 +181,10 @@ $LITERAL := $STR | $DECIMAL | $FLOAT
 ### Apply
 
 ```
-$APPLY := ( $EXPRS_ ) | ( $EXPRS_ , $NAMEDS ) | ( $NAMEDS )
-$NAMED := $ID : $EXPR
-$NAMEDS := $NAMED | $NAMED $NAMED
+$APPLY := ( $EXPRS_? )
 ```
+
+TODO: named arguments, optional
 
 ### If
 

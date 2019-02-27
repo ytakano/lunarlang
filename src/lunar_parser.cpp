@@ -648,9 +648,10 @@ ptr_ast_defun module::parse_defun() {
         PARSECHAR('{', m_parsec);
     }
 
-    // TODO: expr
-
-    PARSECHAR('}', m_parsec);
+    // $EXPRS
+    ret->m_exprs = parse_exprs();
+    if (!ret->m_exprs)
+        return nullptr;
 
     return ret;
 }
@@ -885,11 +886,107 @@ ptr_ast_expr module::parse_braces() {
 }
 
 // $EXPR := $EXPR0 $EXPR'
-ptr_ast_expr module::parse_expr() { return nullptr; }
+ptr_ast_expr module::parse_expr() {
+    auto lhs = parse_expr0();
+    if (!lhs)
+        return nullptr;
+
+    return parse_exprp(std::move(lhs));
+}
 
 // $EXPR' := ∅ | . $ID $EXPR' | $INFIX $EXPR $EXPR' | [ $EXPR ] $EXPR' |
-//          $APPLY $EXPR'
-ptr_ast_expr module::parse_exprp() { return nullptr; }
+//           $APPLY $EXPR'
+ptr_ast_expr module::parse_exprp(ptr_ast_expr lhs) {
+    char c = m_parsec.peek();
+    if (m_parsec.is_fail())
+        return lhs;
+
+    switch (c) {
+    case '[': {
+        m_parsec.character('[');
+        parse_spaces();
+
+        auto e = parse_expr();
+        if (!e)
+            return nullptr;
+
+        parse_spaces();
+        PARSECHAR(']', m_parsec);
+
+        auto index = std::make_unique<ast_index>();
+        index->m_array = std::move(lhs);
+        index->m_index = std::move(e);
+
+        return parse_exprp(std::move(index));
+    }
+    case '(': {
+        auto apply = parse_apply(std::move(lhs));
+        return parse_exprp(std::move(apply));
+    }
+    }
+
+    // . $ID $EXPR' | $INFIX $EXPR $EXPR'
+    int line = m_parsec.get_line();
+    int column = m_parsec.get_column();
+    PTRY(m_parsec, c, m_parsec.oneof(m_parser.m_infix));
+    if (!m_parsec.is_fail()) {
+        std::string infix;
+        infix.push_back(c);
+
+        PMANY(m_parsec, infix, m_parsec.oneof(m_parser.m_infix));
+
+        parse_spaces();
+
+        auto rhs = parse_expr();
+        if (!rhs)
+            return nullptr;
+
+        auto infexpr = std::make_unique<ast_binexpr>();
+        infexpr->m_op = infix;
+        infexpr->m_left = std::move(lhs);
+        infexpr->m_right = std::move(rhs);
+        infexpr->m_line = line;
+        infexpr->m_column = column;
+
+        return parse_exprp(std::move(infexpr));
+    }
+
+    return lhs;
+}
+
+// $APPLY := ( $EXPRS_? )
+ptr_ast_apply module::parse_apply(ptr_ast_expr fun) {
+    auto ret = std::unique_ptr<ast_apply>();
+    ret->m_func = std::move(fun);
+    ret->m_line = fun->m_line;
+    ret->m_column = fun->m_column;
+
+    PARSECHAR('(', m_parsec);
+    parse_spaces();
+
+    char c;
+    PTRY(m_parsec, c, m_parsec.character(')'));
+    if (!m_parsec.is_fail())
+        return ret;
+
+    for (;;) {
+        auto e = parse_expr();
+        if (!e)
+            return nullptr;
+
+        ret->m_args.push_back(std::move(e));
+
+        parse_spaces();
+        PTRY(m_parsec, c, m_parsec.character(')'));
+        if (!m_parsec.is_fail())
+            return ret;
+
+        PARSECHAR(',', m_parsec);
+        parse_spaces();
+    }
+
+    return nullptr; // never reach here
+}
 
 // $IF := if $EXPR { $EXPRS } $ELSE?
 // $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
@@ -1097,8 +1194,13 @@ ptr_ast_expr module::parse_parentheses() {
     parse_spaces();
     char c;
     PTRY(m_parsec, c, m_parsec.character(')'));
-    if (!m_parsec.is_fail())
-        return e;
+    if (!m_parsec.is_fail()) {
+        auto p = std::make_unique<ast_parenthesis>();
+        p->m_expr = std::move(e);
+        p->m_line = line;
+        p->m_column = column;
+        return p;
+    }
 
     // tuple
     PARSECHAR(',', m_parsec);

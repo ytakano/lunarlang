@@ -266,6 +266,9 @@ struct ast_args : public ast {
 
 typedef std::unique_ptr<ast_args> ptr_ast_args;
 
+struct ast_exprs;
+typedef std::unique_ptr<ast_exprs> ptr_ast_exprs;
+
 struct ast_defun : public ast {
     ast_defun() { m_asttype = AST_DEFUN; }
     virtual ~ast_defun() {}
@@ -276,6 +279,7 @@ struct ast_defun : public ast {
     ptr_ast_args m_args;
     ptr_ast_type m_ret;
     ptr_ast_preds m_preds;
+    ptr_ast_exprs m_exprs;
 };
 
 typedef std::unique_ptr<ast_defun> ptr_ast_defun;
@@ -296,6 +300,7 @@ struct ast_expr : public ast {
         EXPR_STR,
         EXPR_VECTOR,
         EXPR_DICT,
+        EXPR_PARENTHESIS,
         EXPRS,
     };
 
@@ -310,8 +315,6 @@ struct ast_exprs : public ast_expr {
 
     std::vector<ptr_ast_expr> m_exprs;
 };
-
-typedef std::unique_ptr<ast_exprs> ptr_ast_exprs;
 
 struct ast_expr_id : public ast_expr {
     ast_expr_id() {}
@@ -460,6 +463,15 @@ struct ast_str : public ast_expr {
 
 typedef std::unique_ptr<ast_str> ptr_ast_str;
 
+struct ast_parenthesis : public ast_expr {
+    ast_parenthesis() { m_exprtype = EXPR_PARENTHESIS; }
+    virtual ~ast_parenthesis() {}
+
+    ptr_ast_expr m_expr;
+};
+
+typedef std::unique_ptr<ast_parenthesis> ptr_ast_parenthesis;
+
 class parser;
 
 class module {
@@ -496,7 +508,8 @@ class module {
     ptr_ast_arg parse_arg();
     ptr_ast_expr parse_expr0();
     ptr_ast_expr parse_expr();
-    ptr_ast_expr parse_exprp();
+    ptr_ast_expr parse_exprp(ptr_ast_expr lhs);
+    ptr_ast_apply parse_apply(ptr_ast_expr fun);
     ptr_ast_if parse_if();
     ptr_ast_let parse_let();
     ptr_ast_defvar parse_defvar();
