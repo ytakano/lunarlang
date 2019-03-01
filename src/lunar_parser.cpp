@@ -672,6 +672,7 @@ ptr_ast_defun module::parse_defun() {
     }
 
     // $EXPRS
+    parse_spaces();
     ret->m_exprs = parse_exprs();
     if (!ret->m_exprs)
         return nullptr;
@@ -958,7 +959,7 @@ ptr_ast_expr module::parse_expr() {
 
     // make AST
     std::deque<ptr_ast> st;
-    while (exprs.size() > 1) {
+    while (!exprs.empty()) {
         auto &p = exprs.front();
 
         assert(p->m_asttype == ast::AST_EXPR || p->m_asttype == ast::AST_INFIX);
@@ -1658,8 +1659,10 @@ void ast_defun::print() {
     std::cout << "{\"id\":";
     m_id->print();
 
-    std::cout << ",\"arguments\":";
-    m_args->print();
+    if (m_args) {
+        std::cout << ",\"arguments\":";
+        m_args->print();
+    }
 
     if (m_ret) {
         std::cout << ",\"return\":";
@@ -1669,6 +1672,11 @@ void ast_defun::print() {
     if (m_preds) {
         std::cout << ",\"predicates\":";
         m_preds->print();
+    }
+
+    if (m_exprs) {
+        std::cout << ",\"expressions\":";
+        m_exprs->print();
     }
 
     std::cout << "}";
@@ -1804,7 +1812,9 @@ void ast_binexpr::print() {
     m_op->print();
     std::cout << ",\"left\":";
     m_left->print();
-    std::cout << ",\"right\"}}";
+    std::cout << ",\"right\":";
+    m_right->print();
+    std::cout << "}}";
 }
 
 void ast_num::print() {

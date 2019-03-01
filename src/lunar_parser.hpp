@@ -14,6 +14,8 @@ struct ast {
     ast() : m_line(0), m_column(0) {}
     virtual ~ast(){};
 
+    virtual void print() = 0;
+
     void set_pos(const parsec &p) {
         m_line = p.get_line();
         m_column = p.get_column();
