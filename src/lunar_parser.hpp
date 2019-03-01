@@ -46,6 +46,8 @@ struct ast {
     asttype m_asttype;
 };
 
+typedef std::unique_ptr<ast> ptr_ast;
+
 struct ast_id : public ast {
     ast_id() { m_asttype = AST_ID; }
     virtual ~ast_id() {}
@@ -437,7 +439,7 @@ struct ast_binexpr : public ast_expr {
     ast_binexpr() { m_exprtype = EXPR_BINEXPR; }
     virtual ~ast_binexpr() {}
 
-    std::string m_op;
+    ptr_ast_infix m_op;
     ptr_ast_expr m_left;
     ptr_ast_expr m_right;
 };
@@ -520,6 +522,7 @@ class module {
     ptr_ast_expr parse_braces();      // {}
     ptr_ast_str parse_str();
     ptr_ast_num parse_num();
+    ptr_ast_infix parse_binop();
     void parse_spaces();
     void parse_spaces_sep();
     bool parse_spaces_plus();
@@ -536,6 +539,13 @@ class parser {
     bool add_module(const std::string &filename);
     bool parse();
     void print();
+    int get_pri(const std::string &infix) const {
+        auto it = m_op2pri.find(infix);
+        if (it != m_op2pri.end())
+            return it->second;
+
+        return 0;
+    }
 
   private:
     std::unordered_map<std::string, ptr_module> m_modules;
@@ -545,6 +555,7 @@ class parser {
     std::unordered_set<char> m_newline;
     std::unordered_set<char> m_newline_sc;
     std::unordered_set<char> m_infix;
+    std::unordered_map<std::string, int> m_op2pri;
 
     friend class module;
 };

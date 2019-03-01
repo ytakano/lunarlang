@@ -133,6 +133,21 @@ parser::parser() {
     m_newline_sc.insert('\r');
     m_newline_sc.insert('\n');
     m_newline_sc.insert(';');
+
+    m_op2pri["."] = 19;
+    m_op2pri["*"] = 14;
+    m_op2pri["/"] = 14;
+    m_op2pri["%"] = 14;
+    m_op2pri["+"] = 13;
+    m_op2pri["-"] = 13;
+    m_op2pri["<<"] = 12;
+    m_op2pri[">>"] = 12;
+    m_op2pri["<"] = 11;
+    m_op2pri[">"] = 11;
+    m_op2pri["<="] = 11;
+    m_op2pri[">="] = 11;
+    m_op2pri["=="] = 10;
+    m_op2pri["!="] = 10;
 }
 
 bool module::parse() {
@@ -887,15 +902,96 @@ ptr_ast_expr module::parse_braces() {
 
 // $EXPR := $EXPR0 $EXPR'
 ptr_ast_expr module::parse_expr() {
-    auto lhs = parse_expr0();
-    if (!lhs)
-        return nullptr;
+    std::deque<ptr_ast_infix> infix;
+    std::deque<ptr_ast> exprs; // Reverse Polish Notation
 
-    return parse_exprp(std::move(lhs));
+    for (;;) {
+        // $EXPR0 $EXPR'
+        auto lhs = parse_expr0();
+        if (!lhs)
+            return nullptr;
+
+        lhs = parse_exprp(std::move(lhs));
+        if (!lhs)
+            return nullptr;
+
+        exprs.push_back(std::move(lhs));
+
+        // $INFIX+
+        parse_spaces();
+        char c = m_parsec.peek();
+        if (m_parsec.is_fail() || !HASKEY(m_parser.m_infix, c))
+            break;
+
+        auto op = parse_binop();
+        if (!op)
+            return nullptr;
+
+        parse_spaces();
+
+        while (!infix.empty()) {
+            auto &b = infix.back();
+            if (m_parser.get_pri(b->m_infix) > m_parser.get_pri(op->m_infix)) {
+                exprs.push_back(std::move(b));
+                infix.pop_back();
+            } else {
+                break;
+            }
+        }
+
+        infix.push_back(std::move(op));
+    }
+
+    while (!infix.empty()) {
+        auto &p = infix.back();
+        exprs.push_back(std::move(p));
+        infix.pop_back();
+    }
+
+    // make AST
+    std::deque<ptr_ast> st;
+    while (exprs.size() > 1) {
+        auto &p = exprs.front();
+
+        assert(p->m_asttype == ast::AST_EXPR || p->m_asttype == ast::AST_INFIX);
+
+        if (p->m_asttype == ast::AST_EXPR) {
+            st.push_back(std::move(p));
+        } else if (p->m_asttype == ast::AST_INFIX) {
+            auto op = std::make_unique<ast_binexpr>();
+
+            op->m_op = std::unique_ptr<ast_infix>((ast_infix *)p.release());
+
+            op->m_right =
+                std::unique_ptr<ast_expr>((ast_expr *)st.back().release());
+            st.pop_back();
+
+            op->m_left =
+                std::unique_ptr<ast_expr>((ast_expr *)st.back().release());
+            st.pop_back();
+
+            st.push_back(std::move(op));
+        }
+
+        exprs.pop_front();
+    }
+
+    assert(st.size() == 1);
+    assert(st.back()->m_asttype == ast::AST_EXPR);
+
+    return std::unique_ptr<ast_expr>((ast_expr *)st.back().release());
 }
 
-// $EXPR' := ∅ | . $ID $EXPR' | $INFIX $EXPR $EXPR' | [ $EXPR ] $EXPR' |
-//           $APPLY $EXPR'
+ptr_ast_infix module::parse_binop() {
+    auto ret = std::make_unique<ast_infix>();
+    ret->set_pos(m_parsec);
+
+    PMANY(m_parsec, ret->m_infix, m_parsec.oneof(m_parser.m_infix));
+
+    return ret;
+}
+
+// $EXPR' := ∅ [ $EXPR ] $EXPR' | $APPLY $EXPR'
 ptr_ast_expr module::parse_exprp(ptr_ast_expr lhs) {
     char c = m_parsec.peek();
     if (m_parsec.is_fail())
@@ -926,30 +1022,30 @@ ptr_ast_expr module::parse_exprp(ptr_ast_expr lhs) {
     }
 
     // . $ID $EXPR' | $INFIX $EXPR $EXPR'
-    int line = m_parsec.get_line();
-    int column = m_parsec.get_column();
-    PTRY(m_parsec, c, m_parsec.oneof(m_parser.m_infix));
-    if (!m_parsec.is_fail()) {
-        std::string infix;
-        infix.push_back(c);
+    // int line = m_parsec.get_line();
+    // int column = m_parsec.get_column();
+    // PTRY(m_parsec, c, m_parsec.oneof(m_parser.m_infix));
+    // if (!m_parsec.is_fail()) {
+    //     std::string infix;
+    //     infix.push_back(c);
 
-        PMANY(m_parsec, infix, m_parsec.oneof(m_parser.m_infix));
+    //     PMANY(m_parsec, infix, m_parsec.oneof(m_parser.m_infix));
 
-        parse_spaces();
+    //     parse_spaces();
 
-        auto rhs = parse_expr();
-        if (!rhs)
-            return nullptr;
+    //     auto rhs = parse_expr();
+    //     if (!rhs)
+    //         return nullptr;
 
-        auto infexpr = std::make_unique<ast_binexpr>();
-        infexpr->m_op = infix;
-        infexpr->m_left = std::move(lhs);
-        infexpr->m_right = std::move(rhs);
-        infexpr->m_line = line;
-        infexpr->m_column = column;
+    //     auto infexpr = std::make_unique<ast_binexpr>();
+    //     infexpr->m_op = infix;
+    //     infexpr->m_left = std::move(lhs);
+    //     infexpr->m_right = std::move(rhs);
+    //     infexpr->m_line = line;
+    //     infexpr->m_column = column;
 
-        return parse_exprp(std::move(infexpr));
-    }
+    //     return parse_exprp(std::move(infexpr));
+    // }
 
     return lhs;
 }
