@@ -290,6 +290,8 @@ struct ast_expr : public ast {
     ast_expr() { m_asttype = AST_EXPR; }
     virtual ~ast_expr() {}
 
+    virtual void print() = 0;
+
     enum ETYPE {
         EXPR_APPLY,
         EXPR_IF,
@@ -315,6 +317,8 @@ struct ast_exprs : public ast_expr {
     ast_exprs() { m_exprtype = EXPRS; }
     virtual ~ast_exprs() {}
 
+    virtual void print();
+
     std::vector<ptr_ast_expr> m_exprs;
 };
 
@@ -322,12 +326,16 @@ struct ast_expr_id : public ast_expr {
     ast_expr_id() {}
     virtual ~ast_expr_id() {}
 
+    virtual void print();
+
     ptr_ast_id m_id;
 };
 
 struct ast_apply : public ast_expr {
     ast_apply() { m_exprtype = EXPR_APPLY; }
     virtual ~ast_apply() {}
+
+    virtual void print();
 
     ptr_ast_expr m_func;
     std::vector<ptr_ast_expr> m_args;
@@ -343,6 +351,8 @@ struct ast_if : public ast_expr {
     ast_if() { m_exprtype = EXPR_IF; }
     virtual ~ast_if() {}
 
+    virtual void print();
+
     ptr_ast_expr m_cond;
     ptr_ast_exprs m_then;
     ptr_ast_if m_elif;
@@ -352,6 +362,8 @@ struct ast_if : public ast_expr {
 struct ast_defvar : public ast {
     ast_defvar() { m_asttype = AST_DEFVAR; }
     virtual ~ast_defvar() {}
+
+    virtual void print();
 
     ptr_ast_id m_id;
     ptr_ast_expr m_expr;
@@ -364,6 +376,8 @@ struct ast_defvars : public ast {
     ast_defvars() { m_asttype = AST_DEFVARS; }
     virtual ~ast_defvars() {}
 
+    virtual void print();
+
     std::vector<ptr_ast_defvar> m_defs;
 };
 
@@ -372,6 +386,8 @@ typedef std::unique_ptr<ast_defvars> ptr_ast_defvars;
 struct ast_let : public ast_expr {
     ast_let() { m_exprtype = EXPR_LET; }
     virtual ~ast_let() {}
+
+    virtual void print();
 
     ptr_ast_defvars m_defvars;
     ptr_ast_expr m_in;
@@ -383,6 +399,8 @@ struct ast_tuple : public ast_expr {
     ast_tuple() { m_exprtype = EXPR_TUPLE; }
     virtual ~ast_tuple() {}
 
+    virtual void print();
+
     std::vector<ptr_ast_expr> m_exprs;
 };
 
@@ -392,6 +410,8 @@ struct ast_vector : public ast_expr {
     ast_vector() { m_exprtype = EXPR_VECTOR; }
     virtual ~ast_vector() {}
 
+    virtual void print();
+
     std::vector<ptr_ast_expr> m_exprs;
 };
 
@@ -400,6 +420,8 @@ typedef std::unique_ptr<ast_vector> ptr_ast_vector;
 struct ast_dictelm : public ast {
     ast_dictelm() { m_asttype = AST_DICTELM; }
     virtual ~ast_dictelm() {}
+
+    virtual void print();
 
     ptr_ast_expr m_key;
     ptr_ast_expr m_val;
@@ -411,6 +433,8 @@ struct ast_dict : public ast_expr {
     ast_dict() { m_exprtype = EXPR_DICT; }
     virtual ~ast_dict() {}
 
+    virtual void print();
+
     std::vector<ptr_ast_dictelm> m_elms;
 };
 
@@ -419,6 +443,8 @@ typedef std::unique_ptr<ast_dict> ptr_ast_dict;
 struct ast_block : public ast_expr {
     ast_block() { m_exprtype = EXPR_BLOCK; }
     virtual ~ast_block() {}
+
+    virtual void print();
 
     std::vector<ptr_ast_expr> m_exprs;
 };
@@ -429,6 +455,8 @@ struct ast_index : public ast_expr {
     ast_index() { m_exprtype = EXPR_INDEX; }
     virtual ~ast_index() {}
 
+    virtual void print();
+
     ptr_ast_expr m_array;
     ptr_ast_expr m_index;
 };
@@ -438,6 +466,8 @@ typedef std::unique_ptr<ast_index> ptr_ast_index;
 struct ast_binexpr : public ast_expr {
     ast_binexpr() { m_exprtype = EXPR_BINEXPR; }
     virtual ~ast_binexpr() {}
+
+    virtual void print();
 
     ptr_ast_infix m_op;
     ptr_ast_expr m_left;
@@ -450,6 +480,8 @@ struct ast_num : public ast_expr {
     ast_num() { m_exprtype = EXPR_NUM; }
     virtual ~ast_num() {}
 
+    virtual void print();
+
     parsec::numtype m_numtype;
     std::string m_num;
 };
@@ -460,6 +492,8 @@ struct ast_str : public ast_expr {
     ast_str() { m_exprtype = EXPR_STR; }
     virtual ~ast_str() {}
 
+    virtual void print();
+
     std::string m_str;
 };
 
@@ -468,6 +502,8 @@ typedef std::unique_ptr<ast_str> ptr_ast_str;
 struct ast_parenthesis : public ast_expr {
     ast_parenthesis() { m_exprtype = EXPR_PARENTHESIS; }
     virtual ~ast_parenthesis() {}
+
+    virtual void print();
 
     ptr_ast_expr m_expr;
 };

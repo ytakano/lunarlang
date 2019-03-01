@@ -163,7 +163,15 @@ bool module::parse() {
         }
 
         if (id->m_id == "fn") {
+            auto fn = parse_defun();
+            if (!fn)
+                return false;
 
+            fn->m_line = id->m_line;
+            fn->m_column = id->m_column;
+
+            // TODO: check multiply defined
+            m_id2defun[fn->m_id->m_id] = std::move(fn);
         } else if (id->m_id == "inst") {
 
         } else if (id->m_id == "class") {
@@ -1492,6 +1500,17 @@ void module::print() {
 
         n++;
     }
+    std::cout << "],\"functions\":[";
+
+    n = 1;
+    for (auto &p : m_id2defun) {
+        p.second->print();
+        if (n < m_id2defun.size())
+            std::cout << ",";
+
+        n++;
+    }
+
     std::cout << "]";
 
     std::cout << "}";
@@ -1652,6 +1671,163 @@ void ast_defun::print() {
         m_preds->print();
     }
 
+    std::cout << "}";
+}
+
+void ast_exprs::print() {
+    std::cout << "{\"exprs\":";
+    PRINTLIST(m_exprs);
+    std::cout << "}";
+}
+
+void ast_expr_id::print() { std::cout << "{\"id\":" << m_id->m_id << "}"; }
+
+void ast_apply::print() {
+    std::cout << "{\"apply\":{\"func\":";
+    m_func->print();
+    std::cout << ",\"arguemnts\":";
+    PRINTLIST(m_args);
+    std::cout << "}}";
+}
+
+void ast_if::print() {
+    std::cout << "{\"if\":\{\"condition\":";
+    m_cond->print();
+    std::cout << ",\"then\":";
+    m_then->print();
+
+    ast_exprs *els = nullptr;
+    if (m_elif) {
+        std::cout << ",\"elif\":[";
+        int n = 0;
+        ast_if *ptr;
+        for (ptr = m_elif.get(); ptr->m_elif; ptr = ptr->m_elif.get()) {
+            if (n > 0)
+                std::cout << ",";
+
+            std::cout << "{\"condition\":";
+            ptr->m_cond->print();
+            std::cout << ",\"then\":";
+            ptr->m_then->print();
+            std::cout << "}";
+            n++;
+        }
+        std::cout << "]";
+        if (ptr->m_else)
+            els = ptr->m_else.get();
+    } else if (m_else) {
+        els = m_else.get();
+    }
+
+    if (els != nullptr) {
+        std::cout << ",\"else\":";
+        els->print();
+    }
+
+    std::cout << "}}";
+}
+
+void ast_defvar::print() {
+    std::cout << "{\"defvar\":{\"id\":";
+    m_id->print();
+    std::cout << ",\"expression\":";
+    m_expr->print();
+
+    if (m_type) {
+        std::cout << ",\"type\":";
+        m_type->print();
+    }
+
+    std::cout << "}}";
+}
+
+void ast_defvars::print() {
+    std::cout << "{\"defvars\":";
+    PRINTLIST(m_defs);
+    std::cout << "}";
+}
+
+void ast_let::print() {
+    std::cout << "{\"let\":{\"defvars\":";
+    m_defvars->print();
+
+    if (m_in) {
+        std::cout << ",\"in\":";
+        m_in->print();
+    }
+
+    std::cout << "}}";
+}
+
+void ast_tuple::print() {
+    std::cout << "{\"tuple\":";
+    PRINTLIST(m_exprs);
+    std::cout << "}";
+}
+
+void ast_vector::print() {
+    std::cout << "{\"vector\":";
+    PRINTLIST(m_exprs);
+    std::cout << "}";
+}
+
+void ast_dictelm::print() {
+    std::cout << "{\"key\":";
+    m_key->print();
+    std::cout << ",\"value\":";
+    m_val->print();
+    std::cout << "}";
+}
+
+void ast_dict::print() {
+    std::cout << "{\"key\":";
+    PRINTLIST(m_elms);
+    std::cout << "}";
+}
+
+void ast_block::print() {
+    std::cout << "{\"block\":";
+    PRINTLIST(m_exprs);
+    std::cout << "}";
+}
+
+void ast_index::print() {
+    std::cout << "{\"indexing\":{\"array\":";
+    m_array->print();
+    std::cout << ",\"index\":";
+    m_index->print();
+    std::cout << "}}";
+}
+
+void ast_binexpr::print() {
+    std::cout << "{\"binary expression\":{\"operator\":";
+    m_op->print();
+    std::cout << ",\"left\":";
+    m_left->print();
+    std::cout << ",\"right\"}}";
+}
+
+void ast_num::print() {
+    std::cout << "{\"number\":{\"type\":";
+
+    switch (m_numtype) {
+    case parsec::NUM_DOUBLE:
+        std::cout << "\"double\"";
+    case parsec::NUM_FLOAT:
+        std::cout << "\"float\"";
+    case parsec::NUM_INT:
+        std::cout << "\"int\"";
+    default:;
+    }
+
+    std::cout << ",\"num\":\"" << m_num << "\"}}";
+}
+
+void ast_str::print() { std::cout << "{\"string\":\"" << m_str << "\"}"; }
+
+void ast_parenthesis::print() {
+    std::cout << "{\"parenthesis\":";
+    m_expr->print();
     std::cout << "}";
 }
 
