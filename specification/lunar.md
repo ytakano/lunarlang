@@ -9,18 +9,18 @@ $TOP := $CLASSDECL | $INST | $DEFUN
 ```
 $INFIX := $INFIXCHAR+
 $INFIXCHAR := + | - | < | > | / | % | : | & |
-              * | ^ | @ | = | ! | ? | ~
+              * | ^ | @ | = | ! | ? | ~ | .
 ```
 
-|priority   | operators
-|----|----
-| 20 | (  )
-| 19 | .
-| 14 | * / %
-| 13 | + -
-| 12 | << >>
-| 11 | < > <= >=
-| 10 | == !=
+| priority | operators
+|----------|-----------
+| 20       | (  )
+| 19       | .
+| 14       | * / %
+| 13       | + -
+| 12       | << >>
+| 11       | < > <= >=
+| 10       | == !=
 
 ## Reserved Words
 
@@ -178,11 +178,10 @@ fn myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
 ## Expression
 
 ```
+$EXPR := $EXPR0 $EXPR' | $EXPR0 $EXPR' $INFIX+ $EXPR
 $EXPR0 := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
           { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
-$EXPR := $EXPR0 $EXPR'
-$EXPR' := ∅ | . $ID $EXPR' | $INFIX $EXPR $EXPR' | [ $EXPR ] $EXPR' |
-          $APPLY $EXPR'
+$EXPR' := ∅ | [ $EXPR ] $EXPR' | $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
 $EXPRS_ := $EXPR | $EXPR , $EXPR
 $LITERAL := $STR | $DECIMAL | $FLOAT

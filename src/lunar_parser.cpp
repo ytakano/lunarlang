@@ -910,7 +910,7 @@ ptr_ast_expr module::parse_braces() {
     return nullptr; // never reach here
 }
 
-// $EXPR := $EXPR0 $EXPR'
+// $EXPR := $EXPR0 $EXPR' | $EXPR0 $EXPR' $INFIX+ $EXPR
 ptr_ast_expr module::parse_expr() {
     std::deque<ptr_ast_infix> infix;
     std::deque<ptr_ast> exprs; // Reverse Polish Notation
@@ -927,7 +927,7 @@ ptr_ast_expr module::parse_expr() {
 
         exprs.push_back(std::move(lhs));
 
-        // $INFIX+
+        // $INFIX+ $EXPR
         bool is_infix;
         PTRY(m_parsec, is_infix, [](module &m) {
             m.parse_spaces();
@@ -942,12 +942,14 @@ ptr_ast_expr module::parse_expr() {
         if (m_parsec.is_fail() || !is_infix)
             break;
 
+        // $INFIX+
         auto op = parse_binop();
         if (!op)
             return nullptr;
 
         parse_spaces();
 
+        // make expression written in reverse polish notation
         while (!infix.empty()) {
             auto &b = infix.back();
             if (m_parser.get_pri(b->m_infix) >= m_parser.get_pri(op->m_infix)) {
@@ -967,7 +969,7 @@ ptr_ast_expr module::parse_expr() {
         infix.pop_back();
     }
 
-    // make AST
+    // make AST from the expression written in reverse polish notation
     std::deque<ptr_ast> st;
     while (!exprs.empty()) {
         auto &p = exprs.front();
