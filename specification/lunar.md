@@ -209,7 +209,7 @@ $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
 $LET := let $DEFVARS $IN?
 $DEFVAR := $ID = $EXPR $TYPESPEC?
 $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
-$IN := in { $EXPRS }
+$IN := in $EXPR
 ```
 
 ### Dict

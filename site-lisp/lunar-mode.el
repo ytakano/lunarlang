@@ -4,12 +4,13 @@
       '(("//.*" . font-lock-comment-face)
 	("`\\<\\w+\\>" . font-lock-variable-name-face)
 	("\\<\\(bool\\|u64\\|s64\\|u32\\|s32\\|u16\\|s16\\|u8\\|s8\\)\\>" . font-lock-type-face)
-	("\\<\\(class\\|where\\|fn\\|infix\\|inst\\|let\\|if\\|match\\)\\>" . font-lock-keyword-face)
+	("\\<\\(class\\|where\\|fn\\|infix\\|inst\\|let\\|if\\|elif\\|else\\|match\\)\\>" . font-lock-keyword-face)
         ("\\<\\(true\\|false\\)\\>" . font-lock-constant-face)))
 
 (define-derived-mode lunar-mode prog-mode "lunar"
   "major mode for editing Lunar language."
   (setq font-lock-defaults '(lunar-highlights))
+  (set (make-local-variable 'comment-start) "//")
   (set (make-local-variable 'tab-width) 4)
   (set (make-local-variable 'indent-tabs-mode) nil)
   (set (make-local-variable 'indent-line-function) 'lunar-indent-line))
