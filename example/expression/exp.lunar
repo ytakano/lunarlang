@@ -1,0 +1,30 @@
+fn binop() {
+    1 + 2 - 3 + 4 * 5 / 6 + 7
+}
+
+fn plus(a, b) {
+    a + b
+}
+
+fn assign(a, b) {
+    let x = plus(a, b) in x + 3
+}
+
+fn ifexpr(a, b) {
+    if a > b {
+        (a, b)
+    } elif a == b {
+        (a, a)
+    } else {
+        (b, a)
+    }
+}
+
+fn typed(a : u32, b : u32, fun : fn (u32, u32) : u32) : u32 {
+    let x : u32 = fun(a, b)
+    x
+}
+
+fn pred(a, b) where eq<a>, eq<b> {
+    cmp(a, b)
+}

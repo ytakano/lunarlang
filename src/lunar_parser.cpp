@@ -655,6 +655,7 @@ ptr_ast_defun module::parse_defun() {
     parse_spaces();
     PTRY(m_parsec, c, m_parsec.character(':'));
     if (!m_parsec.is_fail()) {
+        parse_spaces();
         ret->m_ret = parse_type();
         if (!ret->m_ret)
             return nullptr;
@@ -717,6 +718,7 @@ ptr_ast_arg module::parse_arg() {
     if (c != ':')
         return ret;
 
+    PARSECHAR(':', m_parsec);
     parse_spaces();
     ret->m_type = parse_type();
     if (!ret->m_type)
@@ -1191,6 +1193,20 @@ ptr_ast_defvar module::parse_defvar() {
     // $ID
     PARSEID(ret->m_id, m_parsec);
 
+    // $TYPESPEC?
+    char c;
+    PTRY(m_parsec, c, [](module &m) {
+        m.parse_spaces();
+        return m.m_parsec.character(':');
+    }(*this))
+
+    if (!m_parsec.is_fail()) {
+        parse_spaces();
+        ret->m_type = parse_type();
+        if (!ret->m_type)
+            return nullptr;
+    }
+
     // =
     parse_spaces();
     PARSECHAR('=', m_parsec);
@@ -1199,21 +1215,6 @@ ptr_ast_defvar module::parse_defvar() {
     // $EXPR
     ret->m_expr = parse_expr();
     if (!ret->m_expr)
-        return nullptr;
-
-    // $TYPESPEC?
-    char c;
-    PTRY(m_parsec, c, [](module &m) {
-        m.parse_spaces();
-        return m.m_parsec.character(':');
-    }(*this))
-
-    if (m_parsec.is_fail())
-        return ret;
-
-    parse_spaces();
-    ret->m_type = parse_type();
-    if (!ret->m_type)
         return nullptr;
 
     return ret;
