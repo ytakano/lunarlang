@@ -173,7 +173,16 @@ bool module::parse() {
             // TODO: check multiply defined
             m_id2defun[fn->m_id->m_id] = std::move(fn);
         } else if (id->m_id == "inst") {
+            auto inst = parse_instance();
+            if (!inst)
+                return false;
 
+            inst->m_line = id->m_line;
+            inst->m_column = id->m_column;
+
+            // TODO: check multiply defined
+            m_id2inst.insert(std::pair<std::string, ptr_ast_instance>(
+                inst->m_pred->m_id->m_id, std::move(inst)));
         } else if (id->m_id == "class") {
             auto cls = parse_class();
             if (!cls)
@@ -627,7 +636,7 @@ ptr_ast_interfaces module::parse_interfaces() {
 }
 
 // $DEFUN := fn $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
-ptr_ast_defun module::parse_defun() {
+ptr_ast_defun module::parse_defun(bool is_infix) {
     SPACEPLUS();
 
     auto ret = std::make_unique<ast_defun>();
@@ -636,6 +645,14 @@ ptr_ast_defun module::parse_defun() {
     // $ID
     PARSEID(ret->m_id, m_parsec);
     parse_spaces();
+
+    if (is_infix && ret->m_id->m_id == "infix") {
+        ret->m_infix = parse_infix();
+        if (!ret->m_infix)
+            return nullptr;
+
+        parse_spaces();
+    }
 
     // ( $ARGS? )
     PARSECHAR('(', m_parsec);
@@ -1366,6 +1383,54 @@ ptr_ast_vector module::parse_brackets() {
     return nullptr; // never reach here
 }
 
+// $INST := inst $PRED $PREDS? { $DEFUNS }
+ptr_ast_instance module::parse_instance() {
+    SPACEPLUS();
+
+    auto ret = std::make_unique<ast_instance>();
+    ret->set_pos(m_parsec);
+
+    ret->m_pred = parse_pred();
+    if (!ret->m_pred)
+        return nullptr;
+
+    parse_spaces();
+
+    char c;
+    PTRY(m_parsec, c, m_parsec.character('{'));
+
+    if (m_parsec.is_fail()) {
+        // parse predicates
+        ret->m_preds = parse_preds();
+
+        PARSECHAR('{', m_parsec);
+    }
+
+    for (;;) {
+        parse_spaces();
+        PTRY(m_parsec, c, m_parsec.character('}'));
+        if (!m_parsec.is_fail())
+            return ret;
+
+        int line = m_parsec.get_line();
+        int column = m_parsec.get_column();
+        m_parsec.str("fn");
+        if (m_parsec.is_fail()) {
+            SYNTAXERR("expected a function definition");
+            return nullptr;
+        }
+
+        auto fn = parse_defun(true);
+        if (!fn)
+            return nullptr;
+
+        fn->m_line = line;
+        fn->m_column = column;
+
+        ret->m_id2defun[fn->m_id->m_id] = std::move(fn);
+    }
+}
+
 // $NEWLINE := \r | \n | ;
 // $WHITESPACE2 := space | tab
 // $WHITESPACE3 := space | tab | \r | \n | \r\n | ;
@@ -1502,6 +1567,16 @@ void module::print() {
 
         n++;
     }
+    std::cout << "],\"instances\":[";
+
+    n = 0;
+    for (auto &p : m_id2inst) {
+        if (n > 0)
+            std::cout << ",";
+        p.second->print();
+        n++;
+    }
+
     std::cout << "],\"functions\":[";
 
     n = 1;
@@ -1659,6 +1734,11 @@ void ast_args::print() { PRINTLIST(m_args); }
 void ast_defun::print() {
     std::cout << "{\"id\":";
     m_id->print();
+
+    if (m_infix) {
+        std::cout << ",\"infix\":";
+        m_infix->print();
+    }
 
     if (m_args) {
         std::cout << ",\"arguments\":";
@@ -1843,6 +1923,27 @@ void ast_parenthesis::print() {
     std::cout << "{\"parenthesis\":";
     m_expr->print();
     std::cout << "}";
+}
+
+void ast_instance::print() {
+    std::cout << "{\"instance\":{\"pred\":";
+    m_pred->print();
+
+    if (m_preds) {
+        std::cout << ",\"where\":";
+        m_preds->print();
+    }
+
+    std::cout << ",\"functions\":[";
+    int n = 0;
+    for (auto &p : m_id2defun) {
+        if (n > 0)
+            std::cout << ",";
+        p.second->print();
+        n++;
+    }
+
+    std::cout << "]}}";
 }
 
 } // namespace lunar

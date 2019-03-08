@@ -71,7 +71,7 @@ a type variable "\`a" which is a member of the class "eq".
 ### Class Instance Declaration
 
 ```
-$INST := inst $ID <$TYPES> $PREDS? { $DEFUNS }
+$INST := inst $PRED $PREDS? { $DEFUNS }
 ```
 
 Example:
