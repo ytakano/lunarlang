@@ -11,14 +11,14 @@ void print::unum(uint64_t var) {
     if (PRINTBUFSIZE - m_pos < 20)
         flush();
 
-    m_pos += snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "%llu", var);
+    m_pos += snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "%llu", (unsigned long long)var);
 }
 
 void print::snum(int64_t var) {
     if (PRINTBUFSIZE - m_pos < 20)
         flush();
 
-    m_pos += snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "%lld", var);
+    m_pos += snprintf(m_buf + m_pos, PRINTBUFSIZE - m_pos, "%lld", (unsigned long long)var);
 }
 
 void print::boolean(bool var) {
