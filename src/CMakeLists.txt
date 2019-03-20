@@ -18,9 +18,6 @@ execute_process(
     OUTPUT_VARIABLE LLVM_CXXFLAGS
 )
 
-string(REPLACE "-std=c++0x" "" LLVM_CXXFLAGS ${LLVM_CXXFLAGS})
-string(REPLACE "-O2" "" LLVM_CXXFLAGS ${LLVM_CXXFLAGS})
-
 execute_process(
     COMMAND ${LLVM_TOOLS_BINARY_DIR}/llvm-config --ldflags
     COMMAND tr -d \n
