@@ -50,8 +50,8 @@ int cmp_kind(const kind *lhs, const kind *rhs) {
             return 0;
     } else {
         if (rhs->m_is_star == false) {
-            auto lsub = (kfun *)lhs;
-            auto rsub = (kfun *)rhs;
+            auto lsub = (const kfun *)lhs;
+            auto rsub = (const kfun *)rhs;
 
             int ret = cmp_kind(lsub->m_left.get(), rsub->m_left.get());
             if (ret != 0)
@@ -125,7 +125,7 @@ bool typeclass::apply(std::vector<shared_type> &args) {
     }
 
     // check kind
-    for (int i = 0; i < args.size(); i++) {
+    for (size_t i = 0; i < args.size(); i++) {
         if (cmp_kind(m_args[i]->get_kind().get(), args[i]->get_kind().get()) ==
             0) {
             // TODO: print error

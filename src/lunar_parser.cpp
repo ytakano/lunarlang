@@ -1455,7 +1455,6 @@ bool module::parse_sep() {
     }
 
     // $WHITESPACE3*
-    char c;
     for (;;) {
         PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp3));
 
@@ -1472,8 +1471,6 @@ bool module::parse_sep() {
 }
 
 void module::parse_spaces() {
-    char c;
-
     for (;;) {
         m_parsec.spaces();
 
@@ -1506,7 +1503,6 @@ void module::parse_spaces_sep() {
 }
 
 bool module::parse_spaces_plus() {
-    char c;
     std::string s;
 
     PTRY(m_parsec, s, m_parsec.str("//"));
@@ -1559,7 +1555,7 @@ void parser::print() {
 
 void module::print() {
     std::cout << "{\"classes\":[";
-    int n = 1;
+    size_t n = 1;
     for (auto &p : m_id2class) {
         p.second->print();
         if (n < m_id2class.size())
@@ -1607,7 +1603,7 @@ void ast_kstar::print() { std::cout << "\"*\""; }
 
 void ast_tvars::print() {
     std::cout << "[";
-    int n = 1;
+    size_t n = 1;
     for (auto &v : m_args) {
         std::cout << "{\"id\":";
         v->m_id->print();
@@ -1674,7 +1670,7 @@ void ast_tupletype::print() {
 #define PRINTLIST(LIST)                                                        \
     do {                                                                       \
         std::cout << "[";                                                      \
-        int n = 1;                                                             \
+        size_t n = 1;                                                             \
         for (auto &p : LIST) {                                                 \
             p->print();                                                        \
             if (n < (LIST).size())                                             \
@@ -1780,7 +1776,7 @@ void ast_apply::print() {
 }
 
 void ast_if::print() {
-    std::cout << "{\"if\":\{\"condition\":";
+    std::cout << "{\"if\":{\"condition\":";
     m_cond->print();
     std::cout << ",\"then\":";
     m_then->print();

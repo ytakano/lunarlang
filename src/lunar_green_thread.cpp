@@ -6,6 +6,10 @@
 
 #include <sys/mman.h>
 
+namespace boost {
+  void throw_exception( std::exception const & e ) { }
+}
+
 // stack layout:
 //
 // 24(%rsp) | [empty]
@@ -27,8 +31,8 @@ asm(".global ___INVOKE;"
 
 static const long pagesize = sysconf(_SC_PAGE_SIZE);
 
-__thread static lunar::green_thread *p_green;
-__thread static uint64_t current_id;
+static __thread lunar::green_thread *p_green;
+static __thread uint64_t current_id;
 
 extern "C" {
 

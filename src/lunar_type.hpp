@@ -3,6 +3,8 @@
 
 #include "lunar_common.hpp"
 
+#include <assert.h>
+
 #include <map>
 #include <memory>
 #include <string>

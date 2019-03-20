@@ -3245,7 +3245,6 @@ void ir_let::print() {
 }
 
 void ir_mkvec::print() {
-    int n = 0;
     std::cout << "{\"mkvec\":{\"type\":";
     m_vectype->print();
     std::cout << ",\"num\":";

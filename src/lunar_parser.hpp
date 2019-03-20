@@ -3,6 +3,7 @@
 
 #include "lunar_parsec.hpp"
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>

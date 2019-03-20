@@ -1,0 +1,9 @@
+version: '3'
+services:
+  lunarlang:
+    build: .
+    volumes:
+      - "../:/lunarlang"
+    stdin_open: true
+    tty: true
+    working_dir: "/lunarlang"

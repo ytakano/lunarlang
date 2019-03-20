@@ -1,0 +1,12 @@
+export TERM=xterm
+export RPROMPT='[%~]'
+export HISTFILE=$HOME/.zsh_history
+export HISTSIZE=10000
+export SAVEHIST=10000
+export EDITOR=vi
+export PAGER=less
+export LC_ALL=ja_JP.UTF-8
+export LANG=ja_JP.UTF-8
+export CC=clang
+export CXX=clang++
+export MAKEFLAGS="-j 20"
