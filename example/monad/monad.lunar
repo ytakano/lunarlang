@@ -1,11 +1,11 @@
 // monad
 class monad<`a :: * -> *> {
-    fn infix >>=(`a<`b>, fn (`b) : `a<`c>) : `a<`c>
-    fn return(`b) : `a<`b>
+    func infix >>=(`a<`b>, func (`b) : `a<`c>) : `a<`c>
+    func return(`b) : `a<`b>
 }
 
-inst monad<mytype<`a>> {
-    fn infix >>=(a, b) {
+instance monad<mytype<`a>> {
+    func infix >>=(a, b) {
         b(a.x)
     }
 }

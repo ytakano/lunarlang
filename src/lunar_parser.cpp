@@ -162,7 +162,7 @@ bool module::parse() {
             return false;
         }
 
-        if (id->m_id == "fn") {
+        if (id->m_id == "func") {
             auto fn = parse_defun();
             if (!fn)
                 return false;
@@ -172,7 +172,7 @@ bool module::parse() {
 
             // TODO: check multiply defined
             m_id2defun[fn->m_id->m_id] = std::move(fn);
-        } else if (id->m_id == "inst") {
+        } else if (id->m_id == "instance") {
             auto inst = parse_instance();
             if (!inst)
                 return false;
@@ -327,7 +327,7 @@ ptr_ast_tvars module::parse_tvars() {
     return tvars;
 }
 
-// $TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) $TYPESPEC | ( $TYPES? )
+// $TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? )
 // $IDTVAR := $ID | $TVAR
 // $TYPESPEC := : $TYPE
 ptr_ast_type module::parse_type(bool is_funret = false) {
@@ -369,8 +369,8 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             return nullptr;
         }
 
-        if (id->m_id == "fn") {
-            // fn ( $TYPES? ) : $TYPE
+        if (id->m_id == "func") {
+            // func ( $TYPES? ) : $TYPE
             parse_spaces();
             PARSECHAR('(', m_parsec);
             parse_spaces();
@@ -547,15 +547,15 @@ ptr_ast_class module::parse_class() {
     return ret;
 }
 
-// $INTERFACE := fn $INTNAME ( $TYPES ) $TYPESPEC
+// $INTERFACE := func $INTNAME ( $TYPES ) $TYPESPEC
 // $INTNAME := $ID | infix $INFIX
 ptr_ast_interface module::parse_interface() {
     auto ret = std::make_unique<ast_interface>();
 
     ret->set_pos(m_parsec);
 
-    // fn $INTNAME
-    PARSESTR("fn", m_parsec);
+    // func $INTNAME
+    PARSESTR("func", m_parsec);
     SPACEPLUS();
 
     PARSEID(ret->m_id, m_parsec);
@@ -635,7 +635,7 @@ ptr_ast_interfaces module::parse_interfaces() {
     }
 }
 
-// $DEFUN := fn $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
+// $DEFUN := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
 ptr_ast_defun module::parse_defun(bool is_infix) {
     SPACEPLUS();
 
@@ -1383,7 +1383,7 @@ ptr_ast_vector module::parse_brackets() {
     return nullptr; // never reach here
 }
 
-// $INST := inst $PRED $PREDS? { $DEFUNS }
+// $INST := instance $PRED $PREDS? { $DEFUNS }
 ptr_ast_instance module::parse_instance() {
     SPACEPLUS();
 
@@ -1414,7 +1414,7 @@ ptr_ast_instance module::parse_instance() {
 
         int line = m_parsec.get_line();
         int column = m_parsec.get_column();
-        m_parsec.str("fn");
+        m_parsec.str("func");
         if (m_parsec.is_fail()) {
             SYNTAXERR("expected a function definition");
             return nullptr;
@@ -1670,7 +1670,7 @@ void ast_tupletype::print() {
 #define PRINTLIST(LIST)                                                        \
     do {                                                                       \
         std::cout << "[";                                                      \
-        size_t n = 1;                                                             \
+        size_t n = 1;                                                          \
         for (auto &p : LIST) {                                                 \
             p->print();                                                        \
             if (n < (LIST).size())                                             \

@@ -25,7 +25,7 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 ## Reserved Words
 
 ```
-$RESERVED := class | type | if | let | inst | where | fn |
+$RESERVED := class | type | if | let | instance | where | func |
              match | module | import | return | as |
              infix | $INFIX
 ```
@@ -54,15 +54,15 @@ $IDS := $ID | $ID , $IDS
 ```
 $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
-$INTERFACE := fn $INTNAME ( $TYPES ) $TYPESPEC
+$INTERFACE := func $INTNAME ( $TYPES ) $TYPESPEC
 $INTNAME := $ID | infix $INFIX
 ```
 
 Example:
 ```
 class ord<`a> where eq<`a> {
-    fn infix < (`a, `a) : bool
-    fn funcA (`a) : `a
+    func infix < (`a, `a) : bool
+    func funcA (`a) : `a
 }
 ```
 This class definition define a class "ord" taking
@@ -71,17 +71,17 @@ a type variable "\`a" which is a member of the class "eq".
 ### Class Instance Declaration
 
 ```
-$INST := inst $PRED $PREDS? { $DEFUNS }
+$INST := instance $PRED $PREDS? { $DEFUNS }
 ```
 
 Example:
 ```
-inst ord<u32> {
-    fn infix < (x, y) { ltU32(x, y) }
+instance ord<u32> {
+    func infix < (x, y) { ltU32(x, y) }
 }
 
-inst ord<either `a> where ord<'a> {
-    fn infix < (x, y) {
+instance ord<either `a> where ord<'a> {
+    func infix < (x, y) {
         match (x, y) {
         just a, just b:
             lt(a, b)
@@ -130,7 +130,7 @@ $TVARS := <$TVARKINDS>
 ### Type
 
 ```
-$TYPE := $IDTVAR <$TYPES>? | fn ( $TYPES? ) $TYPESPEC | ( $TYPES? )
+$TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? )
 $IDTVAR := $ID | $TVAR
 $TYPES := $TYPE | $TYPE , $TYPES
 ```
@@ -164,7 +164,7 @@ type foo { bar : { x | y } |
 ## Function Definition
 
 ```
-$DEFUN := fn $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
+$DEFUN := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
 $DEFUNS := $DEFUN | $DEFUNS $SEP $DEFUN
 $ARGS := $ARG | $ARG , $ARGS
 $ARG := $ID $TYPESPEC?
@@ -172,7 +172,7 @@ $RETTYPE := : $TYPE
 ```
 
 ```
-fn myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
+func myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
 ```
 
 ## Expression
