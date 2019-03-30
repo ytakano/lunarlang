@@ -1,0 +1,20 @@
+;; Emacs package system
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))
+(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t)
+(package-initialize)
+
+(setq redisplay-dont-pause nil)
+
+;; show line and column numbers
+(line-number-mode t)
+(column-number-mode t)
+
+;; highlight selected area
+(setq-default transient-mark-mode t)
+
+;; Lunarlang
+(add-to-list
+ 'load-path
+ (expand-file-name "/lunarlang/site-lisp"))
+(require 'lunar-mode)

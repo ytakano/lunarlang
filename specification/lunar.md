@@ -141,24 +141,18 @@ $TYPES := $TYPE | $TYPE , $TYPES
 $TYPESPEC := : $TYPE
 ```
 
-### User Defined Type
+### Struct and Union
 
 ```
-$DEFTYPE := type $ID $TVARKINDSP? { $INTYPE }
-$INTYPE := $SUM | $PROD
-$SUM := $SUMTYPE | $SUMTYPE "|" $SUM
-$SUMTYPE := $ID | $ID $TYPESPEC | $ID : { $INTYPE }
-$PROD := $PRODTYPE | $PRODTYPE , $PROD
-$PRODTYPE := $ID $TYPESPEC | $ID : { $INTYPE }
+$STRUCT := struct $ID $TVARKINDSP? { $PROD }
+$PROD := $PRODTYPE | $PRODTYPE $SEP $PROD
+$PRODTYPE := $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
 ```
 
 ```
-type foo { x | y }
-
-type foo <`a, `b> { x : `a , y : `b }
-
-type foo { bar : { x | y } |
-           z : bool }
+$UNION := struct $ID $TVARSKINDSP? { $SUM }
+$SUM := $SUMTYPE | $SUMTYPE $SEP $SUM
+$SUMTYPE := $ID | $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
 ```
 
 ## Function Definition

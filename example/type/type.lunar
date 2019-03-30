@@ -1,0 +1,29 @@
+union t0 {
+    a : struct {
+        x : u32
+        y : u32
+    }
+    b : struct {
+        z : bool
+        w : u64
+    }
+}
+
+struct t1 {
+    x : u32
+    y : bool
+    z : union {
+        v0
+        v1
+    }
+}
+
+union either<`a, `b> {
+    left : `a
+    right : `b
+}
+
+unon maybe<`a> {
+    just : `a
+    nothing
+}
