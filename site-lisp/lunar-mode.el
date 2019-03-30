@@ -4,7 +4,7 @@
       '(("//.*" . font-lock-comment-face)
 	("`\\<\\w+\\>" . font-lock-variable-name-face)
 	("\\<\\(bool\\|u64\\|s64\\|u32\\|s32\\|u16\\|s16\\|u8\\|s8\\)\\>" . font-lock-type-face)
-	("\\<\\(class\\|where\\|func\\|infix\\|instance\\|let\\|in\\|if\\|elif\\|else\\|match\\|struct\\|union\\)\\>" . font-lock-keyword-face)
+	("\\<\\(class\\|require\\|func\\|infix\\|instance\\|let\\|in\\|if\\|elif\\|else\\|match\\|struct\\|union\\)\\>" . font-lock-keyword-face)
         ("\\<\\(true\\|false\\)\\>" . font-lock-constant-face)))
 
 (define-derived-mode lunar-mode prog-mode "lunar"

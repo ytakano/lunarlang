@@ -481,13 +481,13 @@ ptr_ast_pred module::parse_pred() {
     return ret;
 }
 
-// $PREDS := where $PREDS_
+// $PREDS := require $PREDS_
 // $PREDS_ := $PRED | $PRED, $PRED
 ptr_ast_preds module::parse_preds() {
     auto ret = std::make_unique<ast_preds>();
 
     ret->set_pos(m_parsec);
-    PARSESTR("where", m_parsec);
+    PARSESTR("require", m_parsec);
     SPACEPLUS();
 
     for (;;) {
@@ -509,7 +509,7 @@ ptr_ast_preds module::parse_preds() {
     return ret;
 }
 
-// $CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
+// $CLASSDECL := class $ID $TVARS $PREDS? { $INTERFACES $WHITESPACE3* }
 ptr_ast_class module::parse_class() {
     SPACEPLUS();
 
@@ -1926,7 +1926,7 @@ void ast_instance::print() {
     m_pred->print();
 
     if (m_preds) {
-        std::cout << ",\"where\":";
+        std::cout << ",\"require\":";
         m_preds->print();
     }
 

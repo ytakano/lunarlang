@@ -25,7 +25,7 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 ## Reserved Words
 
 ```
-$RESERVED := class | type | if | let | instance | where | func |
+$RESERVED := class | type | if | let | instance | require | func |
              match | module | import | return | as |
              infix | $INFIX
 ```
@@ -52,7 +52,7 @@ $IDS := $ID | $ID , $IDS
 ### Class Declaration
 
 ```
-$CLASSDECL := class $ID $TVARKINDSP $PREDS? { $INTERFACES $WHITESPACE3* }
+$CLASSDECL := class $ID $TVARS $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
 $INTERFACE := func $INTNAME ( $TYPES ) $TYPESPEC
 $INTNAME := $ID | infix $INFIX
@@ -60,7 +60,7 @@ $INTNAME := $ID | infix $INFIX
 
 Example:
 ```
-class ord<`a> where eq<`a> {
+class ord<`a> require eq<`a> {
     func infix < (`a, `a) : bool
     func funcA (`a) : `a
 }
@@ -80,7 +80,7 @@ instance ord<u32> {
     func infix < (x, y) { ltU32(x, y) }
 }
 
-instance ord<either `a> where ord<'a> {
+instance ord<either `a> require ord<'a> {
     func infix < (x, y) {
         match (x, y) {
         just a, just b:
@@ -96,14 +96,14 @@ instance ord<either `a> where ord<'a> {
 
 A predicate asserts <$TYPES> is a member of the class named by $ID.
 ```
-$PREDS := where $PREDS_
+$PREDS := require $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
 $PRED := $ID <$TYPES>
 ```
 
 Example:
 ```
-where ord<`a>, eq<`b>
+require ord<`a>, eq<`b>
 ```
 This predicate assert \`a and \`b are members of ord and eq classes,
 respectively.
@@ -144,13 +144,13 @@ $TYPESPEC := : $TYPE
 ### Struct and Union
 
 ```
-$STRUCT := struct $ID $TVARKINDSP? { $PROD }
+$STRUCT := struct $ID $TVARS? $PREDS? { $PROD }
 $PROD := $PRODTYPE | $PRODTYPE $SEP $PROD
 $PRODTYPE := $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
 ```
 
 ```
-$UNION := struct $ID $TVARSKINDSP? { $SUM }
+$UNION := struct $ID $TVARS? $PREDS?  { $SUM }
 $SUM := $SUMTYPE | $SUMTYPE $SEP $SUM
 $SUMTYPE := $ID | $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
 ```
@@ -166,7 +166,7 @@ $RETTYPE := : $TYPE
 ```
 
 ```
-func myfun (x : `a, y : `b) : `a where num<`a>, bool<`b> { x }
+func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
 ```
 
 ## Expression

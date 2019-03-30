@@ -23,7 +23,7 @@ union either<`a, `b> {
     right : `b
 }
 
-unon maybe<`a> {
+union maybe<`a> {
     just : `a
     nothing
 }

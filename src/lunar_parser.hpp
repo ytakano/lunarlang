@@ -145,6 +145,8 @@ struct ast_type : public ast {
         TYPE_NORMAL,
         TYPE_FUN,
         TYPE_TUPLE,
+        TYPE_STRUCT,
+        TYPE_UNION,
     };
 
     type m_type;
@@ -521,12 +523,36 @@ struct ast_instance : public ast {
 
     virtual void print();
 
-    ptr_ast_pred m_pred;
-    ptr_ast_preds m_preds;
+    ptr_ast_pred m_pred;   // argument
+    ptr_ast_preds m_preds; // requirements
     std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
 };
 
 typedef std::unique_ptr<ast_instance> ptr_ast_instance;
+
+struct ast_struct : public ast_type {
+    ast_struct() { m_type = TYPE_STRUCT; }
+    virtual ~ast_struct() {}
+
+    virtual void print(){};
+
+    ptr_ast_id m_id;
+    ptr_ast_preds m_preds; // requirements
+};
+
+typedef std::unique_ptr<ast_struct> ptr_ast_struct;
+
+struct ast_union : public ast_type {
+    ast_union() { m_type = TYPE_UNION; }
+    virtual ~ast_union() {}
+
+    virtual void print(){};
+
+    ptr_ast_id m_id;
+    ptr_ast_preds m_preds; // requirements
+};
+
+typedef std::unique_ptr<ast_union> ptr_ast_union;
 
 class parser;
 
