@@ -150,7 +150,7 @@ $PRODTYPE := $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
 ```
 
 ```
-$UNION := struct $ID $TVARS? $PREDS?  { $SUM }
+$UNION := struct $ID $TVARS? $PREDS? { $SUM }
 $SUM := $SUMTYPE | $SUMTYPE $SEP $SUM
 $SUMTYPE := $ID | $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
 ```

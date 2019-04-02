@@ -1267,6 +1267,24 @@ ptr_ast_defvars module::parse_defvars() {
     return nullptr;
 }
 
+// $PROD
+ptr_ast_member module::parse_prod() { return nullptr; }
+
+// $SUM
+ptr_ast_member module::parse_sum() { return nullptr; }
+
+// { $PROD }
+ptr_ast_members module::parse_prods() { return nullptr; }
+
+// { $SUM }
+ptr_ast_members module::parse_sums() { return nullptr; }
+
+// $STRUCT := struct $ID $TVARS? $PREDS? { $PROD }
+ptr_ast_struct module::parse_struct() { return nullptr; }
+
+// $UNION := union $ID $TVARS? $PREDS? { $SUM }
+ptr_ast_union module::parse_union() { return nullptr; }
+
 // $EXPRS := $EXPR | $EXPR $SEP $EXPR
 ptr_ast_exprs module::parse_exprs() {
     auto ret = std::make_unique<ast_exprs>();

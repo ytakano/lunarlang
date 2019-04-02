@@ -43,6 +43,8 @@ struct ast {
         AST_DEFVARS,    // variable definitions
         AST_DICTELM,    // element of dictionary
         AST_INSTANCE,   // instance
+        AST_MEMBER,     // variable definition in structure or union
+        AST_MEMBERS,    // variable definition in structure or union
     };
 
     std::size_t m_line;
@@ -530,6 +532,29 @@ struct ast_instance : public ast {
 
 typedef std::unique_ptr<ast_instance> ptr_ast_instance;
 
+struct ast_member : public ast {
+    ast_member() { m_asttype = AST_MEMBER; }
+    virtual ~ast_member() {}
+
+    virtual void ast_member(){};
+
+    ptr_ast_id m_id;
+    ptr_ast_type m_type;
+};
+
+typedef std::unique_ptr<ast_member> ptr_ast_member;
+
+struct ast_members : public ast {
+    ast_members() { m_asttype = AST_MEMBERS; }
+    virtual ~ast_members() {}
+
+    virtual void ast_members(){};
+
+    std::vector<ptr_ast_member> m_vars;
+};
+
+typedef std::unique_ptr<ast_members> ptr_ast_members;
+
 struct ast_struct : public ast_type {
     ast_struct() { m_type = TYPE_STRUCT; }
     virtual ~ast_struct() {}
@@ -538,6 +563,7 @@ struct ast_struct : public ast_type {
 
     ptr_ast_id m_id;
     ptr_ast_preds m_preds; // requirements
+    ptr_ast_members m_members;
 };
 
 typedef std::unique_ptr<ast_struct> ptr_ast_struct;
@@ -550,6 +576,7 @@ struct ast_union : public ast_type {
 
     ptr_ast_id m_id;
     ptr_ast_preds m_preds; // requirements
+    ptr_ast_members m_members;
 };
 
 typedef std::unique_ptr<ast_union> ptr_ast_union;
@@ -605,6 +632,12 @@ class module {
     ptr_ast_num parse_num();
     ptr_ast_infix parse_binop();
     ptr_ast_instance parse_instance();
+    ptr_ast_member parse_prod();
+    ptr_ast_member parse_sum();
+    ptr_ast_members parse_prods();
+    ptr_ast_members parse_sums();
+    ptr_ast_struct parse_struct();
+    ptr_ast_union parse_union();
     void parse_spaces();
     void parse_spaces_sep();
     bool parse_spaces_plus();
