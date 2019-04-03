@@ -536,7 +536,7 @@ struct ast_member : public ast {
     ast_member() { m_asttype = AST_MEMBER; }
     virtual ~ast_member() {}
 
-    virtual void ast_member(){};
+    virtual void print();
 
     ptr_ast_id m_id;
     ptr_ast_type m_type;
@@ -548,7 +548,7 @@ struct ast_members : public ast {
     ast_members() { m_asttype = AST_MEMBERS; }
     virtual ~ast_members() {}
 
-    virtual void ast_members(){};
+    virtual void print();
 
     std::vector<ptr_ast_member> m_vars;
 };
@@ -559,7 +559,7 @@ struct ast_struct : public ast_type {
     ast_struct() { m_type = TYPE_STRUCT; }
     virtual ~ast_struct() {}
 
-    virtual void print(){};
+    virtual void print();
 
     ptr_ast_id m_id;
     ptr_ast_preds m_preds; // requirements
@@ -638,6 +638,7 @@ class module {
     ptr_ast_members parse_sums();
     ptr_ast_struct parse_struct();
     ptr_ast_union parse_union();
+    bool parse_st_un(const char *str);
     void parse_spaces();
     void parse_spaces_sep();
     bool parse_spaces_plus();

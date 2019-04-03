@@ -1267,8 +1267,63 @@ ptr_ast_defvars module::parse_defvars() {
     return nullptr;
 }
 
-// $PROD
-ptr_ast_member module::parse_prod() { return nullptr; }
+bool module::parse_st_un(const char *str) {
+    std::string s;
+    PTRY(m_parsec, s, [](module &m, const char *p) {
+        auto ret = m.m_parsec.str(p);
+        m.parse_spaces();
+        m.m_parsec.character('{');
+        return ret;
+    }(*this, str));
+
+    return !m_parsec.is_fail();
+}
+
+// $PROD := $PRODTYPE | $PRODTYPE $SEP $PROD
+// $PRODTYPE := $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
+ptr_ast_member module::parse_prod() {
+    auto mem = std::make_unique<ast_member>();
+    mem->m_line = m_parsec.get_line();
+    mem->m_column = m_parsec.get_column();
+    PARSEID(mem->m_id, m_parsec);
+
+    parse_spaces();
+
+    PARSECHAR(':', m_parsec);
+
+    parse_spaces();
+
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
+    if (parse_st_un("struct")) {
+        // parse anonymous struct
+        auto st = std::make_unique<ast_struct>();
+        st->m_members = parse_prods();
+        if (!st->m_members)
+            return nullptr;
+
+        st->m_line = line;
+        st->m_column = column;
+        mem->m_type = std::move(st);
+    } else if (parse_st_un("union")) {
+        // parse anonymous union
+        auto un = std::make_unique<ast_union>();
+        un->m_members = parse_sums();
+        if (!un->m_members)
+            return nullptr;
+
+        un->m_line = line;
+        un->m_column = column;
+        mem->m_type = std::move(un);
+    } else {
+        // TODO: ( $TYPES? ) should be avoided
+        mem->m_type = parse_type();
+        if (!mem->m_type)
+            return nullptr;
+    }
+
+    return mem;
+}
 
 // $SUM
 ptr_ast_member module::parse_sum() { return nullptr; }
@@ -1959,5 +2014,11 @@ void ast_instance::print() {
 
     std::cout << "]}}";
 }
+
+void ast_member::print() {}
+
+void ast_members::print() {}
+
+void ast_struct::print() {}
 
 } // namespace lunar
