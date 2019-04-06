@@ -193,6 +193,26 @@ bool module::parse() {
 
             // TODO: check multiply defined
             m_id2class[cls->m_id->m_id] = std::move(cls);
+        } else if (id->m_id == "struct") {
+            auto st = parse_struct();
+            if (!st)
+                return false;
+
+            st->m_line = id->m_line;
+            st->m_column = id->m_column;
+
+            // TODO: check multiply defined
+            m_id2struct[st->m_id->m_id] = std::move(st);
+        } else if (id->m_id == "union") {
+            auto un = parse_union();
+            if (!un)
+                return false;
+
+            un->m_line = id->m_line;
+            un->m_column = id->m_column;
+
+            // TODO: check multiply defined
+            m_id2union[un->m_id->m_id] = std::move(un);
         }
     }
 
@@ -340,9 +360,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
         auto ret = std::make_unique<ast_normaltype>();
         PARSETVAR(ret->m_id, m_parsec);
 
-        parse_spaces();
-        if (!parse_arg_types(ret->m_args))
-            return nullptr;
+        parse_arg_types(ret->m_args);
 
         return ret;
     }
@@ -402,9 +420,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             auto ret = std::make_unique<ast_normaltype>();
             ret->m_id = std::move(id);
 
-            parse_spaces();
-            if (!parse_arg_types(ret->m_args))
-                return nullptr;
+            parse_arg_types(ret->m_args);
 
             return ret;
         }
@@ -416,7 +432,11 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
 // <$TYPES>?
 bool module::parse_arg_types(ptr_ast_types &types) {
     char c;
-    PTRY(m_parsec, c, m_parsec.character('<'));
+    PTRY(m_parsec, c, [](module &m) {
+        m.parse_spaces();
+        return m.m_parsec.character('<');
+    }(*this));
+
     if (m_parsec.is_fail())
         return true;
 
@@ -1339,10 +1359,11 @@ ptr_ast_member module::parse_sum() {
     mem->m_column = m_parsec.get_column();
     PARSEID(mem->m_id, m_parsec);
 
-    parse_spaces();
-
     char c;
-    PTRY(m_parsec, c, m_parsec.character(':'));
+    PTRY(m_parsec, c, [](module &m) {
+        m.parse_spaces();
+        return m.m_parsec.character(':');
+    }(*this));
     if (m_parsec.is_fail())
         return mem;
 
@@ -1389,7 +1410,7 @@ ptr_ast_members module::parse_sums() { PARSE_MEMBERS(parse_sum); }
         auto ret = std::make_unique<T>();                                      \
         SPACEPLUS();                                                           \
         PARSEID(ret->m_id, m_parsec);                                          \
-        SPACEPLUS();                                                           \
+        parse_spaces();                                                        \
                                                                                \
         char c;                                                                \
         PEEK(c, m_parsec);                                                     \
@@ -1397,9 +1418,9 @@ ptr_ast_members module::parse_sums() { PARSE_MEMBERS(parse_sum); }
             ret->m_tvars = parse_tvars();                                      \
             if (!ret->m_tvars)                                                 \
                 return nullptr;                                                \
+            parse_spaces();                                                    \
         }                                                                      \
                                                                                \
-        SPACEPLUS();                                                           \
         PTRY(m_parsec, c, m_parsec.character('{'));                            \
         if (m_parsec.is_fail()) {                                              \
             ret->m_preds = parse_preds();                                      \
@@ -1735,6 +1756,28 @@ void module::print() {
     for (auto &p : m_id2defun) {
         p.second->print();
         if (n < m_id2defun.size())
+            std::cout << ",";
+
+        n++;
+    }
+
+    std::cout << "],\"structs\":[";
+
+    n = 1;
+    for (auto &p : m_id2struct) {
+        p.second->print();
+        if (n < m_id2struct.size())
+            std::cout << ",";
+
+        n++;
+    }
+
+    std::cout << "],\"unions\":[";
+
+    n = 1;
+    for (auto &p : m_id2union) {
+        p.second->print();
+        if (n < m_id2union.size())
             std::cout << ",";
 
         n++;
@@ -2098,10 +2141,43 @@ void ast_instance::print() {
     std::cout << "]}}";
 }
 
-void ast_member::print() {}
+void ast_member::print() {
+    std::cout << "{\"id\":";
+    m_id->print();
+    if (m_type) {
+        std::cout << ",\"type\":";
+        m_type->print();
+    }
+    std::cout << "}";
+}
 
-void ast_members::print() {}
+void ast_members::print() { PRINTLIST(m_vars); }
 
-void ast_struct::print() {}
+#define PRINTSTUN(STR)                                                         \
+    do {                                                                       \
+        std::cout << "{\"" STR "\":{";                                         \
+        if (m_id) {                                                            \
+            std::cout << "\"id\":";                                            \
+            m_id->print();                                                     \
+            std::cout << ",";                                                  \
+        }                                                                      \
+        if (m_tvars) {                                                         \
+            std::cout << "\"type arguments\":";                                \
+            m_tvars->print();                                                  \
+            std::cout << ",";                                                  \
+        }                                                                      \
+        if (m_preds) {                                                         \
+            std::cout << "\"type arguments\":";                                \
+            m_preds->print();                                                  \
+            std::cout << ",";                                                  \
+        }                                                                      \
+        std::cout << "\"members\":";                                           \
+        m_members->print();                                                    \
+        std::cout << "}}";                                                     \
+    } while (0)
+
+void ast_struct::print() { PRINTSTUN("struct"); }
+
+void ast_union::print() { PRINTSTUN("union"); }
 
 } // namespace lunar

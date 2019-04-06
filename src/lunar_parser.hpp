@@ -573,7 +573,7 @@ struct ast_union : public ast_type {
     ast_union() { m_type = TYPE_UNION; }
     virtual ~ast_union() {}
 
-    virtual void print(){};
+    virtual void print();
 
     ptr_ast_id m_id;
     ptr_ast_tvars m_tvars; // type arguments
@@ -600,6 +600,8 @@ class module {
     parser &m_parser;
     std::unordered_map<std::string, ptr_ast_class> m_id2class;
     std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
+    std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
+    std::unordered_map<std::string, ptr_ast_union> m_id2union;
     std::unordered_multimap<std::string, ptr_ast_instance> m_id2inst;
 
     ptr_ast_class parse_class();
