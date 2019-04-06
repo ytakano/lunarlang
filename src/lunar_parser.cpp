@@ -1267,6 +1267,7 @@ ptr_ast_defvars module::parse_defvars() {
     return nullptr;
 }
 
+// $STR {
 bool module::parse_st_un(const char *str) {
     std::string s;
     PTRY(m_parsec, s, [](module &m, const char *p) {
@@ -1277,6 +1278,35 @@ bool module::parse_st_un(const char *str) {
     }(*this, str));
 
     return !m_parsec.is_fail();
+}
+
+// $TYPESPEC | struct { $PROD } | union { $SUM }
+ptr_ast_type module::parse_member_type() {
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
+    if (parse_st_un("struct")) {
+        // parse anonymous struct
+        auto st = std::make_unique<ast_struct>();
+        st->m_members = parse_prods();
+        if (!st->m_members)
+            return nullptr;
+
+        st->m_line = line;
+        st->m_column = column;
+        return st;
+    } else if (parse_st_un("union")) {
+        // parse anonymous union
+        auto un = std::make_unique<ast_union>();
+        un->m_members = parse_sums();
+        if (!un->m_members)
+            return nullptr;
+
+        un->m_line = line;
+        un->m_column = column;
+        return un;
+    } else {
+        return parse_type();
+    }
 }
 
 // $PROD := $PRODTYPE | $PRODTYPE $SEP $PROD
@@ -1293,52 +1323,103 @@ ptr_ast_member module::parse_prod() {
 
     parse_spaces();
 
-    auto line = m_parsec.get_line();
-    auto column = m_parsec.get_column();
-    if (parse_st_un("struct")) {
-        // parse anonymous struct
-        auto st = std::make_unique<ast_struct>();
-        st->m_members = parse_prods();
-        if (!st->m_members)
-            return nullptr;
-
-        st->m_line = line;
-        st->m_column = column;
-        mem->m_type = std::move(st);
-    } else if (parse_st_un("union")) {
-        // parse anonymous union
-        auto un = std::make_unique<ast_union>();
-        un->m_members = parse_sums();
-        if (!un->m_members)
-            return nullptr;
-
-        un->m_line = line;
-        un->m_column = column;
-        mem->m_type = std::move(un);
-    } else {
-        // TODO: ( $TYPES? ) should be avoided
-        mem->m_type = parse_type();
-        if (!mem->m_type)
-            return nullptr;
-    }
+    mem->m_type = parse_member_type();
+    if (!mem->m_type)
+        return nullptr;
 
     return mem;
 }
 
-// $SUM
-ptr_ast_member module::parse_sum() { return nullptr; }
+// $SUM := $SUMTYPE | $SUMTYPE $SEP $SUM
+// $SUMTYPE := $ID | $ID $TYPESPEC |
+//             $ID : struct { $PROD } | $ID : union { $SUM }
+ptr_ast_member module::parse_sum() {
+    auto mem = std::make_unique<ast_member>();
+    mem->m_line = m_parsec.get_line();
+    mem->m_column = m_parsec.get_column();
+    PARSEID(mem->m_id, m_parsec);
 
-// { $PROD }
-ptr_ast_members module::parse_prods() { return nullptr; }
+    parse_spaces();
 
-// { $SUM }
-ptr_ast_members module::parse_sums() { return nullptr; }
+    char c;
+    PTRY(m_parsec, c, m_parsec.character(':'));
+    if (m_parsec.is_fail())
+        return mem;
+
+    parse_spaces();
+
+    mem->m_type = parse_member_type();
+    if (!mem->m_type)
+        return nullptr;
+
+    return mem;
+}
+
+#define PARSE_MEMBERS(F)                                                       \
+    do {                                                                       \
+        auto ret = std::make_unique<ast_members>();                            \
+        parse_spaces();                                                        \
+        for (;;) {                                                             \
+            auto p = F();                                                      \
+            if (!p)                                                            \
+                return nullptr;                                                \
+                                                                               \
+            ret->m_vars.push_back(std::move(p));                               \
+            char c;                                                            \
+            PTRY(m_parsec, c, [](module &m) {                                  \
+                m.parse_spaces_sep();                                          \
+                return m.m_parsec.character('}');                              \
+            }(*this));                                                         \
+            if (!m_parsec.is_fail())                                           \
+                break;                                                         \
+            if (!parse_sep())                                                  \
+                return nullptr;                                                \
+        }                                                                      \
+        return ret;                                                            \
+    } while (0)
+
+// $PROD }
+ptr_ast_members module::parse_prods() { PARSE_MEMBERS(parse_prod); }
+
+// $SUM }
+ptr_ast_members module::parse_sums() { PARSE_MEMBERS(parse_sum); }
+
+#define PARSEUTYPE(T, F)                                                       \
+    do {                                                                       \
+        auto ret = std::make_unique<T>();                                      \
+        SPACEPLUS();                                                           \
+        PARSEID(ret->m_id, m_parsec);                                          \
+        SPACEPLUS();                                                           \
+                                                                               \
+        char c;                                                                \
+        PEEK(c, m_parsec);                                                     \
+        if (c == '<') {                                                        \
+            ret->m_tvars = parse_tvars();                                      \
+            if (!ret->m_tvars)                                                 \
+                return nullptr;                                                \
+        }                                                                      \
+                                                                               \
+        SPACEPLUS();                                                           \
+        PTRY(m_parsec, c, m_parsec.character('{'));                            \
+        if (m_parsec.is_fail()) {                                              \
+            ret->m_preds = parse_preds();                                      \
+            if (!ret->m_preds)                                                 \
+                return nullptr;                                                \
+            parse_spaces();                                                    \
+            PARSECHAR('{', m_parsec);                                          \
+        }                                                                      \
+                                                                               \
+        ret->m_members = F();                                                  \
+        if (!ret->m_members)                                                   \
+            return nullptr;                                                    \
+        return ret;                                                            \
+    } while (0)
 
 // $STRUCT := struct $ID $TVARS? $PREDS? { $PROD }
-ptr_ast_struct module::parse_struct() { return nullptr; }
+ptr_ast_struct module::parse_struct() { PARSEUTYPE(ast_struct, parse_prods); }
 
 // $UNION := union $ID $TVARS? $PREDS? { $SUM }
-ptr_ast_union module::parse_union() { return nullptr; }
+ptr_ast_union module::parse_union() { PARSEUTYPE(ast_union, parse_sums); }
 
 // $EXPRS := $EXPR | $EXPR $SEP $EXPR
 ptr_ast_exprs module::parse_exprs() {
@@ -1543,6 +1624,7 @@ bool module::parse_sep() {
     return true;
 }
 
+// skip spaces and comments
 void module::parse_spaces() {
     for (;;) {
         m_parsec.spaces();
@@ -1558,6 +1640,7 @@ void module::parse_spaces() {
     }
 }
 
+// skip spaces, comments, and ;
 void module::parse_spaces_sep() {
     std::string tmp;
 

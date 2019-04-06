@@ -562,6 +562,7 @@ struct ast_struct : public ast_type {
     virtual void print();
 
     ptr_ast_id m_id;
+    ptr_ast_tvars m_tvars; // type arguments
     ptr_ast_preds m_preds; // requirements
     ptr_ast_members m_members;
 };
@@ -575,6 +576,7 @@ struct ast_union : public ast_type {
     virtual void print(){};
 
     ptr_ast_id m_id;
+    ptr_ast_tvars m_tvars; // type arguments
     ptr_ast_preds m_preds; // requirements
     ptr_ast_members m_members;
 };
@@ -638,6 +640,7 @@ class module {
     ptr_ast_members parse_sums();
     ptr_ast_struct parse_struct();
     ptr_ast_union parse_union();
+    ptr_ast_type parse_member_type();
     bool parse_st_un(const char *str);
     void parse_spaces();
     void parse_spaces_sep();
