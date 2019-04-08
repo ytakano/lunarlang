@@ -13,6 +13,9 @@
 ;; highlight selected area
 (setq-default transient-mark-mode t)
 
+;; show mathced parenthesis
+(show-paren-mode t)
+
 ;; Lunarlang
 (add-to-list
  'load-path

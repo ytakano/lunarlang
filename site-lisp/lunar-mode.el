@@ -31,6 +31,15 @@
   (interactive)
   (print (lunar-indent-num)))
 
+(defun lunar-backward ()
+  (interactive)
+  (catch 'exit
+    (while t
+      (forward-line -1)
+      (if (or (not (string= (thing-at-point `line t) "\n"))
+	      (bobp))
+	  (throw 'exit "exit loop")))))
+
 (defun lunar-indent-line ()
   (interactive)
   (beginning-of-line)
@@ -39,7 +48,7 @@
     (let ((indent-num 0))
       (progn
 	(save-excursion
-	  (forward-line -1)
+	  (lunar-backward)
 	  (setq indent-num (+ (current-indentation)
 			      (* tab-width (lunar-indent-num))))
 	  (if (looking-at "[ \t]*[})]")
