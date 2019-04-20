@@ -130,7 +130,8 @@ $TVARS := <$TVARKINDS>
 ### Type
 
 ```
-$TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? )
+$TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? ) | [ $TYPE $ARRNUM? ]
+$ARRNUM := * $EXPR
 $IDTVAR := $ID | $TVAR
 $TYPES := $TYPE | $TYPE , $TYPES
 ```

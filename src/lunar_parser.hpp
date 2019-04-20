@@ -149,6 +149,7 @@ struct ast_type : public ast {
         TYPE_TUPLE,
         TYPE_STRUCT,
         TYPE_UNION,
+        TYPE_VEC,
     };
 
     type m_type;
@@ -185,6 +186,19 @@ struct ast_tupletype : public ast_type {
     virtual void print();
 
     ptr_ast_types m_types;
+};
+
+class ast_expr;
+typedef std::unique_ptr<ast_expr> ptr_ast_expr;
+
+struct ast_vectype : public ast_type {
+    ast_vectype() { m_type = TYPE_VEC; }
+    virtual ~ast_vectype() {}
+
+    virtual void print();
+
+    ptr_ast_type m_vectype;
+    ptr_ast_expr m_expr;
 };
 
 struct ast_types : public ast {
@@ -319,8 +333,6 @@ struct ast_expr : public ast {
 
     ETYPE m_exprtype;
 };
-
-typedef std::unique_ptr<ast_expr> ptr_ast_expr;
 
 struct ast_exprs : public ast_expr {
     ast_exprs() { m_exprtype = EXPRS; }

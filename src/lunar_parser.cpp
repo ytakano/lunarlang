@@ -347,7 +347,9 @@ ptr_ast_tvars module::parse_tvars() {
     return tvars;
 }
 
-// $TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? )
+// $TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC |
+//          ( $TYPES? ) | [ $TYPE $ARRNUM? ]
+// $ARRNUM := * $EXPR
 // $IDTVAR := $ID | $TVAR
 // $TYPESPEC := : $TYPE
 ptr_ast_type module::parse_type(bool is_funret = false) {
@@ -376,6 +378,32 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
                 return nullptr;
             parse_spaces();
             PARSECHAR(')', m_parsec);
+        }
+
+        return ret;
+    }
+    case '[': {
+        // [ $TYPE $ARRNUM? ]
+        m_parsec.any();
+        parse_spaces();
+        auto ret = std::make_unique<ast_vectype>();
+
+        ret->m_vectype = parse_type();
+        if (!ret->m_vectype)
+            return nullptr;
+
+        parse_spaces();
+        PTRY(m_parsec, c, m_parsec.character(']'));
+        if (m_parsec.is_fail()) {
+            // * $EXPR
+            PARSECHAR('*', m_parsec);
+            parse_spaces();
+            ret->m_expr = parse_expr();
+            if (!ret->m_expr)
+                return nullptr;
+
+            parse_spaces();
+            PARSECHAR(']', m_parsec);
         }
 
         return ret;
@@ -420,7 +448,8 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             auto ret = std::make_unique<ast_normaltype>();
             ret->m_id = std::move(id);
 
-            parse_arg_types(ret->m_args);
+            if (!parse_arg_types(ret->m_args))
+                return nullptr;
 
             return ret;
         }
@@ -1863,6 +1892,16 @@ void ast_funtype::print() {
 void ast_tupletype::print() {
     std::cout << "{\"type\": \"tuple\",\"types\":";
     m_types->print();
+    std::cout << "}";
+}
+
+void ast_vectype::print() {
+    std::cout << "{\"type\": \"vector\",\"vector type\":";
+    m_vectype->print();
+    if (m_expr) {
+        std::cout << ",\"expression:\"";
+        m_expr->print();
+    }
     std::cout << "}";
 }
 
