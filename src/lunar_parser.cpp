@@ -110,6 +110,9 @@ parser::parser() {
     m_wsp3.insert('\n');
     m_wsp3.insert(';');
 
+    m_prefix.insert('-');
+    m_prefix.insert('*');
+
     m_infix.insert('+');
     m_infix.insert('-');
     m_infix.insert('<');
@@ -793,29 +796,69 @@ ptr_ast_arg module::parse_arg() {
     return ret;
 }
 
-// $EXPR0 := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
-//          { $EXPRS } | $LITERALS
+ptr_ast_prefix module::parse_prefix() {
+    char c;
+
+    auto line = m_parsec.get_line();
+    auto column = m_parsec.get_column();
+    PTRY(m_parsec, c, m_parsec.oneof(m_parser.m_prefix));
+    if (!m_parsec.is_fail()) {
+        auto ret = std::make_unique<ast_prefix>(c);
+        ret->m_line = line;
+        ret->m_column = column;
+        return ret;
+    }
+
+    return nullptr;
+}
+
+// $EXPR0 := $PREFIX? $EXPR0'
+// $EXPR0' := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
+//           { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
 ptr_ast_expr module::parse_expr0() {
+    auto prefix = parse_prefix();
+    if (prefix)
+        parse_spaces();
+
     char c;
     PEEK(c, m_parsec);
 
     switch (c) {
-    case '(':
+    case '(': {
         // ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? )
-        return parse_parentheses();
-    case '{':
+        auto ret = parse_parentheses();
+        if (ret)
+            ret->m_prefix = std::move(prefix);
+        return ret;
+    }
+    case '{': {
         // { $DICT } | { $EXPRS }
-        return parse_braces();
-    case '[':
+        auto ret = parse_braces();
+        if (ret)
+            ret->m_prefix = std::move(prefix);
+        return ret;
+    }
+    case '[': {
         // [ $EXPRS_? ]
-        return parse_brackets();
-    case '"':
-        return parse_str();
+        auto ret = parse_brackets();
+        if (ret)
+            ret->m_prefix = std::move(prefix);
+        return ret;
+    }
+    case '"': {
+        auto ret = parse_str();
+        if (ret)
+            ret->m_prefix = std::move(prefix);
+        return ret;
+    }
     }
 
     if ('0' <= c && c <= '9') {
         // number
-        return parse_num();
+        auto ret = parse_num();
+        if (ret)
+            ret->m_prefix = std::move(prefix);
+        return ret;
     }
 
     auto id = parse_id();
@@ -832,6 +875,7 @@ ptr_ast_expr module::parse_expr0() {
 
         ret->m_line = id->m_line;
         ret->m_column = id->m_column;
+        ret->m_prefix = std::move(prefix);
         return ret;
     } else if (id->m_id == "let") {
         // $LET
@@ -841,6 +885,7 @@ ptr_ast_expr module::parse_expr0() {
 
         ret->m_line = id->m_line;
         ret->m_column = id->m_column;
+        ret->m_prefix = std::move(prefix);
         return ret;
     } else {
         // $ID
@@ -848,6 +893,7 @@ ptr_ast_expr module::parse_expr0() {
         ret->m_line = id->m_line;
         ret->m_column = id->m_column;
         ret->m_id = std::move(id);
+        ret->m_prefix = std::move(prefix);
         return ret;
     }
 
@@ -1640,15 +1686,15 @@ ptr_ast_instance module::parse_instance() {
 // $WHITESPACE3 := space | tab | \r | \n | \r\n | ;
 // $SEP := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
 bool module::parse_sep() {
+    // $WHITESPACE2*
+    std::string tmp;
+    PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp2));
+
     // skip comment
     std::string s;
     PTRY(m_parsec, s, m_parsec.str("//"));
     if (!m_parsec.is_fail())
         PMANY(m_parsec, s, m_parsec.oneof_not(m_parser.m_newline));
-
-    // $WHITESPACE2*
-    std::string tmp;
-    PMANY(m_parsec, tmp, m_parsec.oneof(m_parser.m_wsp2));
 
     // $NEWLINE+
     tmp.clear();
@@ -1899,7 +1945,7 @@ void ast_vectype::print() {
     std::cout << "{\"type\": \"vector\",\"vector type\":";
     m_vectype->print();
     if (m_expr) {
-        std::cout << ",\"expression:\"";
+        std::cout << ",\"expression\":";
         m_expr->print();
     }
     std::cout << "}";
@@ -2003,7 +2049,20 @@ void ast_exprs::print() {
     std::cout << "}";
 }
 
-void ast_expr_id::print() { std::cout << "{\"id\":\"" << m_id->m_id << "\"}"; }
+#define PRINTPREFIX                                                            \
+    do {                                                                       \
+        if (m_prefix) {                                                        \
+            std::cout << "\"prefix\":\"";                                      \
+            m_prefix->print();                                                 \
+            std::cout << "\",";                                                \
+        }                                                                      \
+    } while (0)
+
+void ast_expr_id::print() {
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"id\":\"" << m_id->m_id << "\"}";
+}
 
 void ast_apply::print() {
     std::cout << "{\"apply\":{\"func\":";
@@ -2014,7 +2073,9 @@ void ast_apply::print() {
 }
 
 void ast_if::print() {
-    std::cout << "{\"if\":{\"condition\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"if\":{\"condition\":";
     m_cond->print();
     std::cout << ",\"then\":";
     m_then->print();
@@ -2074,7 +2135,9 @@ void ast_defvars::print() {
 }
 
 void ast_let::print() {
-    std::cout << "{\"let\":{\"defvars\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"let\":{\"defvars\":";
     m_defvars->print();
 
     if (m_in) {
@@ -2086,13 +2149,17 @@ void ast_let::print() {
 }
 
 void ast_tuple::print() {
-    std::cout << "{\"tuple\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"tuple\":";
     PRINTLIST(m_exprs);
     std::cout << "}";
 }
 
 void ast_vector::print() {
-    std::cout << "{\"vector\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"vector\":";
     PRINTLIST(m_exprs);
     std::cout << "}";
 }
@@ -2106,13 +2173,17 @@ void ast_dictelm::print() {
 }
 
 void ast_dict::print() {
-    std::cout << "{\"key\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"key\":";
     PRINTLIST(m_elms);
     std::cout << "}";
 }
 
 void ast_block::print() {
-    std::cout << "{\"block\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"block\":";
     PRINTLIST(m_exprs);
     std::cout << "}";
 }
@@ -2136,7 +2207,9 @@ void ast_binexpr::print() {
 }
 
 void ast_num::print() {
-    std::cout << "{\"number\":{\"type\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"number\":{\"type\":";
 
     switch (m_numtype) {
     case parsec::NUM_DOUBLE:
@@ -2151,10 +2224,16 @@ void ast_num::print() {
     std::cout << ",\"num\":\"" << m_num << "\"}}";
 }
 
-void ast_str::print() { std::cout << "{\"string\":\"" << m_str << "\"}"; }
+void ast_str::print() {
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"string\":\"" << m_str << "\"}";
+}
 
 void ast_parenthesis::print() {
-    std::cout << "{\"parenthesis\":";
+    std::cout << "{";
+    PRINTPREFIX;
+    std::cout << "\"parenthesis\":";
     m_expr->print();
     std::cout << "}";
 }
@@ -2218,5 +2297,7 @@ void ast_members::print() { PRINTLIST(m_vars); }
 void ast_struct::print() { PRINTSTUN("struct"); }
 
 void ast_union::print() { PRINTSTUN("union"); }
+
+void ast_prefix::print() { std::cout << m_prefix; }
 
 } // namespace lunar

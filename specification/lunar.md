@@ -174,12 +174,14 @@ func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
 
 ```
 $EXPR := $EXPR0 $EXPR' | $EXPR0 $EXPR' $INFIX+ $EXPR
-$EXPR0 := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
-          { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
+$EXPR0 := $PREFIX? $EXPR0'
+$EXPR0' := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
+           { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
 $EXPR' := ∅ | [ $EXPR ] $EXPR' | $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
 $EXPRS_ := $EXPR | $EXPR , $EXPR
 $LITERAL := $STR | $DECIMAL | $FLOAT
+$PREFIX := - | *
 ```
 
 ### Apply

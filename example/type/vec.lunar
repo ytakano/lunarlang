@@ -28,7 +28,7 @@ func g(val : s0) {
     val
 }
 
-func h(arg: weak<[u32, 3]>) {
+func h(arg: weak<[u32 * 3]>) {
     s0(*arg) // OK
     s0(arg)  // must be error
 }

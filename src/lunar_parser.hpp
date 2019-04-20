@@ -309,6 +309,17 @@ struct ast_defun : public ast {
 
 typedef std::unique_ptr<ast_defun> ptr_ast_defun;
 
+struct ast_prefix : public ast {
+    ast_prefix(char c) : m_prefix(c) {}
+    virtual ~ast_prefix() {}
+
+    virtual void print();
+
+    char m_prefix;
+};
+
+typedef std::unique_ptr<ast_prefix> ptr_ast_prefix;
+
 struct ast_expr : public ast {
     ast_expr() { m_asttype = AST_EXPR; }
     virtual ~ast_expr() {}
@@ -332,6 +343,7 @@ struct ast_expr : public ast {
     };
 
     ETYPE m_exprtype;
+    ptr_ast_prefix m_prefix;
 };
 
 struct ast_exprs : public ast_expr {
@@ -632,6 +644,7 @@ class module {
     ptr_ast_defun parse_defun(bool is_infix = false);
     ptr_ast_args parse_args();
     ptr_ast_arg parse_arg();
+    ptr_ast_prefix parse_prefix();
     ptr_ast_expr parse_expr0();
     ptr_ast_expr parse_expr();
     ptr_ast_expr parse_exprp(ptr_ast_expr lhs);
@@ -687,7 +700,9 @@ class parser {
     std::unordered_set<char> m_wsp3;
     std::unordered_set<char> m_newline;
     std::unordered_set<char> m_newline_sc;
+    std::unordered_set<char> m_prefix;
     std::unordered_set<char> m_infix;
+
     std::unordered_map<std::string, int> m_op2pri;
 
     friend class module;
