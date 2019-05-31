@@ -2,6 +2,7 @@
 #define LUNAR_PARSER_HPP
 
 #include "lunar_parsec.hpp"
+#include "lunar_type.hpp"
 
 #include <memory>
 #include <string>
@@ -343,6 +344,7 @@ struct ast_expr : public ast {
     };
 
     ETYPE m_exprtype;
+    shared_type m_type; // type of this expression
     ptr_ast_prefix m_prefix;
 };
 
@@ -617,6 +619,9 @@ class module {
 
     bool parse();
     void print();
+
+    std::vector<shared_typeclass> m_classes;
+    std::vector<shared_inst> m_instances;
 
   private:
     parsec m_parsec;

@@ -25,7 +25,7 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 ## Reserved Words
 
 ```
-$RESERVED := class | type | if | let | instance | require | func |
+$RESERVED := class | type | if | let | instance | implies | func |
              match | module | import | return | as |
              infix | $INFIX
 ```
@@ -60,7 +60,7 @@ $INTNAME := $ID | infix $INFIX
 
 Example:
 ```
-class ord<`a> require eq<`a> {
+class ord<`a> implies eq<`a> {
     func infix < (`a, `a) : bool
     func funcA (`a) : `a
 }
@@ -80,7 +80,7 @@ instance ord<u32> {
     func infix < (x, y) { ltU32(x, y) }
 }
 
-instance ord<either `a> require ord<'a> {
+instance ord<either `a> implies ord<'a> {
     func infix < (x, y) {
         match (x, y) {
         just a, just b:
@@ -96,14 +96,14 @@ instance ord<either `a> require ord<'a> {
 
 A predicate asserts <$TYPES> is a member of the class named by $ID.
 ```
-$PREDS := require $PREDS_
+$PREDS := implies $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
 $PRED := $ID <$TYPES>
 ```
 
 Example:
 ```
-require ord<`a>, eq<`b>
+implies ord<`a>, eq<`b>
 ```
 This predicate assert \`a and \`b are members of ord and eq classes,
 respectively.
@@ -167,7 +167,7 @@ $RETTYPE := : $TYPE
 ```
 
 ```
-func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
+func myfun (x : `a, y : `b) : `a implies num<`a>, bool<`b> { x }
 ```
 
 ## Expression

@@ -533,13 +533,13 @@ ptr_ast_pred module::parse_pred() {
     return ret;
 }
 
-// $PREDS := require $PREDS_
+// $PREDS := implies $PREDS_
 // $PREDS_ := $PRED | $PRED, $PRED
 ptr_ast_preds module::parse_preds() {
     auto ret = std::make_unique<ast_preds>();
 
     ret->set_pos(m_parsec);
-    PARSESTR("require", m_parsec);
+    PARSESTR("implies", m_parsec);
     SPACEPLUS();
 
     for (;;) {
@@ -2243,7 +2243,7 @@ void ast_instance::print() {
     m_pred->print();
 
     if (m_preds) {
-        std::cout << ",\"require\":";
+        std::cout << ",\"implies\":";
         m_preds->print();
     }
 

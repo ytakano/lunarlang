@@ -214,7 +214,7 @@ static shared_subst var_bind(shared_type var, shared_type ty) {
 }
 
 // L, R ∈ {types}
-// s ∈ {subsutitutions}
+// s ∈ {substitutions}
 // if ∃s (s L) = (s R)
 // then s (s is the most general unifier)
 // else nullptr
@@ -269,7 +269,7 @@ static shared_subst merge(substitution &s1, substitution &s2) {
 }
 
 // L, R ∈ {types}
-// s ∈ {subsutitutions}
+// s ∈ {substitutions}
 // if ∃s (s L) = R
 // then s
 // else nullptr

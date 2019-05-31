@@ -92,7 +92,7 @@ class type_const : public type {
 
     virtual shared_kind get_kind() { return m_kind; }
 
-    std::string m_id;
+    std::string m_id; // identifier of type (e.g. num, bool)
     shared_kind m_kind;
 };
 
@@ -199,8 +199,8 @@ typedef std::shared_ptr<pred> shared_pred;
 //     class ord<`a> where eq<`a>
 //   qualified class instance:
 //     inst ord<either `a> where ord<'a>
-//   qualifid type declaration:
-//     fn myfun (x : `a, y : `b) -> `a where num<`a>, bool<`b>
+//   qualified type declaration:
+//     fn myfun (x : `a, y : `b) : `a implies num<`a>, bool<`b>
 class qual {
   public:
     qual() {}
@@ -209,7 +209,7 @@ class qual {
     std::vector<shared_pred> m_preds;
 };
 
-// class decralation
+// class declaration
 class typeclass : public qual {
   public:
     typeclass() {}
@@ -243,15 +243,22 @@ class inst : public qual {
 
 typedef std::shared_ptr<inst> shared_inst;
 
-// qualified type
-// TODO
-class qtype : public qual {
+class qual_union_type : public qual {
   public:
-    qtype() {}
-    virtual ~qtype() {}
+    qual_union_type() {}
+    virtual ~qual_union_type() {}
 
     std::vector<shared_type_var> m_args; // arguments
-    shared_type m_type;
+    // TODO: member
+};
+
+class struct_type : public qual {
+  public:
+    struct_type() {}
+    virtual ~struct_type() {}
+
+    std::vector<shared_type_var> m_args; // arguments
+    // TODO: member
 };
 
 class classenv {
