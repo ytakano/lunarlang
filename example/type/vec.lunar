@@ -15,7 +15,7 @@ func f(arg : weak<[u32 * 3]>) { // weak reference
     let v4 : stack<[s0]> = [*s0(*arg), *s0(*arg)]      // vector of s0
     let v5 : stack<s1> = s1(*s0(*arg), uniq<s0>(*arg))
     let v6 : stack<[u32 * 2]> = [10, 20]
-    let v7 : uniq<[u32]> = uniq<u32>([10, 20])
+    let v7 : uniq<[u32]> = uniq<u32>(*[10, 20])
     let v8 : stack<[u32 * 3 * 2]> = [1, 2, 3, 4, 5, 6] // multi dimensional vector
 
     v8[0][1] // accessing to the multi dimensional vector

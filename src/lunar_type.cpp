@@ -7,39 +7,44 @@ namespace lunar {
 static inline shared_star mk_star() { return std::make_unique<star>(); }
 static inline shared_kfun mk_kfun() { return std::make_unique<kfun>(); }
 
-// * -> *
-static inline shared_type mk_kind1(const std::string &id) {
-    auto arr = std::make_shared<type_const>();
-    arr->m_id = id;
+shared_type type_const::make(const std::string &id, unsigned int numtargs) {
+    auto ret = std::shared_ptr<type_const>(new type_const);
 
-    auto k = mk_kfun();
-    k->m_left = mk_star();
-    k->m_right = mk_star();
+    if (numtargs == 0) {
+        ret->m_kind = mk_star();
+    } else {
+        auto kf = mk_kfun();
+        kf->m_left = mk_star();
+        kf->m_right = mk_star();
+        for (int i = 1; i < numtargs; i++) {
+            auto tmp = kf;
+            kf = mk_kfun();
+            kf->m_left = mk_star();
+            kf->m_right = tmp;
+        }
+        ret->m_kind = kf;
+    }
 
-    arr->m_kind = k;
-
-    return arr;
+    ret->m_id = id;
+    return ret;
 }
 
-// * -> (* -> *)
-static inline shared_type mk_kind2(const std::string &id) {
-    auto arr = std::make_shared<type_const>();
-    arr->m_id = id;
-
-    auto k = mk_kfun();
-    k->m_left = mk_star();
-
-    auto right = mk_kfun();
-    right->m_left = mk_star();
-    right->m_right = mk_star();
-
-    arr->m_kind = k;
-
-    return arr;
+shared_type type_var::make(const std::string &id) {
+    auto ret = std::shared_ptr<type_var>(new type_var);
+    ret->m_id = id;
+    ret->m_kind = mk_star();
+    return ret;
 }
 
-static inline shared_type mk_vec() { return mk_kind1("vec"); }
-static inline shared_type mk_dict() { return mk_kind2("dict"); }
+shared_type type_app::make(shared_type lhs, shared_type rhs) {
+    auto ret = std::shared_ptr<type_app>(new type_app);
+    ret->m_left = lhs;
+    ret->m_right = rhs;
+    return ret;
+}
+
+static inline shared_type mk_vec() { return type_const::make("vec", 1); }
+static inline shared_type mk_dict() { return type_const::make("dict", 2); }
 
 // if * , * then 0
 // if * , (* -> *) then -1

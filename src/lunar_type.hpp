@@ -62,13 +62,12 @@ class type {
     enum subtype {
         TYPE_CONST, // constant type
         TYPE_VAR,   // type variable
-        TYPE_APP,   // function application
+        TYPE_APP,   // higher order type application
     };
 
     subtype m_subtype;
 
     virtual shared_kind get_kind() = 0;
-    virtual void apply(const substitution &sub) {}
 };
 
 typedef std::shared_ptr<type> shared_type;
@@ -79,10 +78,8 @@ bool eq_type(type *lhs, type *rhs);
 // e.g.
 //   num : *
 //   vec : * -> *
-//   fn  : * -> (* -> *)
 class type_const : public type {
   public:
-    type_const() { m_subtype = TYPE_CONST; }
     virtual ~type_const() {}
 
     bool operator==(const type_const &lhs) const {
@@ -91,15 +88,23 @@ class type_const : public type {
     }
 
     virtual shared_kind get_kind() { return m_kind; }
+    const std::string &get_id() { return m_id; }
 
+    // id: type name
+    // numtargs: the number of type arguments
+    static shared_type make(const std::string &id, unsigned int numtargs);
+
+  private:
+    type_const() { m_subtype = TYPE_CONST; }
     std::string m_id; // identifier of type (e.g. num, bool)
     shared_kind m_kind;
 };
 
+typedef std::shared_ptr<type_const> shared_type_const;
+
 // type variable
 class type_var : public type {
   public:
-    type_var() { m_subtype = TYPE_VAR; }
     virtual ~type_var() {}
 
     bool operator==(const type_var &lhs) const {
@@ -119,18 +124,42 @@ class type_var : public type {
     }
 
     virtual shared_kind get_kind() { return m_kind; }
-    virtual void apply(const substitution &sub) {}
+    const std::string &get_id() { return m_id; }
 
-    std::string m_id;
-    shared_kind m_kind;
+    // id: type variable name
+    static shared_type make(const std::string &id);
+
+  private:
+    type_var() { m_subtype = TYPE_VAR; }
+    std::string m_id;   // type variable name
+    shared_kind m_kind; // must be *
 };
 
 typedef std::shared_ptr<type_var> shared_type_var;
 
-// higher order type application
+// application of higher order type
+// e.g. (1)
+//   struct dict<T1, T2> {...} is denoted as * -> (* -> *)
+//   dict<int> is denoted as
+//     tapp1.left  = * -> (* -> *)
+//     tapp1.right = *
+//   dict<int, bool> is denoted as
+//     tapp2.left  = tapp1
+//     type2.right = *
+//
+// e.g. (2)
+//   struct somedata<T1, T2, T3> {...}
+//   somedata<int>
+//     tapp1.left  = * -> (* -> (* -> *))
+//     tapp1.right = *
+//   somedata<int, int>
+//     tapp2.left  = tapp1
+//     tapp2.right = *
+//   somedata<int, int, int>
+//     tapp3.left  = tapp2
+//     tapp3.right = *
 class type_app : public type {
   public:
-    type_app() { m_subtype = TYPE_APP; }
     virtual ~type_app() {}
 
     bool operator==(const type_app &lhs) const {
@@ -138,6 +167,12 @@ class type_app : public type {
                eq_type(lhs.m_left.get(), lhs.m_right.get());
     }
 
+    // e.g.
+    // if
+    //   left:  * -> (* -> *)
+    //   right: *
+    // then output
+    //   * -> *
     virtual shared_kind get_kind() {
         auto k = m_left->get_kind();
         assert(!k->m_is_star);
@@ -146,15 +181,17 @@ class type_app : public type {
 
         return kf->m_right;
     }
+    static shared_type make(shared_type lhs, shared_type rhs);
 
-    // satisfy
-    // m_left->get_kind()->m_left == m_right->get_kind()
-
+    // require
+    //   m_left->get_kind()->m_left == m_right->get_kind()
+    //   m_right->get_kind() == *
     shared_type m_left;
     shared_type m_right;
-};
 
-shared_type mk_funtype(shared_type lhs, shared_type rhs);
+  private:
+    type_app() { m_subtype = TYPE_APP; }
+};
 
 // substitution from (id, kind) to type
 // type variable -> type
@@ -196,9 +233,9 @@ typedef std::shared_ptr<pred> shared_pred;
 // qualified type
 // e.g.
 //   qualified class declaration:
-//     class ord<`a> where eq<`a>
+//     class ord<`a> implies eq<`a>
 //   qualified class instance:
-//     inst ord<either `a> where ord<'a>
+//     inst ord<either `a> implies ord<'a>
 //   qualified type declaration:
 //     fn myfun (x : `a, y : `b) : `a implies num<`a>, bool<`b>
 class qual {
@@ -243,22 +280,15 @@ class inst : public qual {
 
 typedef std::shared_ptr<inst> shared_inst;
 
-class qual_union_type : public qual {
+// qualified type
+// function, struct, or union types must be denoted as this class
+class qual_type : public qual {
   public:
-    qual_union_type() {}
-    virtual ~qual_union_type() {}
+    qual_type() {}
+    virtual ~qual_type() {}
 
-    std::vector<shared_type_var> m_args; // arguments
-    // TODO: member
-};
-
-class struct_type : public qual {
-  public:
-    struct_type() {}
-    virtual ~struct_type() {}
-
-    std::vector<shared_type_var> m_args; // arguments
-    // TODO: member
+    shared_type_const m_type;
+    std::vector<shared_type_var> m_args; // type arguments
 };
 
 class classenv {
