@@ -555,8 +555,12 @@ struct ast_instance : public ast {
 
     virtual void print();
 
-    ptr_ast_pred m_pred;   // argument
-    ptr_ast_preds m_preds; // requirements
+    // e.g.
+    // instance Ord<Maybe<`t>> implies Ord<`t>
+    //   m_arg:  Maybe<`t>
+    //   m_impl: Ord<`t>
+    ptr_ast_pred m_arg;   // argument
+    ptr_ast_preds m_impl; // implication
     std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
 };
 
@@ -645,6 +649,8 @@ class module {
     std::vector<shared_typeclass> m_classes;
     std::vector<shared_inst> m_instances;
 
+    bool is_defined(const std::string &str, ast *ptr);
+
   private:
     parsec m_parsec;
     const std::string m_filename;
@@ -654,7 +660,9 @@ class module {
     std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
     std::unordered_map<std::string, ptr_ast_union> m_id2union;
     std::unordered_multimap<std::string, ptr_ast_instance> m_id2inst;
-    std::vector<ptr_ast_import> m_imports;
+
+    // TODO: fix this!
+    std::unordered_map<std::string, ptr_ast_import> m_id2import;
 
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();

@@ -19,6 +19,19 @@
         print_err(LINE, COLUMN, m_parsec.get_str());                           \
     } while (0)
 
+#define MULTIDEFERR(ID, FILE1, AST1, FILE2, AST2)                              \
+    do {                                                                       \
+        fprintf(stderr,                                                        \
+                "(%s:%d) semantic error: \"%s\" is multiply defined\n",        \
+                __FILE__, __LINE__, (ID).c_str());                             \
+        fprintf(stderr, "%s:%lu:%lu:\n", (FILE1).c_str(), (AST1)->m_line,      \
+                (AST1)->m_column);                                             \
+        print_err((AST1)->m_line, (AST1)->m_column, m_parsec.get_str());       \
+        fprintf(stderr, "%s:%lu:%lu:\n", (FILE2).c_str(), (AST2)->m_line,      \
+                (AST2)->m_column);                                             \
+        print_err((AST2)->m_line, (AST2)->m_column, m_parsec.get_str());       \
+    } while (0)
+
 #define SPACEPLUS()                                                            \
     do {                                                                       \
         if (!parse_spaces_plus())                                              \
@@ -180,7 +193,10 @@ bool module::parse() {
             fn->m_line = id->m_line;
             fn->m_column = id->m_column;
 
-            // TODO: check multiply defined
+            // check multiple definition
+            if (is_defined(fn->m_id->m_id, fn.get()))
+                return false;
+
             m_id2defun[fn->m_id->m_id] = std::move(fn);
         } else if (id->m_id == "instance") {
             auto inst = parse_instance();
@@ -190,9 +206,9 @@ bool module::parse() {
             inst->m_line = id->m_line;
             inst->m_column = id->m_column;
 
-            // TODO: check multiply defined
+            // TODO: check multiple definition
             m_id2inst.insert(std::pair<std::string, ptr_ast_instance>(
-                inst->m_pred->m_id->m_id, std::move(inst)));
+                inst->m_arg->m_id->m_id, std::move(inst)));
         } else if (id->m_id == "class") {
             auto cls = parse_class();
             if (!cls)
@@ -201,7 +217,10 @@ bool module::parse() {
             cls->m_line = id->m_line;
             cls->m_column = id->m_column;
 
-            // TODO: check multiply defined
+            // check multiple definition
+            if (is_defined(cls->m_id->m_id, cls.get()))
+                return false;
+
             m_id2class[cls->m_id->m_id] = std::move(cls);
         } else if (id->m_id == "struct") {
             auto st = parse_struct();
@@ -211,7 +230,10 @@ bool module::parse() {
             st->m_line = id->m_line;
             st->m_column = id->m_column;
 
-            // TODO: check multiply defined
+            // check multiple definition
+            if (is_defined(st->m_id->m_id, st.get()))
+                return false;
+
             m_id2struct[st->m_id->m_id] = std::move(st);
         } else if (id->m_id == "union") {
             auto un = parse_union();
@@ -221,7 +243,10 @@ bool module::parse() {
             un->m_line = id->m_line;
             un->m_column = id->m_column;
 
-            // TODO: check multiply defined
+            // check multiple definition
+            if (is_defined(un->m_id->m_id, un.get()))
+                return false;
+
             m_id2union[un->m_id->m_id] = std::move(un);
         } else if (id->m_id == "import") {
             auto im = parse_import();
@@ -231,8 +256,20 @@ bool module::parse() {
             im->m_line = id->m_line;
             im->m_column = id->m_column;
 
-            // TODO: check multiply defined
-            m_imports.push_back(std::move(im));
+            if (im->m_as) {
+                // check multiple definition
+                if (is_defined(im->m_as->m_id, im.get()))
+                    return false;
+
+                m_id2import[im->m_as->m_id] = std::move(im);
+            } else {
+                // check multiple definition
+                // TODO: fix this!
+                if (is_defined(im->m_id[0]->m_id, im.get()))
+                    return false;
+
+                m_id2import[im->m_id[0]->m_id] = std::move(im);
+            }
         } else {
             SYNTAXERR2("unexpected identifier", id->m_line, id->m_column);
             return false;
@@ -240,6 +277,25 @@ bool module::parse() {
     }
 
     return true;
+}
+
+#define IS_DEFINED(CONTAINER)                                                  \
+    do {                                                                       \
+        auto it = CONTAINER.find(str);                                         \
+        if (it != CONTAINER.end()) {                                           \
+            MULTIDEFERR(str, m_filename, it->second.get(), m_filename, ptr);   \
+            return true;                                                       \
+        }                                                                      \
+    } while (0)
+
+bool module::is_defined(const std::string &str, ast *ptr) {
+    IS_DEFINED(m_id2defun);
+    IS_DEFINED(m_id2class);
+    IS_DEFINED(m_id2struct);
+    IS_DEFINED(m_id2union);
+    IS_DEFINED(m_id2import);
+
+    return false;
 }
 
 // $ID := [^0-9$WHITESPACE][^$WHITESPACE]+
@@ -1704,8 +1760,8 @@ ptr_ast_instance module::parse_instance() {
     auto ret = std::make_unique<ast_instance>();
     ret->set_pos(m_parsec);
 
-    ret->m_pred = parse_pred();
-    if (!ret->m_pred)
+    ret->m_arg = parse_pred();
+    if (!ret->m_arg)
         return nullptr;
 
     parse_spaces();
@@ -1714,8 +1770,8 @@ ptr_ast_instance module::parse_instance() {
     PTRY(m_parsec, c, m_parsec.character('{'));
 
     if (m_parsec.is_fail()) {
-        // parse predicates
-        ret->m_preds = parse_preds();
+        // parse implications
+        ret->m_impl = parse_preds();
 
         PARSECHAR('{', m_parsec);
     }
@@ -1872,10 +1928,10 @@ void parser::print() {
 void module::print() {
     std::cout << "{\"import\":[";
     size_t n = 0;
-    for (auto &p : m_imports) {
+    for (auto &p : m_id2import) {
         if (n > 0)
             std::cout << ",";
-        p->print();
+        p.second->print();
         n++;
     }
 
@@ -2310,11 +2366,11 @@ void ast_parenthesis::print() {
 
 void ast_instance::print() {
     std::cout << "{\"instance\":{\"pred\":";
-    m_pred->print();
+    m_arg->print();
 
-    if (m_preds) {
+    if (m_impl) {
         std::cout << ",\"implies\":";
-        m_preds->print();
+        m_impl->print();
     }
 
     std::cout << ",\"functions\":[";

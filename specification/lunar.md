@@ -88,7 +88,7 @@ instance ord<u32> {
     func infix < (x, y) { ltU32(x, y) }
 }
 
-instance ord<either `a> implies ord<'a> {
+instance ord<either<`a>> implies ord<`a> {
     func infix < (x, y) {
         match (x, y) {
         just a, just b:
