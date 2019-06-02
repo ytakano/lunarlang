@@ -16,6 +16,7 @@ struct t1 {
         v0
         v1
     }
+    w : either<u32, bool>
 }
 
 union either<`a, `b> {

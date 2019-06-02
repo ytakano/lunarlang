@@ -7,11 +7,9 @@ namespace lunar {
 static inline shared_star mk_star() { return std::make_unique<star>(); }
 static inline shared_kfun mk_kfun() { return std::make_unique<kfun>(); }
 
-shared_type type_const::make(const std::string &id, unsigned int numtargs) {
-    auto ret = std::shared_ptr<type_const>(new type_const);
-
+shared_kind type_const::make_kind(unsigned int numtargs) {
     if (numtargs == 0) {
-        ret->m_kind = mk_star();
+        return mk_star();
     } else {
         auto kf = mk_kfun();
         kf->m_left = mk_star();
@@ -22,10 +20,16 @@ shared_type type_const::make(const std::string &id, unsigned int numtargs) {
             kf->m_left = mk_star();
             kf->m_right = tmp;
         }
-        ret->m_kind = kf;
+        return kf;
     }
+}
+
+shared_type type_const::make(const std::string &id, unsigned int numtargs) {
+    auto ret = std::shared_ptr<type_const>(new type_const(CTYPE_PRIMTIVE));
 
     ret->m_id = id;
+    ret->m_kind = make_kind(numtargs);
+
     return ret;
 }
 
@@ -43,8 +47,21 @@ shared_type type_app::make(shared_type lhs, shared_type rhs) {
     return ret;
 }
 
+shared_type type_set::make(type_set::SETFOR setfor, const std::string &id,
+                           unsigned int numtargs) {
+    auto ret = std::shared_ptr<type_set>(new type_set(setfor));
+
+    ret->m_id = id;
+    ret->m_kind = make_kind(numtargs);
+
+    return ret;
+}
+
 static inline shared_type mk_vec() { return type_const::make("vec", 1); }
 static inline shared_type mk_dict() { return type_const::make("dict", 2); }
+static inline shared_type mk_tuple(unsigned int num) {
+    return type_const::make("tuple", num);
+}
 
 // if * , * then 0
 // if * , (* -> *) then -1

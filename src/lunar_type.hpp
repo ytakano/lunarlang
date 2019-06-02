@@ -11,6 +11,14 @@
 #include <unordered_map>
 #include <vector>
 
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
+
+namespace mi = boost::multi_index;
+
 namespace lunar {
 
 class substitution;
@@ -82,6 +90,12 @@ class type_const : public type {
   public:
     virtual ~type_const() {}
 
+    enum CTYPEFOR {
+        CTYPE_PRIMTIVE, // primitive type
+        CTYPE_SET,      // struct or union type
+        CTYPE_FUN,      // function type
+    };
+
     bool operator==(const type_const &lhs) const {
         return m_id == lhs.m_id &&
                cmp_kind(m_kind.get(), lhs.m_kind.get()) == 0;
@@ -94,10 +108,12 @@ class type_const : public type {
     // numtargs: the number of type arguments
     static shared_type make(const std::string &id, unsigned int numtargs);
 
-  private:
-    type_const() { m_subtype = TYPE_CONST; }
+  protected:
+    type_const(CTYPEFOR ctype) : m_ctypefor(ctype) { m_subtype = TYPE_CONST; }
+    static shared_kind make_kind(unsigned int numtargs);
     std::string m_id; // identifier of type (e.g. num, bool)
     shared_kind m_kind;
+    CTYPEFOR m_ctypefor;
 };
 
 typedef std::shared_ptr<type_const> shared_type_const;
@@ -192,6 +208,55 @@ class type_app : public type {
   private:
     type_app() { m_subtype = TYPE_APP; }
 };
+
+// class for struct or union type
+class type_set : public type_const {
+  public:
+    virtual ~type_set() {}
+
+    enum SETFOR {
+        TYPE_STRUCT,
+        TYPE_UNION,
+    };
+
+    // id: type name
+    // numtargs: the number of type arguments
+    static shared_type make(SETFOR setfor, const std::string &id,
+                            unsigned int numtargs);
+
+    void add_member(const std::string &id, shared_type t) {
+        m_id2member.insert(id2type(id, t));
+    }
+
+    bool operator==(const type_set &lhs) const;
+
+  private:
+    struct id2type {
+        id2type(const std::string &id, shared_type t) : m_id(id), m_type(t) {}
+        std::string m_id;
+        shared_type m_type;
+    };
+
+    struct id {};
+
+    mi::multi_index_container<
+        id2type,
+        mi::indexed_by<
+            mi::hashed_unique<mi::tag<id>,
+                              mi::member<id2type, std::string, &id2type::m_id>>,
+            mi::sequenced<>>>
+        m_id2member;
+
+    SETFOR m_setfor; // for struct or union
+
+    type_set(SETFOR setfor) : m_setfor(setfor), type_const(CTYPE_SET) {}
+};
+
+typedef std::shared_ptr<type_set> shared_type_struct;
+typedef std::shared_ptr<type_set> shared_type_union;
+
+// class for function type
+class type_fun : public type_const {};
 
 // substitution from (id, kind) to type
 // type variable -> type
