@@ -1,3 +1,5 @@
+import type.a as t
+
 struct s0 {
     a : [u32 * 3]
 }

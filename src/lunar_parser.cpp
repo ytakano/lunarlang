@@ -12,6 +12,13 @@
                   m_parsec.get_str());                                         \
     } while (0)
 
+#define SYNTAXERR2(M, LINE, COLUMN, ...)                                       \
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
+                m_filename.c_str(), LINE, COLUMN, __LINE__, ##__VA_ARGS__);    \
+        print_err(LINE, COLUMN, m_parsec.get_str());                           \
+    } while (0)
+
 #define SPACEPLUS()                                                            \
     do {                                                                       \
         if (!parse_spaces_plus())                                              \
@@ -216,6 +223,19 @@ bool module::parse() {
 
             // TODO: check multiply defined
             m_id2union[un->m_id->m_id] = std::move(un);
+        } else if (id->m_id == "import") {
+            auto im = parse_import();
+            if (!im)
+                return false;
+
+            im->m_line = id->m_line;
+            im->m_column = id->m_column;
+
+            // TODO: check multiply defined
+            m_imports.push_back(std::move(im));
+        } else {
+            SYNTAXERR2("unexpected identifier", id->m_line, id->m_column);
+            return false;
         }
     }
 
@@ -232,6 +252,50 @@ ptr_ast_id module::parse_id() {
 
     if (m_parsec.is_fail())
         return nullptr;
+
+    return ret;
+}
+
+// $IMPORT := import $MODULE $AS?
+// $AS := as $ID
+// $MODULE := $ID | $ID.$MODULE
+ptr_ast_import module::parse_import() {
+    auto ret = std::make_unique<ast_import>();
+
+    SPACEPLUS();
+
+    ptr_ast_id id;
+    PARSEID(id, m_parsec);
+    ret->m_id.push_back(std::move(id));
+
+    for (;;) {
+        bool is_dot;
+        PTRY(m_parsec, is_dot, [](module &m) {
+            m.m_parsec.character('.');
+            if (m.m_parsec.is_fail())
+                return false;
+            return true;
+        }(*this))
+        if (!is_dot)
+            break;
+
+        PARSEID(id, m_parsec);
+        ret->m_id.push_back(std::move(id));
+    }
+
+    bool is_import;
+    PTRY(m_parsec, is_import, [](module &m) {
+        m.parse_spaces_plus();
+        if (m.m_parsec.is_fail())
+            return false;
+        m.m_parsec.str("as");
+        return !m.m_parsec.is_fail();
+    }(*this))
+
+    if (is_import) {
+        SPACEPLUS();
+        PARSEID(ret->m_as, m_parsec);
+    }
 
     return ret;
 }
@@ -1806,8 +1870,17 @@ void parser::print() {
 }
 
 void module::print() {
-    std::cout << "{\"classes\":[";
-    size_t n = 1;
+    std::cout << "{\"import\":[";
+    size_t n = 0;
+    for (auto &p : m_imports) {
+        if (n > 0)
+            std::cout << ",";
+        p->print();
+        n++;
+    }
+
+    std::cout << "],\"classes\":[";
+    n = 1;
     for (auto &p : m_id2class) {
         p.second->print();
         if (n < m_id2class.size())
@@ -1815,8 +1888,8 @@ void module::print() {
 
         n++;
     }
-    std::cout << "],\"instances\":[";
 
+    std::cout << "],\"instances\":[";
     n = 0;
     for (auto &p : m_id2inst) {
         if (n > 0)
@@ -1826,7 +1899,6 @@ void module::print() {
     }
 
     std::cout << "],\"functions\":[";
-
     n = 1;
     for (auto &p : m_id2defun) {
         p.second->print();
@@ -1837,7 +1909,6 @@ void module::print() {
     }
 
     std::cout << "],\"structs\":[";
-
     n = 1;
     for (auto &p : m_id2struct) {
         p.second->print();
@@ -1848,7 +1919,6 @@ void module::print() {
     }
 
     std::cout << "],\"unions\":[";
-
     n = 1;
     for (auto &p : m_id2union) {
         p.second->print();
@@ -2270,6 +2340,24 @@ void ast_member::print() {
 }
 
 void ast_members::print() { PRINTLIST(m_vars); }
+
+void ast_import::print() {
+    std::cout << "{\"import\":{\"id\":\"";
+    int n = 0;
+    for (auto &p : m_id) {
+        if (n > 0)
+            std::cout << ".";
+        std::cout << p->m_id;
+        n++;
+    }
+    if (m_as) {
+        std::cout << "\",\"as\":";
+        m_as->print();
+    } else {
+        std::cout << "\"";
+    }
+    std::cout << "}}";
+}
 
 #define PRINTSTUN(STR)                                                         \
     do {                                                                       \

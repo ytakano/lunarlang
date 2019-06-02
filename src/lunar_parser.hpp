@@ -46,6 +46,7 @@ struct ast {
         AST_INSTANCE,   // instance
         AST_MEMBER,     // variable definition in structure or union
         AST_MEMBERS,    // variable definition in structure or union
+        AST_IMPORT,     // import
     };
 
     std::size_t m_line;
@@ -320,6 +321,9 @@ struct ast_prefix : public ast {
 };
 
 typedef std::unique_ptr<ast_prefix> ptr_ast_prefix;
+
+class type;
+typedef std::shared_ptr<type> shared_type;
 
 struct ast_expr : public ast {
     ast_expr() { m_asttype = AST_EXPR; }
@@ -609,7 +613,25 @@ struct ast_union : public ast_type {
 
 typedef std::unique_ptr<ast_union> ptr_ast_union;
 
+struct ast_import : public ast {
+    ast_import() { m_asttype = AST_IMPORT; }
+    virtual ~ast_import() {}
+
+    virtual void print();
+
+    std::vector<ptr_ast_id> m_id;
+    ptr_ast_id m_as;
+};
+
+typedef std::unique_ptr<ast_import> ptr_ast_import;
+
 class parser;
+
+class typeclass;
+typedef std::shared_ptr<typeclass> shared_typeclass;
+
+class inst;
+typedef std::shared_ptr<inst> shared_inst;
 
 class module {
   public:
@@ -632,6 +654,7 @@ class module {
     std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
     std::unordered_map<std::string, ptr_ast_union> m_id2union;
     std::unordered_multimap<std::string, ptr_ast_instance> m_id2inst;
+    std::vector<ptr_ast_import> m_imports;
 
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();
@@ -673,6 +696,7 @@ class module {
     ptr_ast_struct parse_struct();
     ptr_ast_union parse_union();
     ptr_ast_type parse_member_type();
+    ptr_ast_import parse_import();
     bool parse_st_un(const char *str);
     void parse_spaces();
     void parse_spaces_sep();

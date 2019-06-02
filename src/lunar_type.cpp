@@ -24,7 +24,8 @@ shared_kind type_const::make_kind(unsigned int numtargs) {
     }
 }
 
-shared_type type_const::make(const std::string &id, unsigned int numtargs) {
+shared_type type_const::make(const std::string &id, unsigned int numtargs,
+                             CTYPE ctype) {
     auto ret = std::shared_ptr<type_const>(new type_const(CTYPE_PRIMTIVE));
 
     ret->m_id = id;
@@ -47,20 +48,31 @@ shared_type type_app::make(shared_type lhs, shared_type rhs) {
     return ret;
 }
 
-shared_type type_set::make(type_set::SETFOR setfor, const std::string &id,
-                           unsigned int numtargs) {
-    auto ret = std::shared_ptr<type_set>(new type_set(setfor));
-
-    ret->m_id = id;
-    ret->m_kind = make_kind(numtargs);
-
-    return ret;
-}
-
 static inline shared_type mk_vec() { return type_const::make("vec", 1); }
 static inline shared_type mk_dict() { return type_const::make("dict", 2); }
 static inline shared_type mk_tuple(unsigned int num) {
     return type_const::make("tuple", num);
+}
+
+// make function type
+// input:
+//   num: 1 + the sum of the number of the arguments and the type arguments
+static inline shared_type mk_fun(unsigned int num) {
+    return type_const::make("fun", num, type_const::CTYPE_FUN);
+}
+
+// make struct type
+// input:
+//   num: the number of the member variables and the type arguments
+static inline shared_type mk_struct(const std::string &id, unsigned int num) {
+    return type_const::make(id, num, type_const::CTYPE_STRUCT);
+}
+
+// make union type
+// input:
+//   num: the number of the member variables and the type arguments
+static inline shared_type mk_union(const std::string &id, unsigned int num) {
+    return type_const::make(id, num, type_const::CTYPE_UNION);
 }
 
 // if * , * then 0
@@ -322,5 +334,7 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     // TODO: print error
     return nullptr;
 }
+
+void typing(ptr_ast_type &ast) {}
 
 } // namespace lunar

@@ -1,7 +1,7 @@
 # The Specification of Lunar Language
 
 ```
-$TOP := $CLASSDECL | $INST | $DEFUN
+$TOP := $CLASSDECL | $INST | $DEFUN | $IMPORT
 ```
 
 ## Infix Operator
@@ -45,6 +45,14 @@ $ID must not be reserved words.
 
 ```
 $IDS := $ID | $ID , $IDS
+```
+
+## Import
+
+```
+$IMPORT := import $MODULE $AS?
+$AS := as $ID
+$MODULE := $ID | $ID.$MODULE
 ```
 
 ## Class
