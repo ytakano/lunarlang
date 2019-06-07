@@ -32,6 +32,19 @@
         print_err((AST2)->m_line, (AST2)->m_column, m_parsec.get_str());       \
     } while (0)
 
+#define MULTIMPORTERR(ID, FILE1, AST1, FILE2, AST2)                            \
+    do {                                                                       \
+        fprintf(stderr,                                                        \
+                "(%s:%d) semantic error: \"%s\" is multiply imported\n",       \
+                __FILE__, __LINE__, (ID).c_str());                             \
+        fprintf(stderr, "%s:%lu:%lu:\n", (FILE1).c_str(), (AST1)->m_line,      \
+                (AST1)->m_column);                                             \
+        print_err((AST1)->m_line, (AST1)->m_column, m_parsec.get_str());       \
+        fprintf(stderr, "%s:%lu:%lu:\n", (FILE2).c_str(), (AST2)->m_line,      \
+                (AST2)->m_column);                                             \
+        print_err((AST2)->m_line, (AST2)->m_column, m_parsec.get_str());       \
+    } while (0)
+
 #define SPACEPLUS()                                                            \
     do {                                                                       \
         if (!parse_spaces_plus())                                              \
@@ -173,6 +186,39 @@ parser::parser() {
     m_op2pri["!="] = 10;
 }
 
+void module_tree::add(ptr_ast_import ptr, int n) {
+    auto &id = ptr->m_id[n]->m_id;
+    auto it = m_children.find(id);
+    if (it == m_children.end()) {
+        m_children[id] = std::make_unique<module_tree>();
+        it = m_children.find(id);
+    }
+
+    n++;
+    if (n < ptr->m_id.size()) {
+        it->second->add(std::move(ptr), n);
+    } else {
+        it->second->m_import = std::move(ptr);
+    }
+}
+
+const ast_import *module_tree::find(const std::vector<ptr_ast_id> &id, int n) {
+    auto it = m_children.find(id[n]->m_id);
+    n++;
+
+    if (it != m_children.end()) { // found
+        if (n < id.size())
+            return it->second->find(id, n);
+        else {
+            if (it->second->m_import)
+                return it->second->m_import.get();
+            return nullptr;
+        }
+    }
+
+    return nullptr;
+}
+
 bool module::parse() {
     for (;;) {
         parse_spaces();
@@ -261,15 +307,23 @@ bool module::parse() {
                 if (is_defined(im->m_as->m_id, im.get()))
                     return false;
 
-                m_id2import[im->m_as->m_id] = std::move(im);
-            } else {
+                // TODO: add as
+            }
+
+            if (im->m_id.size() == 1) {
                 // check multiple definition
-                // TODO: fix this!
                 if (is_defined(im->m_id[0]->m_id, im.get()))
                     return false;
-
-                m_id2import[im->m_id[0]->m_id] = std::move(im);
+            } else {
+                // check multiple import
+                auto p = m_modules.find(im->m_id);
+                if (p != nullptr) {
+                    MULTIMPORTERR(im->get_id(), m_filename, p, m_filename, im);
+                    return false;
+                }
             }
+
+            m_modules.add(std::move(im));
         } else {
             SYNTAXERR2("unexpected identifier", id->m_line, id->m_column);
             return false;
@@ -293,7 +347,17 @@ bool module::is_defined(const std::string &str, ast *ptr) {
     IS_DEFINED(m_id2class);
     IS_DEFINED(m_id2struct);
     IS_DEFINED(m_id2union);
-    IS_DEFINED(m_id2import);
+
+    auto it = m_modules.m_children.find(str);
+    if (it != m_modules.m_children.end()) {
+        fprintf(stderr,
+                "(%s:%d) semantic error: \"%s\" is used as module name\n",
+                __FILE__, __LINE__, str.c_str());
+        fprintf(stderr, "%s:%lu:%lu:\n", m_filename.c_str(), ptr->m_line,
+                ptr->m_column);
+        print_err(ptr->m_line, ptr->m_column, m_parsec.get_str());
+        return true;
+    }
 
     return false;
 }
@@ -1925,15 +1989,24 @@ void parser::print() {
     std::cout << std::endl;
 }
 
+void module_tree::print(size_t &n) {
+    if (m_import) {
+        if (n > 0)
+            std::cout << ",";
+
+        m_import->print();
+        n++;
+    }
+
+    for (auto &p : m_children) {
+        p.second->print(n);
+    }
+}
+
 void module::print() {
     std::cout << "{\"import\":[";
     size_t n = 0;
-    for (auto &p : m_id2import) {
-        if (n > 0)
-            std::cout << ",";
-        p.second->print();
-        n++;
-    }
+    m_modules.print(n);
 
     std::cout << "],\"classes\":[";
     n = 1;

@@ -623,8 +623,22 @@ struct ast_import : public ast {
 
     virtual void print();
 
+    std::string get_id() {
+        std::string ret;
+        int n = 0;
+        for (auto &s : m_id) {
+            if (n > 0)
+                ret += ".";
+
+            ret += s->m_id;
+            n++;
+        }
+        return ret;
+    }
+
     std::vector<ptr_ast_id> m_id;
     ptr_ast_id m_as;
+    std::string m_full_path;
 };
 
 typedef std::unique_ptr<ast_import> ptr_ast_import;
@@ -636,6 +650,22 @@ typedef std::shared_ptr<typeclass> shared_typeclass;
 
 class inst;
 typedef std::shared_ptr<inst> shared_inst;
+
+class module;
+
+class module_tree {
+  public:
+    module_tree() {}
+    virtual ~module_tree() {}
+
+    void add(ptr_ast_import ptr, int n = 0);
+    const ast_import *find(const std::vector<ptr_ast_id> &id, int n = 0);
+
+    void print(size_t &n);
+
+    std::unordered_map<std::string, std::unique_ptr<module_tree>> m_children;
+    ptr_ast_import m_import;
+};
 
 class module {
   public:
@@ -660,9 +690,7 @@ class module {
     std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
     std::unordered_map<std::string, ptr_ast_union> m_id2union;
     std::unordered_multimap<std::string, ptr_ast_instance> m_id2inst;
-
-    // TODO: fix this!
-    std::unordered_map<std::string, ptr_ast_import> m_id2import;
+    module_tree m_modules;
 
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();
