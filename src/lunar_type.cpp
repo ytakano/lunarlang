@@ -335,6 +335,10 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     return nullptr;
 }
 
+void classenv::add_class(const ast_class *ptr) {
+    auto cls = std::make_shared<typeclass>();
+}
+
 void typing(ptr_ast_type &ast) {}
 
 } // namespace lunar

@@ -1,3 +1,4 @@
+#include "lunar_env.hpp"
 #include "lunar_green_thread.hpp"
 #include "lunar_ir.hpp"
 #include "lunar_opt.hpp"

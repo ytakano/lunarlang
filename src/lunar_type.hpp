@@ -15,6 +15,7 @@
 namespace lunar {
 
 class substitution;
+class ast_class;
 
 // a kind is the type of a type constructor or a higher order type operator
 // e.g.
@@ -226,10 +227,10 @@ class substitution {
 
 typedef std::shared_ptr<substitution> shared_subst;
 
-// predicate that m_types are members of the class named m_id
+// a predicate asserts that m_types are members of a class named m_id
 // e.g.
-//   num<`a>
-//   ClassA<`a, `b>
+//   num<`a>: class name = num, m_types = [`a]
+//   ClassA<`a, `b>: class name = ClassA, m_types = [`a, `b]
 class pred {
   public:
     pred() {}
@@ -249,6 +250,7 @@ typedef std::shared_ptr<pred> shared_pred;
 //     inst ord<either `a> implies ord<'a>
 //   qualified type declaration:
 //     fn myfun (x : `a, y : `b) : `a implies num<`a>, bool<`b>
+//     struct data<`a, `b> implies num<`a>, bool<`b>
 class qual {
   public:
     qual() {}
@@ -284,8 +286,8 @@ class inst : public qual {
     inst() {}
     virtual ~inst() {}
 
-    std::string m_id;                                     // name
-    std::vector<shared_type> m_args;                      // arguments
+    std::string m_id;                // name
+    std::vector<shared_type> m_args; // type variable arguments
     std::unordered_map<std::string, shared_type> m_funcs; // interfaces
 };
 
@@ -306,6 +308,8 @@ class classenv {
   public:
     classenv() {}
     virtual ~classenv() {}
+
+    void add_class(const ast_class *ptr);
 
   private:
     struct env {

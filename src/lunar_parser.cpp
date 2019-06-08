@@ -206,6 +206,13 @@ const ast_import *module_tree::find(const std::vector<ptr_ast_id> &id, int n) {
     return nullptr;
 }
 
+module::module(const std::string &filename, const std::string &str, parser &p)
+    : m_parsec(str), m_filename(filename), m_parser(p) {
+    fs::path fpath(filename.c_str());
+    fs::path dir = fpath.parent_path();
+    m_env.add(dir);
+}
+
 bool module::parse() {
     for (;;) {
         parse_spaces();
@@ -1962,6 +1969,8 @@ bool module::parse_spaces_plus() {
 
     return true;
 }
+
+void parser::add_load_path(const char *p) { m_env.add(p); }
 
 bool parser::add_module(const std::string &filename) {
     std::ifstream ifs(filename);

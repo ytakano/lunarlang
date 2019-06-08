@@ -1,6 +1,7 @@
 #ifndef LUNAR_PARSER_HPP
 #define LUNAR_PARSER_HPP
 
+#include "lunar_env.hpp"
 #include "lunar_parsec.hpp"
 #include "lunar_type.hpp"
 
@@ -700,8 +701,7 @@ class module_tree {
 
 class module {
   public:
-    module(const std::string &filename, const std::string &str, parser &p)
-        : m_parsec(str), m_filename(filename), m_parser(p) {}
+    module(const std::string &filename, const std::string &str, parser &p);
     virtual ~module() {}
 
     bool parse();
@@ -716,6 +716,7 @@ class module {
     parsec m_parsec;
     const std::string m_filename;
     parser &m_parser;
+    lunar_env m_env;
     std::unordered_map<std::string, ptr_ast_class> m_id2class;
     std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
     std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
@@ -784,6 +785,7 @@ class parser {
     parser();
     virtual ~parser() {}
 
+    void add_load_path(const char *p);
     bool add_module(const std::string &filename);
     bool parse();
     void print();
@@ -806,6 +808,7 @@ class parser {
     std::unordered_set<char> m_infix;
 
     std::unordered_map<std::string, int> m_op2pri;
+    lunar_env m_env;
 
     friend class module;
 };

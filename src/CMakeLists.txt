@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.9)
 
 # for Boost
-find_package(Boost COMPONENTS REQUIRED)
+find_package(Boost COMPONENTS system filesystem REQUIRED)
 
 # for LLVM
 find_package(LLVM REQUIRED CONFIG)
@@ -60,5 +60,5 @@ else()
 endif()
 
 target_link_libraries(lunarlang_green ${LIBS})
-target_link_libraries(lunarlang ${LIBS})
-target_link_libraries(lunar ${LIBS} lunarlang_green lunarlang)
+target_link_libraries(lunarlang ${LIBS} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY})
+target_link_libraries(lunar ${LIBS} lunarlang_green lunarlang ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY})
