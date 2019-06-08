@@ -3,6 +3,14 @@
 
 #include <fstream>
 
+#define MODULENOTFOUND(M, AST, ID)                                             \
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu:(%d) module \"%s\" was not found: \n",     \
+                (M)->m_filename.c_str(), (AST)->m_line, (AST)->m_column,       \
+                __LINE__, (ID).c_str());                                       \
+        print_err(AST->m_line, AST->m_column, (M)->m_parsec.get_str());        \
+    } while (0)
+
 #define SYNTAXERR(M, ...)                                                      \
     do {                                                                       \
         fprintf(stderr, "%s:%lu:%lu:(%d) syntax error: " M "\n",               \
@@ -207,13 +215,17 @@ const ast_import *module_tree::find(const std::vector<ptr_ast_id> &id, int n) {
 }
 
 module::module(const std::string &filename, const std::string &str, parser &p)
-    : m_parsec(str), m_filename(filename), m_parser(p) {
+    : m_parsec(str), m_filename(filename), m_parser(p), m_is_parsed(false),
+      m_is_loaded_module(false) {
     fs::path fpath(filename.c_str());
     fs::path dir = fpath.parent_path();
     m_env.add(dir);
 }
 
 bool module::parse() {
+    if (m_is_parsed)
+        return true;
+
     for (;;) {
         parse_spaces();
         if (m_parsec.is_eof())
@@ -317,6 +329,7 @@ bool module::parse() {
         }
     }
 
+    m_is_parsed = true;
     return true;
 }
 
@@ -1973,6 +1986,17 @@ bool module::parse_spaces_plus() {
 void parser::add_load_path(const char *p) { m_env.add(p); }
 
 bool parser::add_module(const std::string &filename) {
+    fs::path p(filename.c_str());
+    if (!fs::exists(p)) {
+        fprintf(stderr, "%s does not exist\n", filename.c_str());
+        return false;
+    }
+
+    if (!fs::is_regular(fs::path(filename.c_str()))) {
+        fprintf(stderr, "%s is not regular file\n", filename.c_str());
+        return false;
+    }
+
     std::ifstream ifs(filename);
     if (ifs.fail())
         return false;
@@ -1982,27 +2006,77 @@ bool parser::add_module(const std::string &filename) {
     std::string content((std::istreambuf_iterator<char>(ifs)),
                         (std::istreambuf_iterator<char>()));
 
-    auto m = std::make_unique<module>(filename, content, *this);
+    p = fs::absolute(p);
+    p = fs::canonical(p);
+    std::string s = p.string();
+    auto m = std::make_unique<module>(s, content, *this);
 
-    m_modules[filename] = std::move(m);
+    module *ptr_m = m.get();
+
+    m_modules[s] = std::move(m);
 
     return true;
+}
+
+bool parser::load_imported(module *m) {
+    if (m->m_is_loaded_module)
+        return true;
+
+    for (auto &p : m->m_id2import) {
+        std::string id = p.second->get_id();
+        auto path = m->m_env.get_module_path(id);
+        if (path.empty()) {
+            path = m_env.get_module_path(id);
+            if (path.empty()) {
+                MODULENOTFOUND(m, p.second, id);
+                return false;
+            }
+        }
+
+        std::string str = path.string();
+        p.second->m_full_path = str;
+        if (!HASKEY(m_modules, str)) {
+            add_module(str);
+            if (!parse_module(str))
+                return false;
+
+            load_imported(m_modules[str].get());
+        }
+    }
+
+    // TODO: scan m_modules
+
+    m->m_is_loaded_module = true;
+    return true;
+}
+
+bool parser::parse_module(const std::string &str) {
+    assert(HASKEY(m_modules, str));
+    return m_modules[str]->parse();
 }
 
 bool parser::parse() {
     for (auto &p : m_modules) {
         if (!p.second->parse())
             return false;
+        if (!load_imported(p.second.get()))
+            return false;
     }
+
     return true;
 }
 
 void parser::print() {
+    std::cout << "[";
+    int n = 0;
     for (auto &p : m_modules) {
+        if (n > 0)
+            std::cout << ",";
         p.second->print();
+        n++;
     }
 
-    std::cout << std::endl;
+    std::cout << "]" << std::endl;
 }
 
 void module_tree::print(size_t &n) {
@@ -2020,7 +2094,7 @@ void module_tree::print(size_t &n) {
 }
 
 void module::print() {
-    std::cout << "{\"import\":[";
+    std::cout << "{\"path\":\"" << m_filename << "\",\"import\":[";
     size_t n = 0;
     m_modules.print(n);
 

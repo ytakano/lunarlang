@@ -25,7 +25,7 @@ class lunar_env {
     //   "/home/user/foo/bar.lunar" is returned
     //   only if m_paths includes "/home/user" and the file exists.
     //   if there is no such file, empty path is returned
-    fs::path get_module_path(std::string &name);
+    fs::path get_module_path(const std::string &name);
 
   private:
     std::vector<fs::path> m_paths;

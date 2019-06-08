@@ -8,10 +8,11 @@ void lunar_env::add(const char *path) {
     auto p = fs::path(path);
     p.remove_filename();
     p = fs::absolute(p);
+    p = fs::canonical(p);
     m_paths.push_back(p);
 }
 
-fs::path lunar_env::get_module_path(std::string &name) {
+fs::path lunar_env::get_module_path(const std::string &name) {
     std::vector<std::string> strs;
     boost::split(strs, name, boost::is_any_of("."));
 

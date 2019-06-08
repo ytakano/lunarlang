@@ -1,4 +1,4 @@
-import type.a as t
+import type as t
 
 struct s0 {
     a : [u32 * 3]

@@ -729,6 +729,9 @@ class module {
     // (without as id)
     module_tree m_modules;
 
+    bool m_is_parsed;
+    bool m_is_loaded_module;
+
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();
     ptr_ast_id parse_tvar();
@@ -776,6 +779,8 @@ class module {
     void parse_spaces_sep();
     bool parse_spaces_plus();
     bool parse_sep();
+
+    friend class parser;
 };
 
 typedef std::unique_ptr<module> ptr_module;
@@ -785,6 +790,7 @@ class parser {
     parser();
     virtual ~parser() {}
 
+    bool parse_module(const std::string &str);
     void add_load_path(const char *p);
     bool add_module(const std::string &filename);
     bool parse();
@@ -809,6 +815,8 @@ class parser {
 
     std::unordered_map<std::string, int> m_op2pri;
     lunar_env m_env;
+
+    bool load_imported(module *m);
 
     friend class module;
 };
