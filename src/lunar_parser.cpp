@@ -174,7 +174,7 @@ parser::parser() {
 }
 
 void module_tree::add(ptr_ast_import ptr, int n) {
-    auto &id = ptr->m_id[n]->m_id;
+    auto &id = ptr->m_id->m_ids[n]->m_id;
     auto it = m_children.find(id);
     if (it == m_children.end()) {
         m_children[id] = std::make_unique<module_tree>();
@@ -182,7 +182,7 @@ void module_tree::add(ptr_ast_import ptr, int n) {
     }
 
     n++;
-    if (n < ptr->m_id.size()) {
+    if (n < ptr->m_id->m_ids.size()) {
         it->second->add(std::move(ptr), n);
     } else {
         it->second->m_import = std::move(ptr);
@@ -241,7 +241,7 @@ bool module::parse() {
 
             // TODO: check multiple definition
             m_id2inst.insert(std::pair<std::string, ptr_ast_instance>(
-                inst->m_arg->m_id->m_id, std::move(inst)));
+                inst->m_arg->m_id->get_id(), std::move(inst)));
         } else if (id->m_id == "class") {
             auto cls = parse_class();
             if (!cls)
@@ -296,9 +296,9 @@ bool module::parse() {
 
                 m_id2import[im->m_as->m_id] = std::move(im);
             } else {
-                if (im->m_id.size() == 1) {
+                if (im->m_id->m_ids.size() == 1) {
                     // check multiple definition
-                    if (is_defined(im->m_id[0]->m_id, im.get()))
+                    if (is_defined(im->m_id->m_ids[0]->m_id, im.get()))
                         return false;
                 }
 
@@ -359,32 +359,44 @@ ptr_ast_id module::parse_id() {
     return ret;
 }
 
-// $IMPORT := import $MODULE $AS?
+// $DOTID = $ID | $ID . $DOTID
+ptr_ast_dotid module::parse_dotid() {
+    auto ret = std::make_unique<ast_dotid>();
+
+    ret->set_pos(m_parsec);
+
+    ptr_ast_id id;
+    PARSEID(id, m_parsec);
+    ret->m_ids.push_back(std::move(id));
+
+    for (;;) {
+        char c;
+        PTRY(m_parsec, c, [](module &m) {
+            m.parse_spaces();
+            return m.m_parsec.character('.');
+        }(*this));
+
+        if (m_parsec.is_fail())
+            break;
+
+        parse_spaces();
+        PARSEID(id, m_parsec);
+        ret->m_ids.push_back(std::move(id));
+    }
+
+    return ret;
+}
+
+// $IMPORT := import $DOTID $AS?
 // $AS := as $ID
-// $MODULE := $ID | $ID.$MODULE
 ptr_ast_import module::parse_import() {
     auto ret = std::make_unique<ast_import>();
 
     SPACEPLUS();
 
-    ptr_ast_id id;
-    PARSEID(id, m_parsec);
-    ret->m_id.push_back(std::move(id));
-
-    for (;;) {
-        bool is_dot;
-        PTRY(m_parsec, is_dot, [](module &m) {
-            m.m_parsec.character('.');
-            if (m.m_parsec.is_fail())
-                return false;
-            return true;
-        }(*this))
-        if (!is_dot)
-            break;
-
-        PARSEID(id, m_parsec);
-        ret->m_id.push_back(std::move(id));
-    }
+    ret->m_id = parse_dotid();
+    if (!ret->m_id)
+        return nullptr;
 
     bool is_import;
     PTRY(m_parsec, is_import, [](module &m) {
@@ -520,7 +532,7 @@ ptr_ast_tvars module::parse_tvars() {
 // $TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC |
 //          ( $TYPES? ) | [ $TYPE $ARRNUM? ]
 // $ARRNUM := * $EXPR
-// $IDTVAR := $ID | $TVAR
+// $IDTVAR := $DOTID | $TVAR
 // $TYPESPEC := : $TYPE
 ptr_ast_type module::parse_type(bool is_funret = false) {
     char c;
@@ -530,7 +542,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     case '`': {
         // $TVAR <$TYPES>?
         auto ret = std::make_unique<ast_normaltype>();
-        PARSETVAR(ret->m_id, m_parsec);
+        PARSETVAR(ret->m_tvar, m_parsec);
 
         parse_arg_types(ret->m_args);
 
@@ -554,7 +566,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     }
     case '[': {
         // [ $TYPE $ARRNUM? ]
-        m_parsec.any();
+        m_parsec.character('[');
         parse_spaces();
         auto ret = std::make_unique<ast_vectype>();
 
@@ -578,14 +590,21 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
 
         return ret;
     }
-    default:
-        auto id = parse_id();
-        if (!id) {
-            SYNTAXERR("expected a type specifier");
-            return nullptr;
-        }
+    default: {
+        bool is_func;
+        PTRY(m_parsec, is_func, [](module &m) {
+            std::string id;
+            PMANYONE(m.m_parsec, id,
+                     m.m_parsec.oneof_not(m.m_parser.m_no_id_char));
 
-        if (id->m_id == "func") {
+            if (id == "func")
+                return true;
+
+            m.m_parsec.set_fail(true);
+            return false;
+        }(*this));
+
+        if (is_func) {
             // func ( $TYPES? ) : $TYPE
             parse_spaces();
             PARSECHAR('(', m_parsec);
@@ -616,13 +635,16 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
         } else {
             // $TYPE <$TYPES>?
             auto ret = std::make_unique<ast_normaltype>();
-            ret->m_id = std::move(id);
+            ret->m_id = parse_dotid();
+            if (!ret->m_id)
+                return nullptr;
 
             if (!parse_arg_types(ret->m_args))
                 return nullptr;
 
             return ret;
         }
+    }
     }
 
     return nullptr; // never reach here
@@ -679,12 +701,14 @@ ptr_ast_types module::parse_types() {
     return ret;
 }
 
-// $PRED := $ID <$TYPES>
+// $PRED := $DOTID <$TYPES>
 ptr_ast_pred module::parse_pred() {
     auto ret = std::make_unique<ast_pred>();
 
     ret->set_pos(m_parsec);
-    PARSEID(ret->m_id, m_parsec);
+    ret->m_id = parse_dotid();
+    if (!ret->m_id)
+        return nullptr;
 
     parse_spaces();
     PARSECHAR('<', m_parsec);
@@ -1991,6 +2015,13 @@ void module::print() {
     size_t n = 0;
     m_modules.print(n);
 
+    for (auto &p : m_id2import) {
+        if (n > 0)
+            std::cout << ",";
+        p.second->print();
+        n++;
+    }
+
     std::cout << "],\"classes\":[";
     n = 1;
     for (auto &p : m_id2class) {
@@ -2047,6 +2078,18 @@ void module::print() {
 
 void ast_id::print() { std::cout << "\"" << m_id << "\""; }
 
+void ast_dotid::print() {
+    std::cout << "\"";
+    int n = 0;
+    for (auto &id : m_ids) {
+        if (n > 0)
+            std::cout << ".";
+        std::cout << id->m_id;
+        n++;
+    }
+    std::cout << "\"";
+}
+
 void ast_kfun::print() {
     std::cout << "{\"left\":";
     m_left->print();
@@ -2097,7 +2140,11 @@ void ast_class::print() {
 
 void ast_normaltype::print() {
     std::cout << "{\"type\": \"normal\",\"id\":";
-    m_id->print();
+
+    if (m_tvar)
+        m_tvar->print();
+    else
+        m_id->print();
 
     if (m_args) {
         std::cout << ",\"type arguments\":";
@@ -2454,20 +2501,13 @@ void ast_member::print() {
 void ast_members::print() { PRINTLIST(m_vars); }
 
 void ast_import::print() {
-    std::cout << "{\"import\":{\"id\":\"";
-    int n = 0;
-    for (auto &p : m_id) {
-        if (n > 0)
-            std::cout << ".";
-        std::cout << p->m_id;
-        n++;
-    }
+    std::cout << "{\"import\":{\"id\":\"" << get_id() << "\"";
+
     if (m_as) {
-        std::cout << "\",\"as\":";
+        std::cout << ",\"as\":";
         m_as->print();
-    } else {
-        std::cout << "\"";
     }
+
     std::cout << "}}";
 }
 

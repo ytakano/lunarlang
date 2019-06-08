@@ -1,7 +1,8 @@
 # The Specification of Lunar Language
 
 ```
-$TOP := $CLASSDECL | $INST | $DEFUN | $IMPORT
+$TOP  := $TOP2 $TOP | ∅
+$TOP2 := $CLASSDECL | $INST | $DEFUN | $IMPORT
 ```
 
 ## Infix Operator
@@ -44,15 +45,14 @@ $SEP := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
 $ID must not be reserved words.
 
 ```
-$IDS := $ID | $ID , $IDS
+$DOTID = $ID | $ID . $DOTID
 ```
 
 ## Import
 
 ```
-$IMPORT := import $MODULE $AS?
+$IMPORT := import $DOTID $AS?
 $AS := as $ID
-$MODULE := $ID | $ID.$MODULE
 ```
 
 ## Class
@@ -106,7 +106,7 @@ A predicate asserts <$TYPES> is a member of the class named by $ID.
 ```
 $PREDS := implies $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
-$PRED := $ID <$TYPES>
+$PRED := $DOTID <$TYPES>
 ```
 
 Example:
@@ -140,7 +140,7 @@ $TVARS := <$TVARKINDS>
 ```
 $TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? ) | [ $TYPE $ARRNUM? ]
 $ARRNUM := * $EXPR
-$IDTVAR := $ID | $TVAR
+$IDTVAR := $DOTID | $TVAR
 $TYPES := $TYPE | $TYPE , $TYPES
 ```
 

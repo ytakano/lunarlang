@@ -29,6 +29,7 @@ struct ast {
 
     enum asttype {
         AST_ID,
+        AST_DOTID,
         AST_CLASS,
         AST_KFUN,       // kind
         AST_KSTAR,      // kind
@@ -70,6 +71,30 @@ struct ast_id : public ast {
 };
 
 typedef std::unique_ptr<ast_id> ptr_ast_id;
+
+struct ast_dotid : public ast {
+    ast_dotid() { m_asttype = AST_DOTID; }
+    virtual ~ast_dotid() {}
+
+    virtual void print();
+
+    std::string get_id() {
+        std::string ret;
+        int n = 0;
+        for (auto &s : m_ids) {
+            if (n > 0)
+                ret += ".";
+
+            ret += s->m_id;
+            n++;
+        }
+        return ret;
+    }
+
+    std::vector<ptr_ast_id> m_ids;
+};
+
+typedef std::unique_ptr<ast_dotid> ptr_ast_dotid;
 
 struct ast_kind : public ast {
     ast_kind() {}
@@ -170,7 +195,9 @@ struct ast_normaltype : public ast_type {
 
     virtual void print();
 
-    ptr_ast_id m_id;
+    ptr_ast_dotid m_id;
+    ptr_ast_id m_tvar; // if this class specifies a type variable, m_tvar is not
+                       // nullptr otherwise m_tvar is nullptr
     ptr_ast_types m_args;
 };
 
@@ -223,7 +250,7 @@ struct ast_pred : public ast {
 
     virtual void print();
 
-    ptr_ast_id m_id;
+    ptr_ast_dotid m_id;
     ptr_ast_types m_args;
 };
 
@@ -638,20 +665,9 @@ struct ast_import : public ast {
         return nullptr;
     }
 
-    std::string get_id() {
-        std::string ret;
-        int n = 0;
-        for (auto &s : m_id) {
-            if (n > 0)
-                ret += ".";
+    std::string get_id() { return m_id->get_id(); }
 
-            ret += s->m_id;
-            n++;
-        }
-        return ret;
-    }
-
-    std::vector<ptr_ast_id> m_id;
+    ptr_ast_dotid m_id;
     ptr_ast_id m_as;
     std::string m_full_path;
 };
@@ -715,6 +731,7 @@ class module {
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();
     ptr_ast_id parse_tvar();
+    ptr_ast_dotid parse_dotid();
     ptr_ast_tvars parse_tvars();
     ptr_ast_kind parse_kind();
     ptr_ast_pred parse_pred();
