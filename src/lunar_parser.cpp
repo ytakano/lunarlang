@@ -32,19 +32,6 @@
         print_err((AST2)->m_line, (AST2)->m_column, m_parsec.get_str());       \
     } while (0)
 
-#define MULTIMPORTERR(ID, FILE1, AST1, FILE2, AST2)                            \
-    do {                                                                       \
-        fprintf(stderr,                                                        \
-                "(%s:%d) semantic error: \"%s\" is multiply imported\n",       \
-                __FILE__, __LINE__, (ID).c_str());                             \
-        fprintf(stderr, "%s:%lu:%lu:\n", (FILE1).c_str(), (AST1)->m_line,      \
-                (AST1)->m_column);                                             \
-        print_err((AST1)->m_line, (AST1)->m_column, m_parsec.get_str());       \
-        fprintf(stderr, "%s:%lu:%lu:\n", (FILE2).c_str(), (AST2)->m_line,      \
-                (AST2)->m_column);                                             \
-        print_err((AST2)->m_line, (AST2)->m_column, m_parsec.get_str());       \
-    } while (0)
-
 #define SPACEPLUS()                                                            \
     do {                                                                       \
         if (!parse_spaces_plus())                                              \
@@ -307,23 +294,16 @@ bool module::parse() {
                 if (is_defined(im->m_as->m_id, im.get()))
                     return false;
 
-                // TODO: add as
-            }
-
-            if (im->m_id.size() == 1) {
-                // check multiple definition
-                if (is_defined(im->m_id[0]->m_id, im.get()))
-                    return false;
+                m_id2import[im->m_as->m_id] = std::move(im);
             } else {
-                // check multiple import
-                auto p = m_modules.find(im->m_id);
-                if (p != nullptr) {
-                    MULTIMPORTERR(im->get_id(), m_filename, p, m_filename, im);
-                    return false;
+                if (im->m_id.size() == 1) {
+                    // check multiple definition
+                    if (is_defined(im->m_id[0]->m_id, im.get()))
+                        return false;
                 }
-            }
 
-            m_modules.add(std::move(im));
+                m_modules.add(std::move(im));
+            }
         } else {
             SYNTAXERR2("unexpected identifier", id->m_line, id->m_column);
             return false;
@@ -337,7 +317,8 @@ bool module::parse() {
     do {                                                                       \
         auto it = CONTAINER.find(str);                                         \
         if (it != CONTAINER.end()) {                                           \
-            MULTIDEFERR(str, m_filename, it->second.get(), m_filename, ptr);   \
+            MULTIDEFERR(str, m_filename, it->second->get_ast_id(), m_filename, \
+                        ptr->get_ast_id());                                    \
             return true;                                                       \
         }                                                                      \
     } while (0)
@@ -347,15 +328,17 @@ bool module::is_defined(const std::string &str, ast *ptr) {
     IS_DEFINED(m_id2class);
     IS_DEFINED(m_id2struct);
     IS_DEFINED(m_id2union);
+    IS_DEFINED(m_id2import);
 
+    auto id = ptr->get_ast_id();
     auto it = m_modules.m_children.find(str);
     if (it != m_modules.m_children.end()) {
         fprintf(stderr,
                 "(%s:%d) semantic error: \"%s\" is used as module name\n",
                 __FILE__, __LINE__, str.c_str());
-        fprintf(stderr, "%s:%lu:%lu:\n", m_filename.c_str(), ptr->m_line,
-                ptr->m_column);
-        print_err(ptr->m_line, ptr->m_column, m_parsec.get_str());
+        fprintf(stderr, "%s:%lu:%lu:\n", m_filename.c_str(), id->m_line,
+                id->m_column);
+        print_err(id->m_line, id->m_column, m_parsec.get_str());
         return true;
     }
 

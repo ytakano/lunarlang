@@ -12,6 +12,8 @@
 
 namespace lunar {
 
+struct ast_id;
+
 struct ast {
     ast() : m_line(0), m_column(0) {}
     virtual ~ast(){};
@@ -22,6 +24,8 @@ struct ast {
         m_line = p.get_line();
         m_column = p.get_column();
     }
+
+    virtual const ast_id *get_ast_id() { return nullptr; }
 
     enum asttype {
         AST_ID,
@@ -127,6 +131,7 @@ struct ast_class : public ast {
     virtual ~ast_class() {}
 
     virtual void print();
+    virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
     ptr_ast_tvars m_tvars;
@@ -300,6 +305,7 @@ struct ast_defun : public ast {
     virtual ~ast_defun() {}
 
     virtual void print();
+    virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
     ptr_ast_infix m_infix;
@@ -594,6 +600,7 @@ struct ast_struct : public ast_type {
     virtual ~ast_struct() {}
 
     virtual void print();
+    virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
     ptr_ast_tvars m_tvars; // type arguments
@@ -608,6 +615,7 @@ struct ast_union : public ast_type {
     virtual ~ast_union() {}
 
     virtual void print();
+    virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
     ptr_ast_tvars m_tvars; // type arguments
@@ -622,6 +630,13 @@ struct ast_import : public ast {
     virtual ~ast_import() {}
 
     virtual void print();
+
+    virtual const ast_id *get_ast_id() {
+        if (m_as)
+            return m_as.get();
+
+        return nullptr;
+    }
 
     std::string get_id() {
         std::string ret;
@@ -690,6 +705,11 @@ class module {
     std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
     std::unordered_map<std::string, ptr_ast_union> m_id2union;
     std::unordered_multimap<std::string, ptr_ast_instance> m_id2inst;
+
+    // import module as id
+    std::unordered_map<std::string, ptr_ast_import> m_id2import;
+    // import module
+    // (without as id)
     module_tree m_modules;
 
     ptr_ast_class parse_class();
