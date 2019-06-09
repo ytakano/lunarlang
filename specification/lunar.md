@@ -244,3 +244,19 @@ $FLOAT := $DECIMAL.[0-9]* $EXP? f?
 $EXP := e $PLUSMINUS [0-9]+
 $PLUSMINUS := + | -
 ```
+
+## Module Loading
+
+There are the global and the module local loading paths for looking up modules.
+For each module, the directory path, on which the module exists,
+is set as the local loading path.
+
+Assume that the global loading path is /home/usr/.lunar/include,
+and there is a file, /home/usr/.lunar/include/bar/buzz.lunar,
+in the global loading path.
+When compiling /home/user/project/foo.lunar,
+the /home/user/project directory is set as the module
+local loading path, and "bar.buzz" is imported in the foo.lunar,
+/home/user/project/bar/buzz.lunar is looked up first of all.
+If there is no buzz.lunar on the module local loading hath,
+then /home/usr/.lunar/include/bar/buzz.lunar is looked up finally.

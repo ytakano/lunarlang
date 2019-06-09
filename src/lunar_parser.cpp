@@ -2018,33 +2018,60 @@ bool parser::add_module(const std::string &filename) {
     return true;
 }
 
-bool parser::load_imported(module *m) {
+bool parser::load_module_tree(module *m, module_tree *tree) {
+    if (tree->m_import) {
+        if (!load_module(m, tree->m_import.get()))
+            return false;
+    }
+
+    for (auto &c : tree->m_children) {
+        if (!load_module_tree(m, c.second.get()))
+            return false;
+    }
+
+    return true;
+}
+
+bool parser::load_module(module *m, ast_import *im) {
+    std::string id = im->get_id();
+
+    // find module in current path first of all
+    auto path = m->m_env.get_module_path(id);
+    if (path.empty()) {
+        // fallback
+        path = m_env.get_module_path(id);
+        if (path.empty()) {
+            MODULENOTFOUND(m, im, id);
+            return false;
+        }
+    }
+
+    std::string str = path.string();
+    im->m_full_path = str;
+    if (!HASKEY(m_modules, str)) {
+        add_module(str);
+        if (!parse_module(str))
+            return false;
+
+        if (!load_all_module(m_modules[str].get()))
+            return false;
+    }
+
+    return true;
+}
+
+bool parser::load_all_module(module *m) {
     if (m->m_is_loaded_module)
         return true;
 
     for (auto &p : m->m_id2import) {
-        std::string id = p.second->get_id();
-        auto path = m->m_env.get_module_path(id);
-        if (path.empty()) {
-            path = m_env.get_module_path(id);
-            if (path.empty()) {
-                MODULENOTFOUND(m, p.second, id);
-                return false;
-            }
-        }
-
-        std::string str = path.string();
-        p.second->m_full_path = str;
-        if (!HASKEY(m_modules, str)) {
-            add_module(str);
-            if (!parse_module(str))
-                return false;
-
-            load_imported(m_modules[str].get());
-        }
+        if (!load_module(m, p.second.get()))
+            return false;
     }
 
-    // TODO: scan m_modules
+    // scan m_modules
+    if (!load_module_tree(m, &m->m_modules))
+        return false;
 
     m->m_is_loaded_module = true;
     return true;
@@ -2059,7 +2086,7 @@ bool parser::parse() {
     for (auto &p : m_modules) {
         if (!p.second->parse())
             return false;
-        if (!load_imported(p.second.get()))
+        if (!load_all_module(p.second.get()))
             return false;
     }
 

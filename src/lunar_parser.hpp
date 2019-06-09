@@ -816,7 +816,9 @@ class parser {
     std::unordered_map<std::string, int> m_op2pri;
     lunar_env m_env;
 
-    bool load_imported(module *m);
+    bool load_all_module(module *m);
+    bool load_module(module *m, ast_import *im);
+    bool load_module_tree(module *m, module_tree *tree);
 
     friend class module;
 };

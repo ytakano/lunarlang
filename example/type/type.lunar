@@ -1,4 +1,4 @@
-import vec as v
+import vec
 
 union t0 {
     a : struct {
