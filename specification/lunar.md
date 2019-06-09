@@ -260,5 +260,5 @@ the "/home/user/project" directory is set as the module
 local loading path.
 If "bar.buzz" is imported in the "foo.lunar",
 "/home/user/project/bar/buzz.lunar" is looked up first of all.
-If there is no "buzz.lunar" on the module local loading hath,
+If there is no "buzz.lunar" on the module local loading path,
 then "/home/usr/.lunar/include/bar/buzz.lunar" is looked up finally.
