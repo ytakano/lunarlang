@@ -24,7 +24,7 @@ shared_kind type_const::make_kind(unsigned int numtargs) {
     }
 }
 
-shared_type type_const::make(const std::string &id, unsigned int numtargs,
+shared_type type_const::make(const type_id &id, unsigned int numtargs,
                              CTYPE ctype) {
     auto ret = std::shared_ptr<type_const>(new type_const(CTYPE_PRIMTIVE));
 
@@ -48,30 +48,44 @@ shared_type type_app::make(shared_type lhs, shared_type rhs) {
     return ret;
 }
 
-static inline shared_type mk_vec() { return type_const::make("vec", 1); }
-static inline shared_type mk_dict() { return type_const::make("dict", 2); }
+static inline shared_type mk_vec() {
+    type_id id;
+    id.m_id = "vec";
+    return type_const::make(id, 1);
+}
+
+static inline shared_type mk_dict() {
+    type_id id;
+    id.m_id = "dict";
+    return type_const::make(id, 2);
+}
+
 static inline shared_type mk_tuple(unsigned int num) {
-    return type_const::make("tuple", num);
+    type_id id;
+    id.m_id = "tuple";
+    return type_const::make(id, num);
 }
 
 // make function type
 // input:
 //   num: 1 + the sum of the number of the arguments and the type arguments
-static inline shared_type mk_fun(unsigned int num) {
-    return type_const::make("fun", num, type_const::CTYPE_FUN);
+static inline shared_type mk_func(unsigned int num) {
+    type_id id;
+    id.m_id = "func";
+    return type_const::make(id, num, type_const::CTYPE_FUNC);
 }
 
 // make struct type
 // input:
 //   num: the number of the member variables and the type arguments
-static inline shared_type mk_struct(const std::string &id, unsigned int num) {
+static inline shared_type mk_struct(const type_id &id, unsigned int num) {
     return type_const::make(id, num, type_const::CTYPE_STRUCT);
 }
 
 // make union type
 // input:
 //   num: the number of the member variables and the type arguments
-static inline shared_type mk_union(const std::string &id, unsigned int num) {
+static inline shared_type mk_union(const type_id &id, unsigned int num) {
     return type_const::make(id, num, type_const::CTYPE_UNION);
 }
 

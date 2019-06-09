@@ -14,6 +14,33 @@
 
 namespace lunar {
 
+struct type_id {
+    std::string m_path;
+    std::string m_id;
+
+    bool operator==(const type_id &rhs) const {
+        return m_path == rhs.m_path && m_id == rhs.m_id;
+    }
+};
+
+} // namespace lunar
+
+namespace std {
+
+template <> struct std::hash<lunar::type_id> {
+  public:
+    size_t operator()(const lunar::type_id &data) const {
+        std::size_t seed = 0;
+        boost::hash_combine(seed, data.m_path);
+        boost::hash_combine(seed, data.m_id);
+        return seed;
+    }
+};
+
+} // namespace std
+
+namespace lunar {
+
 class substitution;
 class ast_class;
 
@@ -88,7 +115,7 @@ class type_const : public type {
         CTYPE_PRIMTIVE, // primitive type
         CTYPE_STRUCT,   // struct type
         CTYPE_UNION,    // union type
-        CTYPE_FUN,      // function type
+        CTYPE_FUNC,     // function type
     };
 
     bool operator==(const type_const &lhs) const {
@@ -97,17 +124,17 @@ class type_const : public type {
     }
 
     virtual shared_kind get_kind() { return m_kind; }
-    const std::string &get_id() { return m_id; }
+    const type_id &get_id() { return m_id; }
 
     // id: type name
     // numtargs: the number of type arguments
-    static shared_type make(const std::string &id, unsigned int numtargs,
+    static shared_type make(const type_id &id, unsigned int numtargs,
                             CTYPE ctype = CTYPE_PRIMTIVE);
 
   protected:
     type_const(CTYPE ctype) : m_ctype(ctype) { m_subtype = TYPE_CONST; }
     static shared_kind make_kind(unsigned int numtargs);
-    std::string m_id; // identifier of type (e.g. num, bool)
+    type_id m_id; // identifier of type (e.g. num, bool)
     shared_kind m_kind;
     CTYPE m_ctype;
 };
@@ -236,11 +263,13 @@ class pred {
     pred() {}
     virtual ~pred() {}
 
-    std::string m_id; // class name
+    type_id m_id; // class name_id
     std::vector<shared_type> m_types;
 };
 
 typedef std::shared_ptr<pred> shared_pred;
+
+struct ast;
 
 // qualified type
 // e.g.
@@ -257,6 +286,7 @@ class qual {
     virtual ~qual() {}
 
     std::vector<shared_pred> m_preds;
+    ast *m_ast;
 };
 
 // class declaration
@@ -265,15 +295,15 @@ class typeclass : public qual {
     typeclass() {}
     virtual ~typeclass() {}
 
-    std::string m_id; // class name
+    type_id m_id; // class name
 
     // satisfy
     // x ∈ tv(m_args)
     // y, z ∈ tv(m_funcs)
     // ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
     // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
-    std::vector<shared_type_var> m_args;                  // arguments
-    std::unordered_map<std::string, shared_type> m_funcs; // interfaces
+    std::vector<shared_type_var> m_args;              // arguments
+    std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 
     bool apply(std::vector<shared_type> &args);
 };
@@ -286,9 +316,9 @@ class inst : public qual {
     inst() {}
     virtual ~inst() {}
 
-    std::string m_id;                // name
-    std::vector<shared_type> m_args; // type variable arguments
-    std::unordered_map<std::string, shared_type> m_funcs; // interfaces
+    type_id m_id;                                     // class name
+    std::vector<shared_type> m_args;                  // type variable arguments
+    std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 };
 
 typedef std::shared_ptr<inst> shared_inst;
@@ -300,7 +330,7 @@ class qual_type : public qual {
     qual_type() {}
     virtual ~qual_type() {}
 
-    shared_type_const m_type;
+    shared_type m_type;
     std::vector<shared_type_var> m_args; // type arguments
 };
 
@@ -323,10 +353,10 @@ class classenv {
     };
 
     // class name -> (class declarations, class instance declarations)
-    std::unordered_map<std::string, env> m_env;
+    std::unordered_map<type_id, env> m_env;
 
     // function name -> class name
-    std::unordered_map<std::string, std::string> m_func2class;
+    std::unordered_map<type_id, std::string> m_func2class;
 };
 
 } // namespace lunar
