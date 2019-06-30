@@ -197,17 +197,17 @@ void module_tree::add(ptr_ast_import ptr, int n) {
     }
 }
 
-const ast_import *module_tree::find(const std::vector<ptr_ast_id> &id, int n) {
-    auto it = m_children.find(id[n]->m_id);
-    n++;
+const ast_import *module_tree::find(const std::vector<ptr_ast_id> &id,
+                                    unsigned int &pos) const {
+    auto it = m_children.find(id[pos]->m_id);
+    pos++;
 
     if (it != m_children.end()) { // found
-        if (n < id.size())
-            return it->second->find(id, n);
-        else {
-            if (it->second->m_import)
-                return it->second->m_import.get();
-            return nullptr;
+        if (it->second->m_import) {
+            return it->second->m_import.get();
+        } else {
+            if (pos < id.size())
+                return it->second->find(id, pos);
         }
     }
 
@@ -349,6 +349,7 @@ bool module::is_defined(const std::string &str, ast *ptr) {
     IS_DEFINED(m_id2struct);
     IS_DEFINED(m_id2union);
     IS_DEFINED(m_id2import);
+    IS_DEFINED(m_id2union_mem);
 
     auto id = ptr->get_ast_id();
     auto it = m_modules.m_children.find(str);
@@ -363,6 +364,70 @@ bool module::is_defined(const std::string &str, ast *ptr) {
     }
 
     return false;
+}
+
+module *module::find_module(const ast_dotid *dotid, unsigned int pos) const {
+    module *ret = nullptr;
+
+    auto it = m_id2import.find(dotid->m_ids[pos]->m_id);
+    if (it != m_id2import.end()) {
+        auto it_mod = m_parser.m_modules.find(it->second->m_full_path);
+        assert(it_mod != m_parser.m_modules.end());
+        ret = it_mod->second.get();
+        pos++;
+    } else {
+        auto ptr_im = m_modules.find(dotid->m_ids, pos);
+        if (ptr_im != nullptr) {
+            auto it_mod = m_parser.m_modules.find(ptr_im->m_full_path);
+            assert(it_mod != m_parser.m_modules.end());
+            ret = it_mod->second.get();
+        }
+    }
+
+    return ret;
+}
+
+bool module::find_typeclass(const ast_dotid *dotid, std::string &path,
+                            std::string &id, unsigned int pos) const {
+    if (dotid->m_ids.size() - pos == 1) {
+        auto it = m_id2class.find(dotid->m_ids[pos]->m_id);
+        if (it != m_id2class.end()) {
+            path = m_filename;
+            id = it->second->m_id->m_id;
+            return true;
+        }
+    }
+
+    module *ptr_mod = find_module(dotid, pos);
+    if (ptr_mod == nullptr)
+        return false;
+
+    return ptr_mod->find_typeclass(dotid, path, id, pos);
+}
+
+#define FIND_TYPE(C)                                                           \
+    do {                                                                       \
+        auto it = (C).find(dotid->m_ids[pos]->m_id);                           \
+        if (it != (C).end()) {                                                 \
+            path = m_filename;                                                 \
+            id = it->second->m_id->m_id;                                       \
+            return true;                                                       \
+        }                                                                      \
+    } while (0)
+
+bool module::find_type(const ast_dotid *dotid, std::string &path,
+                       std::string &id, unsigned int pos) const {
+    if (dotid->m_ids.size() - pos == 1) {
+        FIND_TYPE(m_id2struct);
+        FIND_TYPE(m_id2union);
+        FIND_TYPE(m_id2union_mem);
+    }
+
+    module *ptr_mod = find_module(dotid, pos);
+    if (ptr_mod == nullptr)
+        return false;
+
+    return ptr_mod->find_type(dotid, path, id, pos);
 }
 
 // $ID := [^0-9$WHITESPACE][^$WHITESPACE]+
@@ -1609,6 +1674,14 @@ ptr_ast_type module::parse_member_type() {
 
         un->m_line = line;
         un->m_column = column;
+
+        for (auto &mem : un->m_members->m_vars) {
+            if (is_defined(mem->m_id->m_id, mem->m_id.get())) {
+                return nullptr;
+            }
+            m_id2union_mem[mem->m_id->m_id] = mem.get();
+        }
+
         return un;
     } else {
         return parse_type();
@@ -2618,7 +2691,7 @@ void ast_import::print() {
         m_as->print();
     }
 
-    std::cout << "}}";
+    std::cout << ",\"path\":\"" << m_full_path << "\"}}";
 }
 
 #define PRINTSTUN(STR)                                                         \

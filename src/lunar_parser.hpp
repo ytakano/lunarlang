@@ -66,6 +66,8 @@ struct ast_id : public ast {
     ast_id() { m_asttype = AST_ID; }
     virtual ~ast_id() {}
 
+    virtual const ast_id *get_ast_id() { return this; }
+
     virtual void print();
 
     std::string m_id;
@@ -605,6 +607,7 @@ struct ast_member : public ast {
     virtual ~ast_member() {}
 
     virtual void print();
+    virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
     ptr_ast_type m_type;
@@ -691,7 +694,10 @@ class module_tree {
     virtual ~module_tree() {}
 
     void add(ptr_ast_import ptr, int n = 0);
-    const ast_import *find(const std::vector<ptr_ast_id> &id, int n = 0);
+    // find corresponding import AST
+    // if no AST is found, then nullptr is returned
+    const ast_import *find(const std::vector<ptr_ast_id> &id,
+                           unsigned int &pos) const;
 
     void print(size_t &n);
 
@@ -712,6 +718,18 @@ class module {
 
     bool is_defined(const std::string &str, ast *ptr);
 
+    // find type class recursively
+    bool find_typeclass(const ast_dotid *dotid, std::string &path,
+                        std::string &id, unsigned int pos = 0) const;
+
+    // find user defined type recursively
+    bool find_type(const ast_dotid *dotid, std::string &path, std::string &id,
+                   unsigned int pos = 0) const;
+
+    module *find_module(const ast_dotid *dotid, unsigned int pos) const;
+
+    const std::string &get_filename() const { return m_filename; }
+
   private:
     parsec m_parsec;
     const std::string m_filename;
@@ -721,6 +739,7 @@ class module {
     std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
     std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
     std::unordered_map<std::string, ptr_ast_union> m_id2union;
+    std::unordered_map<std::string, ast_member *> m_id2union_mem;
     std::unordered_multimap<std::string, ptr_ast_instance> m_id2inst;
 
     // import module as id
@@ -728,6 +747,9 @@ class module {
     // import module
     // (without as id)
     module_tree m_modules;
+    // import module
+    // TODO:
+    std::vector<ptr_ast_import> m_vec_modules;
 
     bool m_is_parsed;
     bool m_is_loaded_module;

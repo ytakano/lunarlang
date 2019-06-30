@@ -82,6 +82,8 @@ typedef std::shared_ptr<kfun> shared_kfun;
 
 int cmp_kind(const kind *lhs, const kind *rhs);
 
+class ast_type;
+
 // type
 class type {
   public:
@@ -95,6 +97,8 @@ class type {
     };
 
     subtype m_subtype;
+
+    static std::shared_ptr<type> make(const ast_type *ptr);
 
     virtual shared_kind get_kind() = 0;
 };
@@ -133,7 +137,6 @@ class type_const : public type {
 
   protected:
     type_const(CTYPE ctype) : m_ctype(ctype) { m_subtype = TYPE_CONST; }
-    static shared_kind make_kind(unsigned int numtargs);
     type_id m_id; // identifier of type (e.g. num, bool)
     shared_kind m_kind;
     CTYPE m_ctype;
@@ -166,12 +169,12 @@ class type_var : public type {
     const std::string &get_id() { return m_id; }
 
     // id: type variable name
-    static shared_type make(const std::string &id);
+    static shared_type make(const std::string &id, unsigned int numtargs);
 
   private:
     type_var() { m_subtype = TYPE_VAR; }
-    std::string m_id;   // type variable name
-    shared_kind m_kind; // must be *
+    std::string m_id; // type variable name
+    shared_kind m_kind;
 };
 
 typedef std::shared_ptr<type_var> shared_type_var;
@@ -256,15 +259,15 @@ typedef std::shared_ptr<substitution> shared_subst;
 
 // a predicate asserts that m_types are members of a class named m_id
 // e.g.
-//   num<`a>: class name = num, m_types = [`a]
-//   ClassA<`a, `b>: class name = ClassA, m_types = [`a, `b]
+//   num<`a>: class name = num, m_args = [`a]
+//   ClassA<`a, `b>: class name = ClassA, m_args = [`a, `b]
 class pred {
   public:
     pred() {}
     virtual ~pred() {}
 
     type_id m_id; // class name_id
-    std::vector<shared_type> m_types;
+    std::vector<shared_type> m_args;
 };
 
 typedef std::shared_ptr<pred> shared_pred;
@@ -334,12 +337,14 @@ class qual_type : public qual {
     std::vector<shared_type_var> m_args; // type arguments
 };
 
+class module;
+
 class classenv {
   public:
     classenv() {}
     virtual ~classenv() {}
 
-    void add_class(const ast_class *ptr);
+    void add_class(const module *ptr_mod, const ast_class *ptr);
 
   private:
     struct env {

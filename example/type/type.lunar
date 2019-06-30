@@ -16,7 +16,7 @@ struct t1 {
     y : bool
     z : union {
         v0
-        v1
+        v0
     }
     w : either<u32, bool>
 }

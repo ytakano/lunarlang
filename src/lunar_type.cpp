@@ -7,7 +7,7 @@ namespace lunar {
 static inline shared_star mk_star() { return std::make_unique<star>(); }
 static inline shared_kfun mk_kfun() { return std::make_unique<kfun>(); }
 
-shared_kind type_const::make_kind(unsigned int numtargs) {
+static shared_kind make_kind(unsigned int numtargs) {
     if (numtargs == 0) {
         return mk_star();
     } else {
@@ -34,10 +34,10 @@ shared_type type_const::make(const type_id &id, unsigned int numtargs,
     return ret;
 }
 
-shared_type type_var::make(const std::string &id) {
+shared_type type_var::make(const std::string &id, unsigned int numtargs) {
     auto ret = std::shared_ptr<type_var>(new type_var);
     ret->m_id = id;
-    ret->m_kind = mk_star();
+    ret->m_kind = make_kind(numtargs);
     return ret;
 }
 
@@ -87,6 +87,30 @@ static inline shared_type mk_struct(const type_id &id, unsigned int num) {
 //   num: the number of the member variables and the type arguments
 static inline shared_type mk_union(const type_id &id, unsigned int num) {
     return type_const::make(id, num, type_const::CTYPE_UNION);
+}
+
+std::shared_ptr<type> type::make(const ast_type *ptr) {
+    switch (ptr->m_type) {
+    case ast_type::TYPE_NORMAL: {
+        auto t = (const ast_normaltype *)(ptr);
+        if (t->m_tvar) {
+            // type variable
+            auto ret =
+                type_var::make(t->m_tvar->m_id, t->m_args->m_types.size());
+            for (auto &ty : t->m_args->m_types) {
+                ret = type_app::make(ret, type::make(ty.get()));
+            }
+            return ret;
+        } else {
+            // normal type, which is either user defined or primitive type
+            // TODO
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return nullptr;
 }
 
 // if * , * then 0
@@ -349,8 +373,22 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     return nullptr;
 }
 
-void classenv::add_class(const ast_class *ptr) {
+void classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     auto cls = std::make_shared<typeclass>();
+
+    cls->m_id.m_path = ptr_mod->get_filename();
+    cls->m_id.m_id = ptr->m_id->m_id;
+
+    for (auto &p : ptr->m_preds->m_preds) {
+        auto pd = std::make_shared<pred>();
+        if (!ptr_mod->find_typeclass(p->m_id.get(), pd->m_id.m_path,
+                                     pd->m_id.m_id)) {
+            // TODO: print error: no such type class
+            return;
+        }
+
+        // TODO
+    }
 }
 
 void typing(ptr_ast_type &ast) {}
