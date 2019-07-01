@@ -155,13 +155,13 @@ $TYPESPEC := : $TYPE
 ```
 $STRUCT := struct $ID $TVARS? $PREDS? { $PROD }
 $PROD := $PRODTYPE | $PRODTYPE $SEP $PROD
-$PRODTYPE := $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
+$PRODTYPE := $ID $TYPESPEC
 ```
 
 ```
 $UNION := struct $ID $TVARS? $PREDS? { $SUM }
 $SUM := $SUMTYPE | $SUMTYPE $SEP $SUM
-$SUMTYPE := $ID | $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
+$SUMTYPE := $ID | $ID $TYPESPEC
 ```
 
 ## Function Definition

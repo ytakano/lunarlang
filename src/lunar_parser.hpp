@@ -794,7 +794,6 @@ class module {
     ptr_ast_members parse_sums();
     ptr_ast_struct parse_struct();
     ptr_ast_union parse_union();
-    ptr_ast_type parse_member_type();
     ptr_ast_import parse_import();
     bool parse_st_un(const char *str);
     void parse_spaces();

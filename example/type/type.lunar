@@ -1,23 +1,13 @@
 import vec
 
 union t0 {
-    a : struct {
-        x : u32
-        y : u32
-    }
-    b : struct {
-        z : bool
-        w : u64
-    }
+    a: bool
+    b: u32
 }
 
 struct t1 {
     x : u32
     y : bool
-    z : union {
-        v0
-        v0
-    }
     w : either<u32, bool>
 }
 

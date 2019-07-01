@@ -1651,45 +1651,8 @@ bool module::parse_st_un(const char *str) {
     return !m_parsec.is_fail();
 }
 
-// $TYPESPEC | struct { $PROD } | union { $SUM }
-ptr_ast_type module::parse_member_type() {
-    auto line = m_parsec.get_line();
-    auto column = m_parsec.get_column();
-    if (parse_st_un("struct")) {
-        // parse anonymous struct
-        auto st = std::make_unique<ast_struct>();
-        st->m_members = parse_prods();
-        if (!st->m_members)
-            return nullptr;
-
-        st->m_line = line;
-        st->m_column = column;
-        return st;
-    } else if (parse_st_un("union")) {
-        // parse anonymous union
-        auto un = std::make_unique<ast_union>();
-        un->m_members = parse_sums();
-        if (!un->m_members)
-            return nullptr;
-
-        un->m_line = line;
-        un->m_column = column;
-
-        for (auto &mem : un->m_members->m_vars) {
-            if (is_defined(mem->m_id->m_id, mem->m_id.get())) {
-                return nullptr;
-            }
-            m_id2union_mem[mem->m_id->m_id] = mem.get();
-        }
-
-        return un;
-    } else {
-        return parse_type();
-    }
-}
-
 // $PROD := $PRODTYPE | $PRODTYPE $SEP $PROD
-// $PRODTYPE := $ID $TYPESPEC | $ID : struct { $PROD } | $ID : union { $SUM }
+// $PRODTYPE := $ID $TYPESPEC
 ptr_ast_member module::parse_prod() {
     auto mem = std::make_unique<ast_member>();
     mem->m_line = m_parsec.get_line();
@@ -1702,7 +1665,7 @@ ptr_ast_member module::parse_prod() {
 
     parse_spaces();
 
-    mem->m_type = parse_member_type();
+    mem->m_type = parse_type();
     if (!mem->m_type)
         return nullptr;
 
@@ -1710,8 +1673,7 @@ ptr_ast_member module::parse_prod() {
 }
 
 // $SUM := $SUMTYPE | $SUMTYPE $SEP $SUM
-// $SUMTYPE := $ID | $ID $TYPESPEC |
-//             $ID : struct { $PROD } | $ID : union { $SUM }
+// $SUMTYPE := $ID | $ID $TYPESPEC
 ptr_ast_member module::parse_sum() {
     auto mem = std::make_unique<ast_member>();
     mem->m_line = m_parsec.get_line();
@@ -1728,7 +1690,7 @@ ptr_ast_member module::parse_sum() {
 
     parse_spaces();
 
-    mem->m_type = parse_member_type();
+    mem->m_type = parse_type();
     if (!mem->m_type)
         return nullptr;
 
