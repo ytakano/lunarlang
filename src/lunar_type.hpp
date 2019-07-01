@@ -98,7 +98,8 @@ class type {
 
     subtype m_subtype;
 
-    static std::shared_ptr<type> make(const ast_type *ptr);
+    static std::shared_ptr<type> make(const module *ptr_mod,
+                                      const ast_type *ptr);
 
     virtual shared_kind get_kind() = 0;
 };

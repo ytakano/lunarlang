@@ -7,6 +7,9 @@ namespace lunar {
 static inline shared_star mk_star() { return std::make_unique<star>(); }
 static inline shared_kfun mk_kfun() { return std::make_unique<kfun>(); }
 
+// numtargs = 0 then return *
+//            1 then return * -> *
+//            2 then return * -> * -> *
 static shared_kind make_kind(unsigned int numtargs) {
     if (numtargs == 0) {
         return mk_star();
@@ -89,23 +92,55 @@ static inline shared_type mk_union(const type_id &id, unsigned int num) {
     return type_const::make(id, num, type_const::CTYPE_UNION);
 }
 
-std::shared_ptr<type> type::make(const ast_type *ptr) {
+#define APP_TYPES(RET, TS)                                                     \
+    do {                                                                       \
+        for (auto &ty : TS) {                                                  \
+            auto t = make(ptr_mod, ty.get());                                  \
+            if (!t)                                                            \
+                return nullptr;                                                \
+            RET = type_app::make(RET, t);                                      \
+        }                                                                      \
+    } while (0)
+
+std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
     switch (ptr->m_type) {
     case ast_type::TYPE_NORMAL: {
-        auto t = (const ast_normaltype *)(ptr);
+        auto t = (const ast_normaltype *)ptr;
         if (t->m_tvar) {
             // type variable
             auto ret =
                 type_var::make(t->m_tvar->m_id, t->m_args->m_types.size());
-            for (auto &ty : t->m_args->m_types) {
-                ret = type_app::make(ret, type::make(ty.get()));
-            }
+            APP_TYPES(ret, t->m_args->m_types);
             return ret;
         } else {
             // normal type, which is either user defined or primitive type
-            // TODO
+            type_id id;
+            if (!ptr_mod->find_type(t->m_id.get(), id.m_path, id.m_id)) {
+                // TODO: print error, no such that type
+                return nullptr;
+            }
+            auto ret = type_const::make(id, t->m_args->m_types.size());
+            APP_TYPES(ret, t->m_args->m_types);
+            return ret;
         }
-        break;
+    }
+    case ast_type::TYPE_FUN: {
+        auto t = (const ast_funtype *)ptr;
+        auto ret = mk_func(t->m_args->m_types.size() + 1);
+
+        auto tret = make(ptr_mod, t->m_ret.get());
+        if (!tret)
+            return nullptr;
+
+        ret = type_app::make(ret, tret);
+        APP_TYPES(ret, t->m_args->m_types);
+        return ret;
+    }
+    case ast_type::TYPE_TUPLE: {
+        auto t = (const ast_tupletype *)ptr;
+        auto ret = mk_tuple(t->m_types->m_types.size());
+        APP_TYPES(ret, t->m_types->m_types);
+        return ret;
     }
     default:
         break;
