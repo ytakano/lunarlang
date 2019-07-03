@@ -181,7 +181,7 @@ parser::parser() {
     m_op2pri["!="] = 10;
 }
 
-void module_tree::add(ptr_ast_import ptr, int n) {
+void module_tree::add(ptr_ast_import ptr, size_t n) {
     auto &id = ptr->m_id->m_ids[n]->m_id;
     auto it = m_children.find(id);
     if (it == m_children.end()) {

@@ -1,6 +1,15 @@
 #include "lunar_type.hpp"
+#include "lunar_print.hpp"
 
 #include <assert.h>
+
+#define TYPEERR(M, MSG, AST)                                                   \
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu:(%d) " MSG "\n",                           \
+                (M)->get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
+                __LINE__);                                                     \
+        print_err(AST->m_line, AST->m_column, (M)->get_parsec().get_str());    \
+    } while (0)
 
 namespace lunar {
 
@@ -57,12 +66,6 @@ static inline shared_type mk_vec(unsigned int dim = 1) {
     return type_const::make(id, dim);
 }
 
-static inline shared_type mk_dict() {
-    type_id id;
-    id.m_id = "dict";
-    return type_const::make(id, 2);
-}
-
 static inline shared_type mk_tuple(unsigned int num) {
     type_id id;
     id.m_id = "tuple";
@@ -76,20 +79,6 @@ static inline shared_type mk_func(unsigned int num) {
     type_id id;
     id.m_id = "func";
     return type_const::make(id, num, type_const::CTYPE_FUNC);
-}
-
-// make struct type
-// input:
-//   num: the number of the member variables and the type arguments
-static inline shared_type mk_struct(const type_id &id, unsigned int num) {
-    return type_const::make(id, num, type_const::CTYPE_STRUCT);
-}
-
-// make union type
-// input:
-//   num: the number of the member variables and the type arguments
-static inline shared_type mk_union(const type_id &id, unsigned int num) {
-    return type_const::make(id, num, type_const::CTYPE_UNION);
 }
 
 // make natural number type
@@ -125,7 +114,8 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
             // normal type, which is either user defined or primitive type
             type_id id;
             if (!ptr_mod->find_type(t->m_id.get(), id.m_path, id.m_id)) {
-                // TODO: print error, no such that type
+                // error, no such that type
+                TYPEERR(ptr_mod, "undefined type", t);
                 return nullptr;
             }
             auto ret = type_const::make(id, t->m_args->m_types.size());
@@ -165,6 +155,7 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
         return ret;
     }
     default:
+        assert(false);
         break;
     }
     return nullptr;
@@ -440,7 +431,8 @@ void classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         auto pd = std::make_shared<pred>();
         if (!ptr_mod->find_typeclass(p->m_id.get(), pd->m_id.m_path,
                                      pd->m_id.m_id)) {
-            // TODO: print error: no such type class
+            // error, no such type class
+            TYPEERR(ptr_mod, "undefined type class", p);
             return;
         }
 

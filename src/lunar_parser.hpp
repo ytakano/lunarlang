@@ -694,7 +694,7 @@ class module_tree {
     module_tree() {}
     virtual ~module_tree() {}
 
-    void add(ptr_ast_import ptr, int n = 0);
+    void add(ptr_ast_import ptr, size_t n = 0);
     // find corresponding import AST
     // if no AST is found, then nullptr is returned
     const ast_import *find(const std::vector<ptr_ast_id> &id,
@@ -730,6 +730,7 @@ class module {
     module *find_module(const ast_dotid *dotid, unsigned int pos) const;
 
     const std::string &get_filename() const { return m_filename; }
+    const parsec &get_parsec() const { return m_parsec; }
 
   private:
     parsec m_parsec;
