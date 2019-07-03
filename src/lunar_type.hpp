@@ -42,7 +42,7 @@ template <> struct std::hash<lunar::type_id> {
 namespace lunar {
 
 class substitution;
-class ast_class;
+struct ast_class;
 
 // a kind is the type of a type constructor or a higher order type operator
 // e.g.
@@ -82,7 +82,7 @@ typedef std::shared_ptr<kfun> shared_kfun;
 
 int cmp_kind(const kind *lhs, const kind *rhs);
 
-class ast_type;
+struct ast_type;
 class module;
 
 // type

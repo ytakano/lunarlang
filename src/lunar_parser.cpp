@@ -2061,8 +2061,6 @@ bool parser::add_module(const std::string &filename) {
     std::string s = p.string();
     auto m = std::make_unique<module>(s, content, *this);
 
-    module *ptr_m = m.get();
-
     m_modules[s] = std::move(m);
 
     return true;

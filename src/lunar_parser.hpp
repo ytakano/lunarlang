@@ -225,10 +225,10 @@ struct ast_tupletype : public ast_type {
     ptr_ast_types m_types;
 };
 
-class ast_expr;
+struct ast_expr;
 typedef std::unique_ptr<ast_expr> ptr_ast_expr;
 
-class ast_num;
+struct ast_num;
 typedef std::unique_ptr<ast_num> ptr_ast_num;
 
 struct ast_vectype : public ast_type {

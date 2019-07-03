@@ -17,7 +17,7 @@ static shared_kind make_kind(unsigned int numtargs) {
         auto kf = mk_kfun();
         kf->m_left = mk_star();
         kf->m_right = mk_star();
-        for (int i = 1; i < numtargs; i++) {
+        for (unsigned int i = 1; i < numtargs; i++) {
             auto tmp = kf;
             kf = mk_kfun();
             kf->m_left = mk_star();
@@ -51,10 +51,10 @@ shared_type type_app::make(shared_type lhs, shared_type rhs) {
     return ret;
 }
 
-static inline shared_type mk_vec() {
+static inline shared_type mk_vec(unsigned int dim = 1) {
     type_id id;
     id.m_id = "vec";
-    return type_const::make(id, 1);
+    return type_const::make(id, dim);
 }
 
 static inline shared_type mk_dict() {
@@ -90,6 +90,15 @@ static inline shared_type mk_struct(const type_id &id, unsigned int num) {
 //   num: the number of the member variables and the type arguments
 static inline shared_type mk_union(const type_id &id, unsigned int num) {
     return type_const::make(id, num, type_const::CTYPE_UNION);
+}
+
+// make natural number type
+// input:
+//   num:
+static inline shared_type mk_nat(const std::string &num) {
+    type_id id;
+    id.m_id = num;
+    return type_const::make(id, 0, type_const::CTYPE_PRIMTIVE);
 }
 
 #define APP_TYPES(RET, TS)                                                     \
@@ -140,6 +149,19 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
         auto t = (const ast_tupletype *)ptr;
         auto ret = mk_tuple(t->m_types->m_types.size());
         APP_TYPES(ret, t->m_types->m_types);
+        return ret;
+    }
+    case ast_type::TYPE_VEC: {
+        auto t = (const ast_vectype *)ptr;
+        auto ret = mk_vec(t->m_nums.size() + 1);
+        auto tval = make(ptr_mod, t->m_vectype.get());
+        if (!tval)
+            return nullptr;
+
+        for (auto &num : t->m_nums) {
+            auto n = mk_nat(num->m_num);
+            ret = type_app::make(ret, n);
+        }
         return ret;
     }
     default:
