@@ -18,6 +18,10 @@ struct type_id {
     std::string m_path;
     std::string m_id;
 
+    void print() {
+        std::cout << "{\"path\":\"" << m_path << "\",\"id\"" << m_id << "}";
+    }
+
     bool operator==(const type_id &rhs) const {
         return m_path == rhs.m_path && m_id == rhs.m_id;
     }
@@ -54,6 +58,8 @@ class kind {
     kind() {}
     virtual ~kind(){};
 
+    virtual void print() = 0;
+
     bool m_is_star;
 };
 
@@ -64,6 +70,7 @@ class star : public kind {
   public:
     star() { m_is_star = true; }
     virtual ~star() {}
+    virtual void print() { std::cout << "*"; }
 };
 
 typedef std::shared_ptr<star> shared_star;
@@ -73,6 +80,12 @@ class kfun : public kind {
   public:
     kfun() { m_is_star = false; }
     virtual ~kfun() {}
+
+    virtual void print() {
+        m_left->print();
+        std::cout << " -> ";
+        m_right->print();
+    }
 
     shared_kind m_left;
     shared_kind m_right;
@@ -90,6 +103,8 @@ class type {
   public:
     type() {}
     virtual ~type(){};
+
+    virtual void print() = 0;
 
     enum subtype {
         TYPE_CONST, // constant type
@@ -116,6 +131,7 @@ bool eq_type(type *lhs, type *rhs);
 class type_const : public type {
   public:
     virtual ~type_const() {}
+    virtual void print();
 
     enum CTYPE {
         CTYPE_PRIMTIVE, // primitive type
@@ -172,6 +188,8 @@ class type_var : public type {
 
     // id: type variable name
     static shared_type make(const std::string &id, unsigned int numtargs);
+
+    virtual void print();
 
   private:
     type_var() { m_subtype = TYPE_VAR; }
@@ -233,6 +251,8 @@ class type_app : public type {
     shared_type m_left;
     shared_type m_right;
 
+    virtual void print();
+
   private:
     type_app() { m_subtype = TYPE_APP; }
 };
@@ -268,6 +288,8 @@ class pred {
     pred() {}
     virtual ~pred() {}
 
+    void print();
+
     type_id m_id; // class name_id
     std::vector<shared_type> m_args;
 };
@@ -290,6 +312,8 @@ class qual {
     qual() {}
     virtual ~qual() {}
 
+    void print_preds();
+
     std::vector<shared_pred> m_preds;
     ast *m_ast;
 };
@@ -299,6 +323,8 @@ class typeclass : public qual {
   public:
     typeclass() {}
     virtual ~typeclass() {}
+
+    void print();
 
     type_id m_id; // class name
 
@@ -344,7 +370,9 @@ class classenv {
     classenv() {}
     virtual ~classenv() {}
 
-    void add_class(const module *ptr_mod, const ast_class *ptr);
+    bool add_class(const module *ptr_mod, const ast_class *ptr);
+
+    void print();
 
   private:
     struct env {
@@ -357,8 +385,10 @@ class classenv {
         std::vector<shared_inst> m_insts; // instance declarations
     };
 
+    typedef std::unique_ptr<env> ptr_env;
+
     // class name -> (class declarations, class instance declarations)
-    std::unordered_map<type_id, env> m_env;
+    std::unordered_map<type_id, ptr_env> m_env;
 
     // function name -> class name
     std::unordered_map<type_id, std::string> m_func2class;

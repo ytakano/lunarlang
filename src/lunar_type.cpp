@@ -421,7 +421,7 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     return nullptr;
 }
 
-void classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
+bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     auto cls = std::make_shared<typeclass>();
 
     cls->m_id.m_path = ptr_mod->get_filename();
@@ -433,11 +433,103 @@ void classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
                                      pd->m_id.m_id)) {
             // error, no such type class
             TYPEERR(ptr_mod, "undefined type class", p);
-            return;
+            return false;
         }
 
-        // TODO
+        for (auto &arg : p->m_args->m_types) {
+            auto ta = type::make(ptr_mod, arg.get());
+            if (!ta)
+                return false;
+
+            pd->m_args.push_back(ta);
+        }
+
+        cls->m_preds.push_back(pd);
     }
+
+    // TODO: add arguments and functions
+
+    if (HASKEY(m_env, cls->m_id)) {
+        TYPEERR(ptr_mod, "multiply defined class", ptr);
+        return false;
+    }
+
+    auto e = std::make_unique<env>();
+    e->m_class = cls;
+    m_env[cls->m_id] = std::move(e);
+
+    return true;
+}
+
+void type_const::print() {
+    std::cout << "{\"type\":\"const\",\"id\":";
+    m_id.print();
+    std::cout << ",\"kind\":\"";
+    m_kind->print();
+    std::cout << "\"}";
+}
+
+void type_var::print() {
+    std::cout << "{\"type\":\"tvar\",\"id\":\"" << m_id << "\",\"kind\":\"";
+    m_kind->print();
+    std::cout << "\"}";
+}
+
+void type_app::print() {
+    std::cout << "{\"type\":\"app\",\"left\":";
+    m_left->print();
+    std::cout << ",\"right\":";
+    m_right->print();
+    std::cout << "}";
+}
+
+void pred::print() {
+    std::cout << "{\"id\":";
+    m_id.print();
+    std::cout << ",\"args\":[";
+    int n = 0;
+    for (auto &arg : m_args) {
+        if (n > 0)
+            std::cout << ",";
+        arg->print();
+        n++;
+    }
+    std::cout << "]}";
+}
+
+void qual::print_preds() {
+    std::cout << "[";
+    int n = 0;
+    for (auto &p : m_preds) {
+        if (n > 0)
+            std::cout << ",";
+        p->print();
+        n++;
+    }
+    std::cout << "]";
+}
+
+void typeclass::print() {
+    std::cout << "{\"id\":";
+    m_id.print();
+    std::cout << ",\"predicates\":";
+    print_preds();
+
+    // TODO: print arguments and functions
+
+    std::cout << "}";
+}
+
+void classenv::print() {
+    std::cout << "[";
+    int n = 0;
+    for (auto &e : m_env) {
+        if (n > 0)
+            std::cout << ",";
+        e.second->m_class->print();
+        n++;
+    }
+    std::cout << "]";
 }
 
 void typing(ptr_ast_type &ast) {}
