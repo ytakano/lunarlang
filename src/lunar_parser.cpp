@@ -616,7 +616,7 @@ ptr_ast_tvars module::parse_tvars() {
 
 // $TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC |
 //          ( $TYPES? ) | [ $TYPE $ARRNUM? ]
-// $ARRNUM := * $EXPR
+// $ARRNUM := * $DECIMAL | * $DECIMAL $ARRNUM
 // $IDTVAR := $DOTID | $TVAR
 // $TYPESPEC := : $TYPE
 ptr_ast_type module::parse_type(bool is_funret = false) {
@@ -662,15 +662,30 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
         parse_spaces();
         PTRY(m_parsec, c, m_parsec.character(']'));
         if (m_parsec.is_fail()) {
-            // * $EXPR
+            // * $DECIMAL
             PARSECHAR('*', m_parsec);
             parse_spaces();
-            ret->m_expr = parse_expr();
-            if (!ret->m_expr)
-                return nullptr;
+            for (;;) {
+                auto dec = parse_num();
+                if (!dec)
+                    return nullptr;
 
-            parse_spaces();
-            PARSECHAR(']', m_parsec);
+                ret->m_nums.push_back(std::move(dec));
+
+                parse_spaces();
+
+                char c;
+                PEEK(c, m_parsec);
+                if (c == ']') {
+                    PARSECHAR(']', m_parsec);
+                    break;
+                } else if (c == '*') {
+                    PARSECHAR('*', m_parsec);
+                    parse_spaces();
+                } else {
+                    SYNTAXERR("expected '*' or ']'");
+                }
+            }
         }
 
         return ret;
@@ -2318,11 +2333,15 @@ void ast_tupletype::print() {
 void ast_vectype::print() {
     std::cout << "{\"type\": \"vector\",\"vector type\":";
     m_vectype->print();
-    if (m_expr) {
-        std::cout << ",\"expression\":";
-        m_expr->print();
+    std::cout << ",\"nums\":[";
+    int n = 0;
+    for (auto &num : m_nums) {
+        if (n > 0)
+            std::cout << ",";
+        std::cout << num->m_num;
+        n++;
     }
-    std::cout << "}";
+    std::cout << "]}";
 }
 
 #define PRINTLIST(LIST)                                                        \

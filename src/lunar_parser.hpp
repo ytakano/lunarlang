@@ -228,6 +228,9 @@ struct ast_tupletype : public ast_type {
 class ast_expr;
 typedef std::unique_ptr<ast_expr> ptr_ast_expr;
 
+class ast_num;
+typedef std::unique_ptr<ast_num> ptr_ast_num;
+
 struct ast_vectype : public ast_type {
     ast_vectype() { m_type = TYPE_VEC; }
     virtual ~ast_vectype() {}
@@ -235,7 +238,7 @@ struct ast_vectype : public ast_type {
     virtual void print();
 
     ptr_ast_type m_vectype;
-    ptr_ast_expr m_expr;
+    std::vector<ptr_ast_num> m_nums;
 };
 
 struct ast_types : public ast {
@@ -560,8 +563,6 @@ struct ast_num : public ast_expr {
     parsec::numtype m_numtype;
     std::string m_num;
 };
-
-typedef std::unique_ptr<ast_num> ptr_ast_num;
 
 struct ast_str : public ast_expr {
     ast_str() { m_exprtype = EXPR_STR; }

@@ -139,7 +139,7 @@ $TVARS := <$TVARKINDS>
 
 ```
 $TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? ) | [ $TYPE $ARRNUM? ]
-$ARRNUM := * $EXPR
+$ARRNUM := * $DECIMAL | * $DECIMAL $ARRNUM
 $IDTVAR := $DOTID | $TVAR
 $TYPES := $TYPE | $TYPE , $TYPES
 ```

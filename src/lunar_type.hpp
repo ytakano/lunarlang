@@ -83,6 +83,7 @@ typedef std::shared_ptr<kfun> shared_kfun;
 int cmp_kind(const kind *lhs, const kind *rhs);
 
 class ast_type;
+class module;
 
 // type
 class type {
@@ -337,8 +338,6 @@ class qual_type : public qual {
     shared_type m_type;
     std::vector<shared_type_var> m_args; // type arguments
 };
-
-class module;
 
 class classenv {
   public:
