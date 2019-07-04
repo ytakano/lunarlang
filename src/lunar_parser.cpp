@@ -876,6 +876,8 @@ ptr_ast_class module::parse_class() {
     if (m_parsec.is_fail()) {
         // parse predicates
         ret->m_preds = parse_preds();
+        if (!ret->m_preds)
+            return nullptr;
 
         PARSECHAR('{', m_parsec);
     }
@@ -2141,7 +2143,7 @@ bool parser::parse() {
     return true;
 }
 
-void parser::print() {
+void parser::print() const {
     std::cout << "[";
     int n = 0;
     for (auto &p : m_modules) {
@@ -2154,7 +2156,7 @@ void parser::print() {
     std::cout << "]" << std::endl;
 }
 
-void module_tree::print(size_t &n) {
+void module_tree::print(size_t &n) const {
     if (m_import) {
         if (n > 0)
             std::cout << ",";
@@ -2168,7 +2170,7 @@ void module_tree::print(size_t &n) {
     }
 }
 
-void module::print() {
+void module::print() const {
     std::cout << "{\"path\":\"" << m_filename << "\",\"import\":[";
     size_t n = 0;
     m_modules.print(n);
@@ -2234,9 +2236,9 @@ void module::print() {
     std::cout << "}";
 }
 
-void ast_id::print() { std::cout << "\"" << m_id << "\""; }
+void ast_id::print() const { std::cout << "\"" << m_id << "\""; }
 
-void ast_dotid::print() {
+void ast_dotid::print() const {
     std::cout << "\"";
     int n = 0;
     for (auto &id : m_ids) {
@@ -2248,7 +2250,7 @@ void ast_dotid::print() {
     std::cout << "\"";
 }
 
-void ast_kfun::print() {
+void ast_kfun::print() const {
     std::cout << "{\"left\":";
     m_left->print();
     std::cout << ",\"right\":";
@@ -2256,9 +2258,9 @@ void ast_kfun::print() {
     std::cout << "}";
 }
 
-void ast_kstar::print() { std::cout << "\"*\""; }
+void ast_kstar::print() const { std::cout << "\"*\""; }
 
-void ast_tvars::print() {
+void ast_tvars::print() const {
     std::cout << "[";
     size_t n = 1;
     for (auto &v : m_args) {
@@ -2278,7 +2280,7 @@ void ast_tvars::print() {
     std::cout << "]";
 }
 
-void ast_class::print() {
+void ast_class::print() const {
     std::cout << "{\"id\":";
     m_id->print();
 
@@ -2296,7 +2298,7 @@ void ast_class::print() {
     std::cout << "}";
 }
 
-void ast_normaltype::print() {
+void ast_normaltype::print() const {
     std::cout << "{\"type\": \"normal\",\"id\":";
 
     if (m_tvar)
@@ -2312,7 +2314,7 @@ void ast_normaltype::print() {
     std::cout << "}";
 }
 
-void ast_funtype::print() {
+void ast_funtype::print() const {
     std::cout << "{\"type\": \"function\",\"arguments\":";
     m_args->print();
 
@@ -2322,13 +2324,13 @@ void ast_funtype::print() {
     std::cout << "}";
 }
 
-void ast_tupletype::print() {
+void ast_tupletype::print() const {
     std::cout << "{\"type\": \"tuple\",\"types\":";
     m_types->print();
     std::cout << "}";
 }
 
-void ast_vectype::print() {
+void ast_vectype::print() const {
     std::cout << "{\"type\": \"vector\",\"vector type\":";
     m_vectype->print();
     std::cout << ",\"nums\":[";
@@ -2355,9 +2357,9 @@ void ast_vectype::print() {
         std::cout << "]";                                                      \
     } while (0)
 
-void ast_types::print() { PRINTLIST(m_types); }
+void ast_types::print() const { PRINTLIST(m_types); }
 
-void ast_pred::print() {
+void ast_pred::print() const {
     std::cout << "{\"id\":";
     m_id->print();
 
@@ -2367,11 +2369,11 @@ void ast_pred::print() {
     std::cout << "}";
 }
 
-void ast_preds::print() { PRINTLIST(m_preds); }
+void ast_preds::print() const { PRINTLIST(m_preds); }
 
-void ast_infix::print() { std::cout << "\"" << m_infix << "\""; }
+void ast_infix::print() const { std::cout << "\"" << m_infix << "\""; }
 
-void ast_interface::print() {
+void ast_interface::print() const {
     std::cout << "{\"id\":";
     m_id->print();
 
@@ -2380,17 +2382,19 @@ void ast_interface::print() {
         m_infix->print();
     }
 
-    std::cout << ",\"arguments\":";
-    m_args->print();
+    if (m_args) {
+        std::cout << ",\"arguments\":";
+        m_args->print();
+    }
 
     std::cout << ",\"return\":";
     m_ret->print();
     std::cout << "}";
 }
 
-void ast_interfaces::print() { PRINTLIST(m_interfaces); }
+void ast_interfaces::print() const { PRINTLIST(m_interfaces); }
 
-void ast_arg::print() {
+void ast_arg::print() const {
     std::cout << "{\"id\":";
     m_id->print();
     if (m_type) {
@@ -2400,9 +2404,9 @@ void ast_arg::print() {
     std::cout << "}";
 }
 
-void ast_args::print() { PRINTLIST(m_args); }
+void ast_args::print() const { PRINTLIST(m_args); }
 
-void ast_defun::print() {
+void ast_defun::print() const {
     std::cout << "{\"id\":";
     m_id->print();
 
@@ -2434,7 +2438,7 @@ void ast_defun::print() {
     std::cout << "}";
 }
 
-void ast_exprs::print() {
+void ast_exprs::print() const {
     std::cout << "{\"exprs\":";
     PRINTLIST(m_exprs);
     std::cout << "}";
@@ -2449,13 +2453,13 @@ void ast_exprs::print() {
         }                                                                      \
     } while (0)
 
-void ast_expr_id::print() {
+void ast_expr_id::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"id\":\"" << m_id->m_id << "\"}";
 }
 
-void ast_apply::print() {
+void ast_apply::print() const {
     std::cout << "{\"apply\":{\"func\":";
     m_func->print();
     std::cout << ",\"arguemnts\":";
@@ -2463,7 +2467,7 @@ void ast_apply::print() {
     std::cout << "}}";
 }
 
-void ast_if::print() {
+void ast_if::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"if\":{\"condition\":";
@@ -2505,7 +2509,7 @@ void ast_if::print() {
     std::cout << "}}";
 }
 
-void ast_defvar::print() {
+void ast_defvar::print() const {
     std::cout << "{\"defvar\":{\"id\":";
     m_id->print();
     std::cout << ",\"expression\":";
@@ -2519,13 +2523,13 @@ void ast_defvar::print() {
     std::cout << "}}";
 }
 
-void ast_defvars::print() {
+void ast_defvars::print() const {
     std::cout << "{\"defvars\":";
     PRINTLIST(m_defs);
     std::cout << "}";
 }
 
-void ast_let::print() {
+void ast_let::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"let\":{\"defvars\":";
@@ -2539,7 +2543,7 @@ void ast_let::print() {
     std::cout << "}}";
 }
 
-void ast_tuple::print() {
+void ast_tuple::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"tuple\":";
@@ -2547,7 +2551,7 @@ void ast_tuple::print() {
     std::cout << "}";
 }
 
-void ast_vector::print() {
+void ast_vector::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"vector\":";
@@ -2555,7 +2559,7 @@ void ast_vector::print() {
     std::cout << "}";
 }
 
-void ast_dictelm::print() {
+void ast_dictelm::print() const {
     std::cout << "{\"key\":";
     m_key->print();
     std::cout << ",\"value\":";
@@ -2563,7 +2567,7 @@ void ast_dictelm::print() {
     std::cout << "}";
 }
 
-void ast_dict::print() {
+void ast_dict::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"key\":";
@@ -2571,7 +2575,7 @@ void ast_dict::print() {
     std::cout << "}";
 }
 
-void ast_block::print() {
+void ast_block::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"block\":";
@@ -2579,7 +2583,7 @@ void ast_block::print() {
     std::cout << "}";
 }
 
-void ast_index::print() {
+void ast_index::print() const {
     std::cout << "{\"indexing\":{\"array\":";
     m_array->print();
     std::cout << ",\"index\":";
@@ -2587,7 +2591,7 @@ void ast_index::print() {
     std::cout << "}}";
 }
 
-void ast_binexpr::print() {
+void ast_binexpr::print() const {
     std::cout << "{\"binary expression\":{\"operator\":";
     m_op->print();
     std::cout << ",\"left\":";
@@ -2597,7 +2601,7 @@ void ast_binexpr::print() {
     std::cout << "}}";
 }
 
-void ast_num::print() {
+void ast_num::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"number\":{\"type\":";
@@ -2615,13 +2619,13 @@ void ast_num::print() {
     std::cout << ",\"num\":\"" << m_num << "\"}}";
 }
 
-void ast_str::print() {
+void ast_str::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"string\":\"" << m_str << "\"}";
 }
 
-void ast_parenthesis::print() {
+void ast_parenthesis::print() const {
     std::cout << "{";
     PRINTPREFIX;
     std::cout << "\"parenthesis\":";
@@ -2629,7 +2633,7 @@ void ast_parenthesis::print() {
     std::cout << "}";
 }
 
-void ast_instance::print() {
+void ast_instance::print() const {
     std::cout << "{\"instance\":{\"pred\":";
     m_arg->print();
 
@@ -2650,7 +2654,7 @@ void ast_instance::print() {
     std::cout << "]}}";
 }
 
-void ast_member::print() {
+void ast_member::print() const {
     std::cout << "{\"id\":";
     m_id->print();
     if (m_type) {
@@ -2660,9 +2664,9 @@ void ast_member::print() {
     std::cout << "}";
 }
 
-void ast_members::print() { PRINTLIST(m_vars); }
+void ast_members::print() const { PRINTLIST(m_vars); }
 
-void ast_import::print() {
+void ast_import::print() const {
     std::cout << "{\"import\":{\"id\":\"" << get_id() << "\"";
 
     if (m_as) {
@@ -2696,10 +2700,10 @@ void ast_import::print() {
         std::cout << "}}";                                                     \
     } while (0)
 
-void ast_struct::print() { PRINTSTUN("struct"); }
+void ast_struct::print() const { PRINTSTUN("struct"); }
 
-void ast_union::print() { PRINTSTUN("union"); }
+void ast_union::print() const { PRINTSTUN("union"); }
 
-void ast_prefix::print() { std::cout << m_prefix; }
+void ast_prefix::print() const { std::cout << m_prefix; }
 
 } // namespace lunar

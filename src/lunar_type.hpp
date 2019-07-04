@@ -19,7 +19,7 @@ struct type_id {
     std::string m_id;
 
     void print() {
-        std::cout << "{\"path\":\"" << m_path << "\",\"id\"" << m_id << "}";
+        std::cout << "{\"path\":\"" << m_path << "\",\"id\":\"" << m_id << "\"}";
     }
 
     bool operator==(const type_id &rhs) const {
@@ -45,8 +45,13 @@ template <> struct std::hash<lunar::type_id> {
 
 namespace lunar {
 
-class substitution;
+struct ast;
+struct ast_type;
 struct ast_class;
+class module;
+class parser;
+
+class substitution;
 
 // a kind is the type of a type constructor or a higher order type operator
 // e.g.
@@ -94,9 +99,6 @@ class kfun : public kind {
 typedef std::shared_ptr<kfun> shared_kfun;
 
 int cmp_kind(const kind *lhs, const kind *rhs);
-
-struct ast_type;
-class module;
 
 // type
 class type {
@@ -296,8 +298,6 @@ class pred {
 
 typedef std::shared_ptr<pred> shared_pred;
 
-struct ast;
-
 // qualified type
 // e.g.
 //   qualified class declaration:
@@ -369,6 +369,8 @@ class classenv {
   public:
     classenv() {}
     virtual ~classenv() {}
+
+    static std::unique_ptr<classenv> make(const parser &ps);
 
     bool add_class(const module *ptr_mod, const ast_class *ptr);
 

@@ -190,5 +190,11 @@ int main(int argc, char *argv[]) {
         parser.print();
     }
 
+    auto env = lunar::classenv::make(parser);
+    if (opt.m_is_classenv && env) {
+        env->print();
+        std::cout << std::endl;
+    }
+
     return 0;
 }

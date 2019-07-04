@@ -19,7 +19,7 @@ struct ast {
     ast() : m_line(0), m_column(0) {}
     virtual ~ast(){};
 
-    virtual void print() = 0;
+    virtual void print() const = 0;
 
     void set_pos(const parsec &p) {
         m_line = p.get_line();
@@ -68,7 +68,7 @@ struct ast_id : public ast {
 
     virtual const ast_id *get_ast_id() { return this; }
 
-    virtual void print();
+    virtual void print() const;
 
     std::string m_id;
 };
@@ -79,9 +79,9 @@ struct ast_dotid : public ast {
     ast_dotid() { m_asttype = AST_DOTID; }
     virtual ~ast_dotid() {}
 
-    virtual void print();
+    virtual void print() const;
 
-    std::string get_id() {
+    std::string get_id() const {
         std::string ret;
         int n = 0;
         for (auto &s : m_ids) {
@@ -102,7 +102,7 @@ typedef std::unique_ptr<ast_dotid> ptr_ast_dotid;
 struct ast_kind : public ast {
     ast_kind() {}
     virtual ~ast_kind() {}
-    virtual void print() = 0;
+    virtual void print() const = 0;
 };
 
 typedef std::unique_ptr<ast_kind> ptr_ast_kind;
@@ -111,7 +111,7 @@ struct ast_kfun : public ast_kind {
     ast_kfun() { m_asttype = AST_KFUN; }
     virtual ~ast_kfun() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_kind m_left;
     ptr_ast_kind m_right;
@@ -123,7 +123,7 @@ struct ast_kstar : public ast_kind {
     ast_kstar() { m_asttype = AST_KSTAR; }
     virtual ~ast_kstar() {}
 
-    virtual void print();
+    virtual void print() const;
 };
 
 typedef std::unique_ptr<ast_kstar> ptr_ast_kstar;
@@ -134,7 +134,7 @@ struct ast_tvars : public ast {
     ast_tvars() {}
     virtual ~ast_tvars() {}
 
-    virtual void print();
+    virtual void print() const;
 
     struct arg {
         ptr_ast_id m_id;
@@ -158,7 +158,7 @@ struct ast_class : public ast {
     ast_class() { m_asttype = AST_CLASS; }
     virtual ~ast_class() {}
 
-    virtual void print();
+    virtual void print() const;
     virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
@@ -176,7 +176,7 @@ struct ast_type : public ast {
     ast_type() { m_asttype = AST_TYPE; }
     virtual ~ast_type() {}
 
-    virtual void print() = 0;
+    virtual void print() const = 0;
 
     enum type {
         TYPE_NORMAL,
@@ -196,7 +196,7 @@ struct ast_normaltype : public ast_type {
     ast_normaltype() { m_type = TYPE_NORMAL; }
     virtual ~ast_normaltype() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_dotid m_id;
     ptr_ast_id m_tvar; // if this class specifies a type variable, m_tvar is not
@@ -210,7 +210,7 @@ struct ast_funtype : public ast_type {
     ast_funtype() { m_type = TYPE_FUN; }
     virtual ~ast_funtype() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_types m_args;
     ptr_ast_type m_ret;
@@ -220,7 +220,7 @@ struct ast_tupletype : public ast_type {
     ast_tupletype() { m_type = TYPE_TUPLE; }
     virtual ~ast_tupletype() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_types m_types;
 };
@@ -235,7 +235,7 @@ struct ast_vectype : public ast_type {
     ast_vectype() { m_type = TYPE_VEC; }
     virtual ~ast_vectype() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_type m_vectype;
     std::vector<ptr_ast_num> m_nums;
@@ -245,7 +245,7 @@ struct ast_types : public ast {
     ast_types() { m_asttype = AST_TYPES; }
     virtual ~ast_types() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_type> m_types;
 };
@@ -254,7 +254,7 @@ struct ast_pred : public ast {
     ast_pred() { m_asttype = AST_PRED; }
     virtual ~ast_pred() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_dotid m_id;
     ptr_ast_types m_args;
@@ -266,7 +266,7 @@ struct ast_preds : public ast {
     ast_preds() { m_asttype = AST_PREDS; }
     virtual ~ast_preds() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_pred> m_preds;
 };
@@ -277,7 +277,7 @@ struct ast_infix : public ast {
     ast_infix() { m_asttype = AST_INFIX; }
     virtual ~ast_infix() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::string m_infix;
 };
@@ -288,7 +288,7 @@ struct ast_interface : public ast {
     ast_interface() { m_asttype = AST_INTERFACE; }
     virtual ~ast_interface() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_id m_id;
     ptr_ast_infix m_infix;
@@ -302,7 +302,7 @@ struct ast_interfaces : public ast {
     ast_interfaces() { m_asttype = AST_INTERFACES; }
     virtual ~ast_interfaces() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_interface> m_interfaces;
 };
@@ -311,7 +311,7 @@ struct ast_arg : public ast {
     ast_arg() { m_asttype = AST_ARG; }
     virtual ~ast_arg() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_id m_id;
     ptr_ast_type m_type;
@@ -323,7 +323,7 @@ struct ast_args : public ast {
     ast_args() { m_asttype = AST_ARGS; }
     virtual ~ast_args() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_arg> m_args;
 };
@@ -337,7 +337,7 @@ struct ast_defun : public ast {
     ast_defun() { m_asttype = AST_DEFUN; }
     virtual ~ast_defun() {}
 
-    virtual void print();
+    virtual void print() const;
     virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
@@ -354,7 +354,7 @@ struct ast_prefix : public ast {
     ast_prefix(char c) : m_prefix(c) {}
     virtual ~ast_prefix() {}
 
-    virtual void print();
+    virtual void print() const;
 
     char m_prefix;
 };
@@ -368,7 +368,7 @@ struct ast_expr : public ast {
     ast_expr() { m_asttype = AST_EXPR; }
     virtual ~ast_expr() {}
 
-    virtual void print() = 0;
+    virtual void print() const = 0;
 
     enum ETYPE {
         EXPR_APPLY,
@@ -395,7 +395,7 @@ struct ast_exprs : public ast_expr {
     ast_exprs() { m_exprtype = EXPRS; }
     virtual ~ast_exprs() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_expr> m_exprs;
 };
@@ -404,7 +404,7 @@ struct ast_expr_id : public ast_expr {
     ast_expr_id() {}
     virtual ~ast_expr_id() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_id m_id;
 };
@@ -413,7 +413,7 @@ struct ast_apply : public ast_expr {
     ast_apply() { m_exprtype = EXPR_APPLY; }
     virtual ~ast_apply() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_expr m_func;
     std::vector<ptr_ast_expr> m_args;
@@ -429,7 +429,7 @@ struct ast_if : public ast_expr {
     ast_if() { m_exprtype = EXPR_IF; }
     virtual ~ast_if() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_expr m_cond;
     ptr_ast_exprs m_then;
@@ -441,7 +441,7 @@ struct ast_defvar : public ast {
     ast_defvar() { m_asttype = AST_DEFVAR; }
     virtual ~ast_defvar() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_id m_id;
     ptr_ast_expr m_expr;
@@ -454,7 +454,7 @@ struct ast_defvars : public ast {
     ast_defvars() { m_asttype = AST_DEFVARS; }
     virtual ~ast_defvars() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_defvar> m_defs;
 };
@@ -465,7 +465,7 @@ struct ast_let : public ast_expr {
     ast_let() { m_exprtype = EXPR_LET; }
     virtual ~ast_let() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_defvars m_defvars;
     ptr_ast_expr m_in;
@@ -477,7 +477,7 @@ struct ast_tuple : public ast_expr {
     ast_tuple() { m_exprtype = EXPR_TUPLE; }
     virtual ~ast_tuple() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_expr> m_exprs;
 };
@@ -488,7 +488,7 @@ struct ast_vector : public ast_expr {
     ast_vector() { m_exprtype = EXPR_VECTOR; }
     virtual ~ast_vector() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_expr> m_exprs;
 };
@@ -499,7 +499,7 @@ struct ast_dictelm : public ast {
     ast_dictelm() { m_asttype = AST_DICTELM; }
     virtual ~ast_dictelm() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_expr m_key;
     ptr_ast_expr m_val;
@@ -511,7 +511,7 @@ struct ast_dict : public ast_expr {
     ast_dict() { m_exprtype = EXPR_DICT; }
     virtual ~ast_dict() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_dictelm> m_elms;
 };
@@ -522,7 +522,7 @@ struct ast_block : public ast_expr {
     ast_block() { m_exprtype = EXPR_BLOCK; }
     virtual ~ast_block() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_expr> m_exprs;
 };
@@ -533,7 +533,7 @@ struct ast_index : public ast_expr {
     ast_index() { m_exprtype = EXPR_INDEX; }
     virtual ~ast_index() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_expr m_array;
     ptr_ast_expr m_index;
@@ -545,7 +545,7 @@ struct ast_binexpr : public ast_expr {
     ast_binexpr() { m_exprtype = EXPR_BINEXPR; }
     virtual ~ast_binexpr() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_infix m_op;
     ptr_ast_expr m_left;
@@ -558,7 +558,7 @@ struct ast_num : public ast_expr {
     ast_num() { m_exprtype = EXPR_NUM; }
     virtual ~ast_num() {}
 
-    virtual void print();
+    virtual void print() const;
 
     parsec::numtype m_numtype;
     std::string m_num;
@@ -568,7 +568,7 @@ struct ast_str : public ast_expr {
     ast_str() { m_exprtype = EXPR_STR; }
     virtual ~ast_str() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::string m_str;
 };
@@ -579,7 +579,7 @@ struct ast_parenthesis : public ast_expr {
     ast_parenthesis() { m_exprtype = EXPR_PARENTHESIS; }
     virtual ~ast_parenthesis() {}
 
-    virtual void print();
+    virtual void print() const;
 
     ptr_ast_expr m_expr;
 };
@@ -590,7 +590,7 @@ struct ast_instance : public ast {
     ast_instance() { m_asttype = AST_INSTANCE; }
     virtual ~ast_instance() {}
 
-    virtual void print();
+    virtual void print() const;
 
     // e.g.
     // instance Ord<Maybe<`t>> implies Ord<`t>
@@ -607,7 +607,7 @@ struct ast_member : public ast {
     ast_member() { m_asttype = AST_MEMBER; }
     virtual ~ast_member() {}
 
-    virtual void print();
+    virtual void print() const;
     virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
@@ -620,7 +620,7 @@ struct ast_members : public ast {
     ast_members() { m_asttype = AST_MEMBERS; }
     virtual ~ast_members() {}
 
-    virtual void print();
+    virtual void print() const;
 
     std::vector<ptr_ast_member> m_vars;
 };
@@ -631,7 +631,7 @@ struct ast_struct : public ast_type {
     ast_struct() { m_type = TYPE_STRUCT; }
     virtual ~ast_struct() {}
 
-    virtual void print();
+    virtual void print() const;
     virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
@@ -646,7 +646,7 @@ struct ast_union : public ast_type {
     ast_union() { m_type = TYPE_UNION; }
     virtual ~ast_union() {}
 
-    virtual void print();
+    virtual void print() const;
     virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
@@ -661,7 +661,7 @@ struct ast_import : public ast {
     ast_import() { m_asttype = AST_IMPORT; }
     virtual ~ast_import() {}
 
-    virtual void print();
+    virtual void print() const;
 
     virtual const ast_id *get_ast_id() {
         if (m_as)
@@ -670,7 +670,7 @@ struct ast_import : public ast {
         return nullptr;
     }
 
-    std::string get_id() { return m_id->get_id(); }
+    std::string get_id() const { return m_id->get_id(); }
 
     ptr_ast_dotid m_id;
     ptr_ast_id m_as;
@@ -700,7 +700,7 @@ class module_tree {
     const ast_import *find(const std::vector<ptr_ast_id> &id,
                            unsigned int &pos) const;
 
-    void print(size_t &n);
+    void print(size_t &n) const;
 
     std::unordered_map<std::string, std::unique_ptr<module_tree>> m_children;
     ptr_ast_import m_import;
@@ -712,10 +712,7 @@ class module {
     virtual ~module() {}
 
     bool parse();
-    void print();
-
-    std::vector<shared_typeclass> m_classes;
-    std::vector<shared_inst> m_instances;
+    void print() const;
 
     bool is_defined(const std::string &str, ast *ptr);
 
@@ -731,6 +728,10 @@ class module {
 
     const std::string &get_filename() const { return m_filename; }
     const parsec &get_parsec() const { return m_parsec; }
+
+    const std::unordered_map<std::string, ptr_ast_class> &get_classes() const {
+        return m_id2class;
+    }
 
   private:
     parsec m_parsec;
@@ -817,13 +818,16 @@ class parser {
     void add_load_path(const char *p);
     bool add_module(const std::string &filename);
     bool parse();
-    void print();
+    void print() const;
     int get_pri(const std::string &infix) const {
         auto it = m_op2pri.find(infix);
         if (it != m_op2pri.end())
             return it->second;
 
         return 0;
+    }
+    const std::unordered_map<std::string, ptr_module> &get_modules() const {
+        return m_modules;
     }
 
   private:

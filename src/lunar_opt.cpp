@@ -16,6 +16,8 @@ bool opt::parse(int argc, char *argv[]) {
             m_is_ast = true;
         } else if (C(argv[n], "-l") || C(argv[n], "--llvm")) {
             m_is_llvm = true;
+        } else if (C(argv[n], "-c") || C(argv[n], "--class")) {
+            m_is_classenv = true;
         } else if (C(argv[n], "-h") || C(argv[n], "--help")) {
             print_help(argv);
             return false;

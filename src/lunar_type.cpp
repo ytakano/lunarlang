@@ -106,10 +106,14 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
         auto t = (const ast_normaltype *)ptr;
         if (t->m_tvar) {
             // type variable
-            auto ret =
-                type_var::make(t->m_tvar->m_id, t->m_args->m_types.size());
-            APP_TYPES(ret, t->m_args->m_types);
-            return ret;
+            if (t->m_args) {
+                auto ret =
+                    type_var::make(t->m_tvar->m_id, t->m_args->m_types.size());
+                APP_TYPES(ret, t->m_args->m_types);
+                return ret;
+            } else {
+                return type_var::make(t->m_tvar->m_id, 0);
+            }
         } else {
             // normal type, which is either user defined or primitive type
             type_id id;
@@ -427,24 +431,26 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     cls->m_id.m_path = ptr_mod->get_filename();
     cls->m_id.m_id = ptr->m_id->m_id;
 
-    for (auto &p : ptr->m_preds->m_preds) {
-        auto pd = std::make_shared<pred>();
-        if (!ptr_mod->find_typeclass(p->m_id.get(), pd->m_id.m_path,
-                                     pd->m_id.m_id)) {
-            // error, no such type class
-            TYPEERR(ptr_mod, "undefined type class", p);
-            return false;
-        }
-
-        for (auto &arg : p->m_args->m_types) {
-            auto ta = type::make(ptr_mod, arg.get());
-            if (!ta)
+    if (ptr->m_preds) {
+        for (auto &p : ptr->m_preds->m_preds) {
+            auto pd = std::make_shared<pred>();
+            if (!ptr_mod->find_typeclass(p->m_id.get(), pd->m_id.m_path,
+                                         pd->m_id.m_id)) {
+                // error, no such type class
+                TYPEERR(ptr_mod, "undefined type class", p);
                 return false;
+            }
 
-            pd->m_args.push_back(ta);
+            for (auto &arg : p->m_args->m_types) {
+                auto ta = type::make(ptr_mod, arg.get());
+                if (!ta)
+                    return false;
+
+                pd->m_args.push_back(ta);
+            }
+
+            cls->m_preds.push_back(pd);
         }
-
-        cls->m_preds.push_back(pd);
     }
 
     // TODO: add arguments and functions
@@ -459,6 +465,18 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     m_env[cls->m_id] = std::move(e);
 
     return true;
+}
+
+std::unique_ptr<classenv> classenv::make(const parser &ps) {
+    auto ret = std::make_unique<classenv>();
+    for (auto &mod : ps.get_modules()) {
+        for (auto &cls : mod.second->get_classes()) {
+            if (!ret->add_class(mod.second.get(), cls.second.get()))
+                return nullptr;
+        }
+    }
+
+    return ret;
 }
 
 void type_const::print() {

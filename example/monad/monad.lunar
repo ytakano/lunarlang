@@ -1,5 +1,9 @@
+class foo<`a> {
+    func bar() : void
+}
+
 // monad
-class monad<`a :: * -> *> {
+class monad<`a :: * -> *> implies foo<`a> {
     func infix >>=(`a<`b>, func (`b) : `a<`c>) : `a<`c>
     func return(`b) : `a<`b>
 }
