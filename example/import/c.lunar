@@ -1,0 +1,7 @@
+class foo<`a> {
+    func f(`a) : `a
+}
+
+class bar<`a :: * -> *> implies foo<`a<`b>> {
+    func g(`a) : `a
+}

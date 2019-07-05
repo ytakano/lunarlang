@@ -1,0 +1,5 @@
+import b
+
+instance b.c.foo<u32> {
+   func f(a) { a }
+}
