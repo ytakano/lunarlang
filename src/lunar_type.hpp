@@ -19,7 +19,8 @@ struct type_id {
     std::string m_id;
 
     void print() {
-        std::cout << "{\"path\":\"" << m_path << "\",\"id\":\"" << m_id << "\"}";
+        std::cout << "{\"path\":\"" << m_path << "\",\"id\":\"" << m_id
+                  << "\"}";
     }
 
     bool operator==(const type_id &rhs) const {
@@ -48,6 +49,7 @@ namespace lunar {
 struct ast;
 struct ast_type;
 struct ast_class;
+struct ast_instance;
 class module;
 class parser;
 
@@ -372,8 +374,6 @@ class classenv {
 
     static std::unique_ptr<classenv> make(const parser &ps);
 
-    bool add_class(const module *ptr_mod, const ast_class *ptr);
-
     void print();
 
   private:
@@ -394,6 +394,9 @@ class classenv {
 
     // function name -> class name
     std::unordered_map<type_id, std::string> m_func2class;
+
+    bool add_class(const module *ptr_mod, const ast_class *ptr);
+    bool add_instance(const module *ptr_mod, const ast_instance *ptr);
 };
 
 } // namespace lunar

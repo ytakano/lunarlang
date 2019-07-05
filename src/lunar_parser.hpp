@@ -750,7 +750,7 @@ class module {
     // import module
     // (without as id)
     module_tree m_modules;
-    // import module
+    // import module here
     // TODO:
     std::vector<ptr_ast_import> m_vec_modules;
 

@@ -9,7 +9,7 @@ $ docker-compose run lunarlang
 compile in the container
 ```
 # cd src
-# cmake -G Ninja .
+# cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug .
 # ninja
 ```
 

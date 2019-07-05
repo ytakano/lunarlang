@@ -467,6 +467,10 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     return true;
 }
 
+bool classenv::add_instance(const module *ptr_mod, const ast_instance *ptr) {
+    return true;
+}
+
 std::unique_ptr<classenv> classenv::make(const parser &ps) {
     auto ret = std::make_unique<classenv>();
     for (auto &mod : ps.get_modules()) {
