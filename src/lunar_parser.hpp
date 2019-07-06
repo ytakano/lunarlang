@@ -724,13 +724,17 @@ class module {
     bool find_type(const ast_dotid *dotid, std::string &path, std::string &id,
                    unsigned int pos = 0) const;
 
-    module *find_module(const ast_dotid *dotid, unsigned int pos) const;
+    module *find_module(const ast_dotid *dotid, unsigned int &pos) const;
 
     const std::string &get_filename() const { return m_filename; }
     const parsec &get_parsec() const { return m_parsec; }
 
     const std::unordered_map<std::string, ptr_ast_class> &get_classes() const {
         return m_id2class;
+    }
+
+    const std::unordered_multimap<std::string, ptr_ast_instance> &get_instances() const {
+        return m_id2inst;
     }
 
   private:

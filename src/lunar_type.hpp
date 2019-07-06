@@ -349,6 +349,8 @@ class inst : public qual {
     inst() {}
     virtual ~inst() {}
 
+    void print();
+
     type_id m_id;                                     // class name
     std::vector<shared_type> m_args;                  // type variable arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces

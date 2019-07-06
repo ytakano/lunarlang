@@ -468,6 +468,26 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
 }
 
 bool classenv::add_instance(const module *ptr_mod, const ast_instance *ptr) {
+    auto ret = std::make_shared<inst>();
+    if (!ptr_mod->find_typeclass(ptr->m_arg->m_id.get(), ret->m_id.m_path,
+                                 ret->m_id.m_id)) {
+        // error, no such type class
+        TYPEERR(ptr_mod, "undefined type class", ptr->m_arg->m_id);
+        return false;
+    }
+
+    auto cls = m_env.find(ret->m_id);
+    assert(cls != m_env.end());
+
+    for (auto &arg : ptr->m_arg->m_args->m_types) {
+        auto ta = type::make(ptr_mod, arg.get());
+        if (!ta)
+            return false;
+        ret->m_args.push_back(ta);
+    }
+
+    cls->second->m_insts.push_back(ret);
+
     return true;
 }
 
@@ -476,6 +496,13 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
     for (auto &mod : ps.get_modules()) {
         for (auto &cls : mod.second->get_classes()) {
             if (!ret->add_class(mod.second.get(), cls.second.get()))
+                return nullptr;
+        }
+    }
+
+    for (auto &mod : ps.get_modules()) {
+        for (auto &inst : mod.second->get_instances()) {
+            if (!ret->add_instance(mod.second.get(), inst.second.get()))
                 return nullptr;
         }
     }
@@ -548,10 +575,38 @@ void classenv::print() {
     for (auto &e : m_env) {
         if (n > 0)
             std::cout << ",";
+
+        std::cout << "{\"class\":";
         e.second->m_class->print();
+
+        int m = 0;
+        std::cout << ",\"instance\":[";
+        for (auto &inst : e.second->m_insts) {
+            if (m > 0)
+                std::cout << ",";
+            inst->print();
+            m++;
+        }
+        std::cout << "]}";
+
         n++;
     }
     std::cout << "]";
+}
+
+void inst::print() {
+    std::cout << "{\"id\":";
+    m_id.print();
+
+    int n = 0;
+    std::cout << ",\"args\":[";
+    for (auto &arg : m_args) {
+        if (n > 0)
+            std::cout << ",";
+        arg->print();
+        n++;
+    }
+    std::cout << "]}";
 }
 
 void typing(ptr_ast_type &ast) {}

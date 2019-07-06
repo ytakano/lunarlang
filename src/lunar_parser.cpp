@@ -366,7 +366,7 @@ bool module::is_defined(const std::string &str, ast *ptr) {
     return false;
 }
 
-module *module::find_module(const ast_dotid *dotid, unsigned int pos) const {
+module *module::find_module(const ast_dotid *dotid, unsigned int &pos) const {
     module *ret = nullptr;
 
     auto it = m_id2import.find(dotid->m_ids[pos]->m_id);
@@ -738,6 +738,9 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             ret->m_id = parse_dotid();
             if (!ret->m_id)
                 return nullptr;
+
+            ret->m_line = ret->m_id->m_line;
+            ret->m_column = ret->m_id->m_column;
 
             if (!parse_arg_types(ret->m_args))
                 return nullptr;
