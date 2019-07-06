@@ -1,5 +1,6 @@
 import b
+import d here
 
-instance b.c.foo<u32> {
+instance b.c.foo<st> {
    func f(a) { a }
 }

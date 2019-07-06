@@ -200,9 +200,9 @@ void module_tree::add(ptr_ast_import ptr, size_t n) {
 const ast_import *module_tree::find(const std::vector<ptr_ast_id> &id,
                                     unsigned int &pos) const {
     auto it = m_children.find(id[pos]->m_id);
-    pos++;
 
     if (it != m_children.end()) { // found
+        pos++;
         if (it->second->m_import) {
             return it->second->m_import.get();
         } else {
@@ -314,6 +314,8 @@ bool module::parse() {
                     return false;
 
                 m_id2import[im->m_as->m_id] = std::move(im);
+            } else if (im->m_is_here) {
+                m_vec_modules.push_back(std::move(im));
             } else {
                 if (im->m_id->m_ids.size() == 1) {
                     // check multiple definition
@@ -424,8 +426,16 @@ bool module::find_type(const ast_dotid *dotid, std::string &path,
     }
 
     module *ptr_mod = find_module(dotid, pos);
-    if (ptr_mod == nullptr)
+    if (ptr_mod == nullptr) {
+        for (auto it = m_vec_modules.rbegin(); it != m_vec_modules.rend();
+             ++it) {
+            auto it_mod = m_parser.m_modules.find((*it)->m_full_path);
+            assert(it_mod != m_parser.m_modules.end());
+            if (it_mod->second->find_type(dotid, path, id, pos))
+                return true;
+        }
         return false;
+    }
 
     return ptr_mod->find_type(dotid, path, id, pos);
 }
@@ -472,7 +482,8 @@ ptr_ast_dotid module::parse_dotid() {
     return ret;
 }
 
-// $IMPORT := import $DOTID $AS?
+// $IMPORT := import $DOTID $HEREAS?
+// $HEREAS := here | $AS
 // $AS := as $ID
 ptr_ast_import module::parse_import() {
     auto ret = std::make_unique<ast_import>();
@@ -483,8 +494,22 @@ ptr_ast_import module::parse_import() {
     if (!ret->m_id)
         return nullptr;
 
-    bool is_import;
-    PTRY(m_parsec, is_import, [](module &m) {
+    bool is_here;
+    PTRY(m_parsec, is_here, [](module &m) {
+        m.parse_spaces_plus();
+        if (m.m_parsec.is_fail())
+            return false;
+        m.m_parsec.str("here");
+        return !m.m_parsec.is_fail();
+    }(*this))
+
+    if (is_here) {
+        ret->m_is_here = true;
+        return ret;
+    }
+
+    bool is_as;
+    PTRY(m_parsec, is_as, [](module &m) {
         m.parse_spaces_plus();
         if (m.m_parsec.is_fail())
             return false;
@@ -492,7 +517,8 @@ ptr_ast_import module::parse_import() {
         return !m.m_parsec.is_fail();
     }(*this))
 
-    if (is_import) {
+    if (is_as) {
+        // as $ID
         SPACEPLUS();
         PARSEID(ret->m_as, m_parsec);
     }
@@ -827,13 +853,13 @@ ptr_ast_pred module::parse_pred() {
     return ret;
 }
 
-// $PREDS := implies $PREDS_
+// $PREDS := require $PREDS_
 // $PREDS_ := $PRED | $PRED, $PRED
 ptr_ast_preds module::parse_preds() {
     auto ret = std::make_unique<ast_preds>();
 
     ret->set_pos(m_parsec);
-    PARSESTR("implies", m_parsec);
+    PARSESTR("require", m_parsec);
     SPACEPLUS();
 
     for (;;) {
@@ -1916,8 +1942,8 @@ ptr_ast_instance module::parse_instance() {
     PTRY(m_parsec, c, m_parsec.character('{'));
 
     if (m_parsec.is_fail()) {
-        // parse implications
-        ret->m_impl = parse_preds();
+        // parse require
+        ret->m_req = parse_preds();
 
         PARSECHAR('{', m_parsec);
     }
@@ -2119,6 +2145,11 @@ bool parser::load_all_module(module *m) {
 
     for (auto &p : m->m_id2import) {
         if (!load_module(m, p.second.get()))
+            return false;
+    }
+
+    for (auto &p : m->m_vec_modules) {
+        if (!load_module(m, p.get()))
             return false;
     }
 
@@ -2640,9 +2671,9 @@ void ast_instance::print() const {
     std::cout << "{\"instance\":{\"pred\":";
     m_arg->print();
 
-    if (m_impl) {
-        std::cout << ",\"implies\":";
-        m_impl->print();
+    if (m_req) {
+        std::cout << ",\"require\":";
+        m_req->print();
     }
 
     std::cout << ",\"functions\":[";
@@ -2676,6 +2707,13 @@ void ast_import::print() const {
         std::cout << ",\"as\":";
         m_as->print();
     }
+
+    std::cout << ",\"here\":";
+
+    if (m_is_here)
+        std::cout << "true";
+    else
+        std::cout << "false";
 
     std::cout << ",\"path\":\"" << m_full_path << "\"}}";
 }

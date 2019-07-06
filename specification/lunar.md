@@ -26,8 +26,8 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 ## Reserved Words
 
 ```
-$RESERVED := class | type | if | let | instance | implies | func |
-             match | module | import | return | as |
+$RESERVED := class | type | if | let | instance | require | func |
+             match | module | import | return | as | here |
              infix | $INFIX
 ```
 
@@ -51,7 +51,8 @@ $DOTID = $ID | $ID . $DOTID
 ## Import
 
 ```
-$IMPORT := import $DOTID $AS?
+$IMPORT := import $DOTID $HEREAS?
+$HEREAS := here | $AS
 $AS := as $ID
 ```
 
@@ -68,7 +69,7 @@ $INTNAME := $ID | infix $INFIX
 
 Example:
 ```
-class ord<`a> implies eq<`a> {
+class ord<`a> require eq<`a> {
     func infix < (`a, `a) : bool
     func funcA (`a) : `a
 }
@@ -88,7 +89,7 @@ instance ord<u32> {
     func infix < (x, y) { ltU32(x, y) }
 }
 
-instance ord<either<`a>> implies ord<`a> {
+instance ord<either<`a>> require ord<`a> {
     func infix < (x, y) {
         match (x, y) {
         just a, just b:
@@ -104,14 +105,14 @@ instance ord<either<`a>> implies ord<`a> {
 
 A predicate asserts <$TYPES> is a member of the class named by $ID.
 ```
-$PREDS := implies $PREDS_
+$PREDS := require $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
 $PRED := $DOTID <$TYPES>
 ```
 
 Example:
 ```
-implies ord<`a>, eq<`b>
+require ord<`a>, eq<`b>
 ```
 This predicate assert \`a and \`b are members of ord and eq classes,
 respectively.
@@ -175,7 +176,7 @@ $RETTYPE := : $TYPE
 ```
 
 ```
-func myfun (x : `a, y : `b) : `a implies num<`a>, bool<`b> { x }
+func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
 ```
 
 ## Expression

@@ -3,7 +3,7 @@ class foo<`a> {
 }
 
 // monad
-class monad<`a :: * -> *> implies foo<`a> {
+class monad<`a :: * -> *> require foo<`a> {
     func infix >>=(`a<`b>, func (`b) : `a<`c>) : `a<`c>
     func return(`b) : `a<`b>
 }

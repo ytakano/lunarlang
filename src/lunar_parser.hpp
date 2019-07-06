@@ -594,10 +594,10 @@ struct ast_instance : public ast {
 
     // e.g.
     // instance Ord<Maybe<`t>> implies Ord<`t>
-    //   m_arg:  Maybe<`t>
-    //   m_impl: Ord<`t>
-    ptr_ast_pred m_arg;   // argument
-    ptr_ast_preds m_impl; // implication
+    //   m_arg: Maybe<`t>
+    //   m_req: Ord<`t>
+    ptr_ast_pred m_arg;  // argument
+    ptr_ast_preds m_req; // require
     std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
 };
 
@@ -658,7 +658,7 @@ struct ast_union : public ast_type {
 typedef std::unique_ptr<ast_union> ptr_ast_union;
 
 struct ast_import : public ast {
-    ast_import() { m_asttype = AST_IMPORT; }
+    ast_import() : m_is_here(false) { m_asttype = AST_IMPORT; }
     virtual ~ast_import() {}
 
     virtual void print() const;
@@ -674,6 +674,7 @@ struct ast_import : public ast {
 
     ptr_ast_dotid m_id;
     ptr_ast_id m_as;
+    bool m_is_here;
     std::string m_full_path;
 };
 
@@ -733,7 +734,8 @@ class module {
         return m_id2class;
     }
 
-    const std::unordered_multimap<std::string, ptr_ast_instance> &get_instances() const {
+    const std::unordered_multimap<std::string, ptr_ast_instance> &
+    get_instances() const {
         return m_id2inst;
     }
 
@@ -755,7 +757,6 @@ class module {
     // (without as id)
     module_tree m_modules;
     // import module here
-    // TODO:
     std::vector<ptr_ast_import> m_vec_modules;
 
     bool m_is_parsed;

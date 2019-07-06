@@ -122,9 +122,14 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
                 TYPEERR(ptr_mod, "undefined type", t);
                 return nullptr;
             }
-            auto ret = type_const::make(id, t->m_args->m_types.size());
-            APP_TYPES(ret, t->m_args->m_types);
-            return ret;
+
+            if (t->m_args) {
+                auto ret = type_const::make(id, t->m_args->m_types.size());
+                APP_TYPES(ret, t->m_args->m_types);
+                return ret;
+            } else {
+                return type_const::make(id, 0);
+            }
         }
     }
     case ast_type::TYPE_FUN: {
