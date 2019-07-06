@@ -1,6 +1,14 @@
 import b
 import d here
 
+struct st2<`a> {
+    v: `a
+}
+
 instance b.c.foo<st> {
-   func f(a) { a }
+    func f(a) { a }
+}
+
+instance b.c.foo<st2<u64>> {
+    func g(a) { a }
 }

@@ -263,3 +263,9 @@ If "bar.buzz" is imported in the "foo.lunar",
 "/home/user/project/bar/buzz.lunar" is looked up first of all.
 If there is no "buzz.lunar" on the module local loading path,
 then "/home/usr/.lunar/include/bar/buzz.lunar" is looked up finally.
+
+## Built-in Type
+
+```
+bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | void
+```

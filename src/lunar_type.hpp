@@ -50,6 +50,7 @@ struct ast;
 struct ast_type;
 struct ast_class;
 struct ast_instance;
+struct ast_pred;
 class module;
 class parser;
 
@@ -293,6 +294,9 @@ class pred {
     virtual ~pred() {}
 
     void print();
+
+    static std::shared_ptr<pred> make(const module *ptr_mod,
+                                      const ast_pred *ptr);
 
     type_id m_id; // class name_id
     std::vector<shared_type> m_args;

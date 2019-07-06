@@ -16,6 +16,39 @@ namespace lunar {
 static inline shared_star mk_star() { return std::make_unique<star>(); }
 static inline shared_kfun mk_kfun() { return std::make_unique<kfun>(); }
 
+class built_in_type {
+  public:
+    built_in_type() {
+        m_1st.insert("u64");
+        m_1st.insert("s64");
+        m_1st.insert("u32");
+        m_1st.insert("s32");
+        m_1st.insert("u16");
+        m_1st.insert("s16");
+        m_1st.insert("u8");
+        m_1st.insert("s8");
+        m_1st.insert("fp64");
+        m_1st.insert("fp32");
+        m_1st.insert("void");
+        m_1st.insert("bool");
+    }
+
+    shared_type make(const std::string &s) {
+        if (HASKEY(m_1st, s)) {
+            type_id id;
+            id.m_id = s;
+            id.m_path = "built-in";
+            return type_const::make(id, 0);
+        }
+        return nullptr;
+    }
+
+  private:
+    std::unordered_set<std::string> m_1st;
+};
+
+static built_in_type gen_built_in;
+
 // numtargs = 0 then return *
 //            1 then return * -> *
 //            2 then return * -> * -> *
@@ -118,6 +151,13 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
             // normal type, which is either user defined or primitive type
             type_id id;
             if (!ptr_mod->find_type(t->m_id.get(), id.m_path, id.m_id)) {
+                // make built-in type
+                if (t->m_id->m_ids.size() == 1) {
+                    auto ret = gen_built_in.make(t->m_id->m_ids[0]->m_id);
+                    if (ret)
+                        return ret;
+                }
+
                 // error, no such that type
                 TYPEERR(ptr_mod, "undefined type", t);
                 return nullptr;
@@ -430,6 +470,26 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     return nullptr;
 }
 
+shared_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
+    auto ret = std::make_shared<pred>();
+    if (!ptr_mod->find_typeclass(ptr->m_id.get(), ret->m_id.m_path,
+                                 ret->m_id.m_id)) {
+        // error, no such type class
+        TYPEERR(ptr_mod, "undefined type class", ptr);
+        return nullptr;
+    }
+
+    for (auto &arg : ptr->m_args->m_types) {
+        auto ta = type::make(ptr_mod, arg.get());
+        if (!ta)
+            return nullptr;
+
+        ret->m_args.push_back(ta);
+    }
+
+    return ret;
+}
+
 bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     auto cls = std::make_shared<typeclass>();
 
@@ -438,21 +498,9 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
 
     if (ptr->m_preds) {
         for (auto &p : ptr->m_preds->m_preds) {
-            auto pd = std::make_shared<pred>();
-            if (!ptr_mod->find_typeclass(p->m_id.get(), pd->m_id.m_path,
-                                         pd->m_id.m_id)) {
-                // error, no such type class
-                TYPEERR(ptr_mod, "undefined type class", p);
+            auto pd = pred::make(ptr_mod, p.get());
+            if (!pd)
                 return false;
-            }
-
-            for (auto &arg : p->m_args->m_types) {
-                auto ta = type::make(ptr_mod, arg.get());
-                if (!ta)
-                    return false;
-
-                pd->m_args.push_back(ta);
-            }
 
             cls->m_preds.push_back(pd);
         }
@@ -489,6 +537,15 @@ bool classenv::add_instance(const module *ptr_mod, const ast_instance *ptr) {
         if (!ta)
             return false;
         ret->m_args.push_back(ta);
+    }
+
+    if (ptr->m_req) {
+        for (auto &p : ptr->m_req->m_preds) {
+            auto pd = pred::make(ptr_mod, p.get());
+            if (!pd)
+                return false;
+            ret->m_preds.push_back(pd);
+        }
     }
 
     cls->second->m_insts.push_back(ret);
