@@ -25,6 +25,6 @@ func typed(a : u32, b : u32, fun : func (u32, u32) : u32) : u32 {
     x
 }
 
-func pred(a, b) implies eq<a>, eq<b> {
+func pred(a, b) require eq<a>, eq<b> {
     cmp(a, b)
 }

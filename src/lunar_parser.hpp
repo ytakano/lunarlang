@@ -593,7 +593,7 @@ struct ast_instance : public ast {
     virtual void print() const;
 
     // e.g.
-    // instance Ord<Maybe<`t>> implies Ord<`t>
+    // instance Ord<Maybe<`t>> require Ord<`t>
     //   m_arg: Maybe<`t>
     //   m_req: Ord<`t>
     ptr_ast_pred m_arg;  // argument

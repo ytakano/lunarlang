@@ -26,6 +26,8 @@ struct type_id {
     bool operator==(const type_id &rhs) const {
         return m_path == rhs.m_path && m_id == rhs.m_id;
     }
+
+    bool operator!=(const type_id &rhs) const { return !(*this == rhs); }
 };
 
 } // namespace lunar
@@ -307,12 +309,12 @@ typedef std::shared_ptr<pred> shared_pred;
 // qualified type
 // e.g.
 //   qualified class declaration:
-//     class ord<`a> implies eq<`a>
+//     class ord<`a> require eq<`a>
 //   qualified class instance:
-//     inst ord<either `a> implies ord<'a>
+//     inst ord<either `a> require ord<'a>
 //   qualified type declaration:
-//     fn myfun (x : `a, y : `b) : `a implies num<`a>, bool<`b>
-//     struct data<`a, `b> implies num<`a>, bool<`b>
+//     fn myfun (x : `a, y : `b) : `a require num<`a>, bool<`b>
+//     struct data<`a, `b> require num<`a>, bool<`b>
 class qual {
   public:
     qual() {}
@@ -321,7 +323,8 @@ class qual {
     void print_preds();
 
     std::vector<shared_pred> m_preds;
-    ast *m_ast;
+    const ast *m_ast;
+    const module *m_module;
 };
 
 // class declaration
@@ -355,8 +358,10 @@ class inst : public qual {
 
     void print();
 
-    type_id m_id;                                     // class name
-    std::vector<shared_type> m_args;                  // type variable arguments
+    pred m_pred;
+    //    type_id m_id;                                     // class name
+    //    std::vector<shared_type> m_args;                  // type variable
+    //    arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 };
 
@@ -403,6 +408,7 @@ class classenv {
 
     bool add_class(const module *ptr_mod, const ast_class *ptr);
     bool add_instance(const module *ptr_mod, const ast_instance *ptr);
+    inst *overlap(pred &ptr);
 };
 
 } // namespace lunar

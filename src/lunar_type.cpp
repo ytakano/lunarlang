@@ -3,12 +3,23 @@
 
 #include <assert.h>
 
-#define TYPEERR(M, MSG, AST)                                                   \
+#define TYPEERR(MSG, M, AST)                                                   \
     do {                                                                       \
-        fprintf(stderr, "%s:%lu:%lu:(%d) " MSG "\n",                           \
+        fprintf(stderr, "%s:%lu:%lu:(%d) error: " MSG "\n",                    \
                 (M)->get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
                 __LINE__);                                                     \
         print_err(AST->m_line, AST->m_column, (M)->get_parsec().get_str());    \
+    } while (0)
+
+#define TYPEERR2(MSG, M1, M2, AST1, AST2)                                      \
+    do {                                                                       \
+        fprintf(stderr, "(%d) error: " MSG "\n", __LINE__);                    \
+        fprintf(stderr, "%s:%lu:%lu:\n", (M1)->get_filename().c_str(),         \
+                (AST1)->m_line, (AST1)->m_column);                             \
+        print_err(AST1->m_line, AST1->m_column, (M1)->get_parsec().get_str()); \
+        fprintf(stderr, "%s:%lu:%lu:\n", (M2)->get_filename().c_str(),         \
+                (AST2)->m_line, (AST2)->m_column);                             \
+        print_err(AST2->m_line, AST2->m_column, (M2)->get_parsec().get_str()); \
     } while (0)
 
 namespace lunar {
@@ -159,7 +170,7 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
                 }
 
                 // error, no such that type
-                TYPEERR(ptr_mod, "undefined type", t);
+                TYPEERR("undefined type", ptr_mod, t);
                 return nullptr;
             }
 
@@ -367,15 +378,11 @@ static shared_subst var_bind(shared_type var, shared_type ty) {
             return std::make_shared<substitution>();
     }
 
-    if (occurs_check(*tv1, ty.get())) {
-        // TODO: print error
+    if (occurs_check(*tv1, ty.get()))
         return nullptr;
-    }
 
-    if (var->get_kind() != ty->get_kind()) {
-        // TODO: print error
+    if (cmp_kind(var->get_kind().get(), ty->get_kind().get()) != 0)
         return nullptr;
-    }
 
     auto s = std::make_shared<substitution>();
     s->m_subst[*tv1] = ty;
@@ -446,8 +453,15 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     if (lhs->m_subtype == type::TYPE_APP && rhs->m_subtype == type::TYPE_APP) {
         auto lapp = std::static_pointer_cast<type_app>(lhs);
         auto rapp = std::static_pointer_cast<type_app>(rhs);
+
         auto sl = match(lapp->m_left, rapp->m_left);
+        if (!sl)
+            return nullptr;
+
         auto sr = match(lapp->m_right, rapp->m_right);
+        if (!sl)
+            return nullptr;
+
         return merge(*sl, *sr);
     }
 
@@ -466,8 +480,52 @@ shared_subst match(shared_type lhs, shared_type rhs) {
             return std::make_shared<substitution>();
     }
 
-    // TODO: print error
     return nullptr;
+}
+
+shared_subst mgu_pred(pred *lhs, pred *rhs) {
+    if (lhs->m_id != rhs->m_id || lhs->m_args.size() != rhs->m_args.size())
+        return nullptr;
+
+    auto s1 = mgu(lhs->m_args[0], rhs->m_args[0]);
+    if (!s1)
+        return nullptr;
+
+    for (int i = 1; i < lhs->m_args.size(); i++) {
+        auto s2 = mgu(s1->apply(lhs->m_args[i]), s1->apply(rhs->m_args[i]));
+        if (!s2)
+            return nullptr;
+        s1 = compose(*s2, *s1);
+    }
+
+    return s1;
+}
+
+shared_subst match_pred(pred *lhs, pred *rhs) {
+    if (lhs->m_id != rhs->m_id || lhs->m_args.size() != rhs->m_args.size())
+        return nullptr;
+
+    auto s1 = std::make_shared<substitution>();
+    for (int i = 0; i < lhs->m_args.size(); i++) {
+        auto lapp = std::static_pointer_cast<type_app>(lhs->m_args[i]);
+        auto rapp = std::static_pointer_cast<type_app>(rhs->m_args[i]);
+
+        auto sl = match(lapp->m_left, rapp->m_left);
+        if (!sl)
+            return nullptr;
+
+        auto sr = match(lapp->m_right, rapp->m_right);
+        if (!sr)
+            return nullptr;
+
+        auto s2 = merge(*sl, *sr);
+        if (!s2)
+            return nullptr;
+
+        s1 = merge(*s2, *s1);
+    }
+
+    return s1;
 }
 
 shared_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
@@ -475,7 +533,7 @@ shared_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
     if (!ptr_mod->find_typeclass(ptr->m_id.get(), ret->m_id.m_path,
                                  ret->m_id.m_id)) {
         // error, no such type class
-        TYPEERR(ptr_mod, "undefined type class", ptr);
+        TYPEERR("undefined type class", ptr_mod, ptr);
         return nullptr;
     }
 
@@ -509,9 +567,12 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     // TODO: add arguments and functions
 
     if (HASKEY(m_env, cls->m_id)) {
-        TYPEERR(ptr_mod, "multiply defined class", ptr);
+        TYPEERR("multiply defined class", ptr_mod, ptr);
         return false;
     }
+
+    cls->m_ast = ptr;
+    cls->m_module = ptr_mod;
 
     auto e = std::make_unique<env>();
     e->m_class = cls;
@@ -520,23 +581,46 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     return true;
 }
 
+// return nullptr if no overlapped instance is found
+// otherwise return the pointer to the overlapped instance
+inst *classenv::overlap(pred &ptr) {
+    auto is = m_env.find(ptr.m_id);
+    assert(is != m_env.end());
+
+    for (auto &it : is->second->m_insts) {
+        auto s = mgu_pred(&it->m_pred, &ptr);
+        if (s)
+            return it.get();
+    }
+
+    return nullptr;
+}
+
 bool classenv::add_instance(const module *ptr_mod, const ast_instance *ptr) {
     auto ret = std::make_shared<inst>();
-    if (!ptr_mod->find_typeclass(ptr->m_arg->m_id.get(), ret->m_id.m_path,
-                                 ret->m_id.m_id)) {
+    if (!ptr_mod->find_typeclass(ptr->m_arg->m_id.get(),
+                                 ret->m_pred.m_id.m_path,
+                                 ret->m_pred.m_id.m_id)) {
         // error, no such type class
-        TYPEERR(ptr_mod, "undefined type class", ptr->m_arg->m_id);
+        TYPEERR("undefined type class", ptr_mod, ptr->m_arg->m_id);
         return false;
     }
 
-    auto cls = m_env.find(ret->m_id);
+    auto cls = m_env.find(ret->m_pred.m_id);
     assert(cls != m_env.end());
 
     for (auto &arg : ptr->m_arg->m_args->m_types) {
         auto ta = type::make(ptr_mod, arg.get());
         if (!ta)
             return false;
-        ret->m_args.push_back(ta);
+        ret->m_pred.m_args.push_back(ta);
+    }
+
+    auto is = overlap(ret->m_pred);
+    if (is) {
+        TYPEERR2("instance declarations are overlapped", ptr_mod, is->m_module,
+                 ptr->m_arg, ((ast_instance *)is->m_ast)->m_arg);
+        return false;
     }
 
     if (ptr->m_req) {
@@ -547,6 +631,9 @@ bool classenv::add_instance(const module *ptr_mod, const ast_instance *ptr) {
             ret->m_preds.push_back(pd);
         }
     }
+
+    ret->m_ast = ptr;
+    ret->m_module = ptr_mod;
 
     cls->second->m_insts.push_back(ret);
 
@@ -657,18 +744,11 @@ void classenv::print() {
 }
 
 void inst::print() {
-    std::cout << "{\"id\":";
-    m_id.print();
-
-    int n = 0;
-    std::cout << ",\"args\":[";
-    for (auto &arg : m_args) {
-        if (n > 0)
-            std::cout << ",";
-        arg->print();
-        n++;
-    }
-    std::cout << "]}";
+    std::cout << "{\"head\":";
+    m_pred.print();
+    std::cout << ",\"predicates\":";
+    print_preds();
+    std::cout << "}";
 }
 
 void typing(ptr_ast_type &ast) {}
