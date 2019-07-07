@@ -330,7 +330,12 @@ class qual {
 // class declaration
 class typeclass : public qual {
   public:
-    typeclass() {}
+    enum ASYCLIC {
+        ASYCLIC_NONE,
+        ASYCLIC_YES,
+        ASYCLIC_NO,
+    };
+    typeclass() : m_is_asyclic(ASYCLIC_NONE) {}
     virtual ~typeclass() {}
 
     void print();
@@ -344,6 +349,8 @@ class typeclass : public qual {
     // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
     std::vector<shared_type_var> m_args;              // arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
+
+    ASYCLIC m_is_asyclic;
 
     bool apply(std::vector<shared_type> &args);
 };
@@ -409,6 +416,9 @@ class classenv {
     bool add_class(const module *ptr_mod, const ast_class *ptr);
     bool add_instance(const module *ptr_mod, const ast_instance *ptr);
     inst *overlap(pred &ptr);
+    bool is_asyclic();
+    bool is_asyclic(const module *ptr_mod, typeclass *ptr,
+                    std::unordered_set<type_id> &visited);
 };
 
 } // namespace lunar

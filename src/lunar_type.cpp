@@ -656,7 +656,53 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
         }
     }
 
+    if (!ret->is_asyclic())
+        return nullptr;
+
     return ret;
+}
+
+bool classenv::is_asyclic() {
+    for (auto &it : m_env) {
+        std::unordered_set<type_id> visited;
+        if (!is_asyclic(it.second->m_class->m_module, it.second->m_class.get(),
+                        visited)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool classenv::is_asyclic(const module *ptr_mod, typeclass *ptr,
+                          std::unordered_set<type_id> &visited) {
+    if (ptr->m_is_asyclic == typeclass::ASYCLIC_YES)
+        return true;
+
+    if (ptr->m_preds.size() == 0) {
+        ptr->m_is_asyclic = typeclass::ASYCLIC_YES;
+        return true;
+    }
+
+    visited.insert(ptr->m_id);
+    for (auto &it : ptr->m_preds) {
+        if (HASKEY(visited, it->m_id)) {
+            ptr->m_is_asyclic = typeclass::ASYCLIC_NO;
+            TYPEERR("class is cyclically defined", ptr_mod, ptr->m_ast);
+            return false;
+        }
+
+        auto e = m_env.find(it->m_id);
+        assert(e != m_env.end());
+
+        if (!is_asyclic(ptr_mod, e->second->m_class.get(), visited)) {
+            ptr->m_is_asyclic = typeclass::ASYCLIC_NO;
+            return false;
+        }
+    }
+
+    ptr->m_is_asyclic = typeclass::ASYCLIC_YES;
+    return true;
 }
 
 void type_const::print() {
