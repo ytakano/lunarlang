@@ -12,6 +12,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include <boost/bimap/bimap.hpp>
+#include <boost/bimap/unordered_set_of.hpp>
+
 namespace lunar {
 
 struct type_id {
@@ -191,7 +194,8 @@ class type_var : public type {
     }
 
     virtual shared_kind get_kind() { return m_kind; }
-    const std::string &get_id() { return m_id; }
+    const std::string &get_id() const { return m_id; }
+    void set_id(const std::string &s) { m_id = s; }
 
     // id: type variable name
     static shared_type make(const std::string &id, unsigned int numtargs);
@@ -327,6 +331,10 @@ class qual {
     const module *m_module;
 };
 
+typedef boost::bimaps::bimap<boost::bimaps::unordered_set_of<std::string>,
+                             boost::bimaps::unordered_set_of<std::string>>
+    bimap_ss;
+
 // class declaration
 class typeclass : public qual {
   public:
@@ -347,8 +355,12 @@ class typeclass : public qual {
     // y, z ∈ tv(m_funcs)
     // ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
     // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
-    std::vector<shared_type_var> m_args;              // arguments
+    std::vector<shared_type> m_tvar_constraint; // type variable constraint
+    std::vector<std::string> m_args;            // arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
+
+    // de Bruijn index <-> original type variable
+    bimap_ss m_idx_tvar;
 
     ASYCLIC m_is_asyclic;
 
@@ -387,7 +399,7 @@ class qual_type : public qual {
 
 class classenv {
   public:
-    classenv() {}
+    classenv() : m_de_bruijn_idx(0) {}
     virtual ~classenv() {}
 
     static std::unique_ptr<classenv> make(const parser &ps);
@@ -413,12 +425,18 @@ class classenv {
     // function name -> class name
     std::unordered_map<type_id, std::string> m_func2class;
 
+    uint64_t m_de_bruijn_idx;
+
     bool add_class(const module *ptr_mod, const ast_class *ptr);
     bool add_instance(const module *ptr_mod, const ast_instance *ptr);
     inst *overlap(pred &ptr);
     bool is_asyclic();
     bool is_asyclic(const module *ptr_mod, typeclass *ptr,
                     std::unordered_set<type_id> &visited);
+    void de_bruijn();
+    void de_bruijn(typeclass *ptr);
+    void de_bruijn(typeclass *ptr, type *ptr_type);
+    std::string gensym();
 };
 
 } // namespace lunar

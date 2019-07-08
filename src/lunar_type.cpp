@@ -3,6 +3,8 @@
 
 #include <assert.h>
 
+#include <boost/lexical_cast.hpp>
+
 #define TYPEERR(MSG, M, AST)                                                   \
     do {                                                                       \
         fprintf(stderr, "%s:%lu:%lu:(%d) error: " MSG "\n",                    \
@@ -304,15 +306,6 @@ bool typeclass::apply(std::vector<shared_type> &args) {
         return false;
     }
 
-    // check kind
-    for (size_t i = 0; i < args.size(); i++) {
-        if (cmp_kind(m_args[i]->get_kind().get(), args[i]->get_kind().get()) ==
-            0) {
-            // TODO: print error
-            return false;
-        }
-    }
-
     // check predicates
 
     // check functions
@@ -564,6 +557,29 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         }
     }
 
+    std::unordered_set<std::string> s;
+    for (auto &tv : ptr->m_tvars->m_args) {
+        if (HASKEY(s, tv->m_id->m_id)) {
+            TYPEERR("argument name is multiply used", ptr_mod, tv->m_id);
+            return false;
+        }
+
+        cls->m_args.push_back(tv->m_id->m_id);
+        s.insert(tv->m_id->m_id);
+
+        if (tv->m_kind) {
+            int n = 0;
+            for (auto k = tv->m_kind.get(); k->m_asttype != ast::AST_KSTAR;
+                 k = ((ast_kfun *)k)->m_right.get()) {
+                assert(k->m_asttype == ast::AST_KFUN);
+                assert(((ast_kfun *)k)->m_right->m_asttype == ast::AST_KSTAR);
+                n++;
+            }
+            auto v = type_var::make(tv->m_id->m_id, n);
+            cls->m_tvar_constraint.push_back(v);
+        }
+    }
+
     // TODO: add arguments and functions
 
     if (HASKEY(m_env, cls->m_id)) {
@@ -659,6 +675,8 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
     if (!ret->is_asyclic())
         return nullptr;
 
+    ret->de_bruijn();
+
     return ret;
 }
 
@@ -703,6 +721,63 @@ bool classenv::is_asyclic(const module *ptr_mod, typeclass *ptr,
 
     ptr->m_is_asyclic = typeclass::ASYCLIC_YES;
     return true;
+}
+
+std::string classenv::gensym() {
+    return "T" + boost::lexical_cast<std::string>(m_de_bruijn_idx++);
+}
+
+void classenv::de_bruijn() {
+    for (auto &it : m_env) {
+        de_bruijn(it.second->m_class.get());
+    }
+}
+
+void classenv::de_bruijn(typeclass *ptr) {
+    for (auto &arg : ptr->m_args) {
+        std::string tmp = arg;
+        arg = gensym();
+        ptr->m_idx_tvar.insert(bimap_ss::value_type(arg, tmp));
+    }
+
+    for (auto &tv : ptr->m_tvar_constraint) {
+        assert(tv->m_subtype == type::TYPE_VAR);
+        auto t = (type_var *)tv.get();
+        auto it = ptr->m_idx_tvar.right.find(t->get_id());
+        if (it != ptr->m_idx_tvar.right.end())
+            t->set_id(it->second);
+    }
+
+    for (auto &p : ptr->m_preds) {
+        for (auto &t : p->m_args) {
+            de_bruijn(ptr, t.get());
+        }
+    }
+}
+
+void classenv::de_bruijn(typeclass *ptr, type *ptr_type) {
+    switch (ptr_type->m_subtype) {
+    case type::TYPE_APP: {
+        auto app = (type_app *)ptr_type;
+        de_bruijn(ptr, app->m_left.get());
+        de_bruijn(ptr, app->m_right.get());
+        break;
+    }
+    case type::TYPE_VAR: {
+        auto var = (type_var *)ptr_type;
+        auto id = var->get_id();
+        auto it = ptr->m_idx_tvar.right.find(id);
+        if (it == ptr->m_idx_tvar.right.end()) {
+            var->set_id(gensym());
+            ptr->m_idx_tvar.insert(bimap_ss::value_type(var->get_id(), id));
+        } else {
+            var->set_id(it->second);
+        }
+        break;
+    }
+    case type::TYPE_CONST:
+        break;
+    }
 }
 
 void type_const::print() {
@@ -761,7 +836,25 @@ void typeclass::print() {
 
     // TODO: print arguments and functions
 
-    std::cout << "}";
+    std::cout << ",\"args\":[";
+    int n = 0;
+    for (auto &arg : m_args) {
+        if (n > 0)
+            std::cout << ",";
+        std::cout << "\"" << arg << "\"";
+        n++;
+    }
+
+    std::cout << "],\"constraints\":[";
+    n = 0;
+    for (auto &tv : m_tvar_constraint) {
+        if (n > 0)
+            std::cout << ",";
+        tv->print();
+        n++;
+    }
+
+    std::cout << "]}";
 }
 
 void classenv::print() {
