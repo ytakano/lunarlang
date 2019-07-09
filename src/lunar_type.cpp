@@ -730,6 +730,9 @@ std::string classenv::gensym() {
 void classenv::de_bruijn() {
     for (auto &it : m_env) {
         de_bruijn(it.second->m_class.get());
+        for (auto &p : it.second->m_insts) {
+            de_bruijn(p.get());
+        }
     }
 }
 
@@ -755,7 +758,19 @@ void classenv::de_bruijn(typeclass *ptr) {
     }
 }
 
-void classenv::de_bruijn(typeclass *ptr, type *ptr_type) {
+void classenv::de_bruijn(inst *ptr) {
+    for (auto &t : ptr->m_pred.m_args) {
+        de_bruijn(ptr, t.get());
+    }
+
+    for (auto &p : ptr->m_preds) {
+        for (auto &t : p->m_args) {
+            de_bruijn(ptr, t.get());
+        }
+    }
+}
+
+void classenv::de_bruijn(qual *ptr, type *ptr_type) {
     switch (ptr_type->m_subtype) {
     case type::TYPE_APP: {
         auto app = (type_app *)ptr_type;

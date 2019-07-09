@@ -310,6 +310,10 @@ class pred {
 
 typedef std::shared_ptr<pred> shared_pred;
 
+typedef boost::bimaps::bimap<boost::bimaps::unordered_set_of<std::string>,
+                             boost::bimaps::unordered_set_of<std::string>>
+    bimap_ss;
+
 // qualified type
 // e.g.
 //   qualified class declaration:
@@ -326,14 +330,14 @@ class qual {
 
     void print_preds();
 
-    std::vector<shared_pred> m_preds;
+    std::vector<shared_pred> m_preds; // require
+
+    // de Bruijn index <-> original type variable
+    bimap_ss m_idx_tvar;
+
     const ast *m_ast;
     const module *m_module;
 };
-
-typedef boost::bimaps::bimap<boost::bimaps::unordered_set_of<std::string>,
-                             boost::bimaps::unordered_set_of<std::string>>
-    bimap_ss;
 
 // class declaration
 class typeclass : public qual {
@@ -359,9 +363,6 @@ class typeclass : public qual {
     std::vector<std::string> m_args;            // arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 
-    // de Bruijn index <-> original type variable
-    bimap_ss m_idx_tvar;
-
     ASYCLIC m_is_asyclic;
 
     bool apply(std::vector<shared_type> &args);
@@ -378,9 +379,6 @@ class inst : public qual {
     void print();
 
     pred m_pred;
-    //    type_id m_id;                                     // class name
-    //    std::vector<shared_type> m_args;                  // type variable
-    //    arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 };
 
@@ -435,7 +433,8 @@ class classenv {
                     std::unordered_set<type_id> &visited);
     void de_bruijn();
     void de_bruijn(typeclass *ptr);
-    void de_bruijn(typeclass *ptr, type *ptr_type);
+    void de_bruijn(inst *ptr);
+    void de_bruijn(qual *ptr, type *ptr_type);
     std::string gensym();
 };
 

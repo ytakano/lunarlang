@@ -1,6 +1,10 @@
 import b
 import d here
 
+class buz<`a> {
+    func h(`a) : `a
+}
+
 struct st2<`a> {
     v: `a
 }
@@ -9,6 +13,6 @@ instance b.c.foo<st> {
     func f(a) { a }
 }
 
-instance b.c.foo<st2<u64>> {
+instance b.c.foo<st2<`a>> require buz<`a> {
     func g(a) { a }
 }
