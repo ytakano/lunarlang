@@ -407,6 +407,9 @@ shared_subst mgu(shared_type lhs, shared_type rhs) {
         return var_bind(rhs, lhs);
     } else if (lhs->m_subtype == type::TYPE_CONST &&
                rhs->m_subtype == type::TYPE_CONST) {
+        if (*((type_const *)lhs.get()) != *((type_const *)rhs.get())) {
+            return nullptr;
+        }
         return std::make_shared<substitution>();
     }
 
@@ -793,6 +796,50 @@ void classenv::de_bruijn(qual *ptr, type *ptr_type) {
     case type::TYPE_CONST:
         break;
     }
+}
+
+bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
+    auto p = std::make_unique<pred>(*pd);
+    pds.push_back(std::move(p));
+
+    auto it = m_env.find(pd->m_id);
+    assert(it != m_env.end());
+
+    if (pd->m_args.size() != it->second->m_class->m_args.size()) {
+        // TODO: print error
+        return false;
+    }
+
+    // get variable bindings
+    substitution sbst;
+    for (int i = 0; i < pd->m_args.size(); i++) {
+        auto const &id = it->second->m_class->m_args[i];
+        auto const k = pd->m_args[i]->get_kind();
+        // check wheter the kind of the argument satsfies the constraints
+        for (auto &tv : it->second->m_class->m_tvar_constraint) {
+            if (id == ((type_var *)tv.get())->get_id() &&
+                cmp_kind(k.get(), tv->get_kind().get()) != 0) {
+                // TODO: print error
+                return false;
+            }
+        }
+
+        type_var tv(id, k);
+        sbst.m_subst[tv] = pd->m_args[i];
+    }
+
+    for (auto &s : it->second->m_class->m_preds) { // get super classes
+        // apply the substitution to the super classes
+        pred sup;
+        sup.m_id = s->m_id;
+        for (auto &t : s->m_args) {
+            sup.m_args.push_back(sbst.apply(t));
+        }
+
+        by_super(&sup, pds);
+    }
+
+    return true;
 }
 
 void type_const::print() {

@@ -13,6 +13,6 @@ instance b.c.foo<st> {
     func f(a) { a }
 }
 
-instance b.c.foo<st2<`a>> require buz<`a> {
+instance b.c.foo<st2> require buz<`a> {
     func g(a) { a }
 }

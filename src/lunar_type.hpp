@@ -151,9 +151,11 @@ class type_const : public type {
     };
 
     bool operator==(const type_const &lhs) const {
-        return m_id == lhs.m_id &&
+        return m_ctype == lhs.m_ctype && m_id == lhs.m_id &&
                cmp_kind(m_kind.get(), lhs.m_kind.get()) == 0;
     }
+
+    bool operator!=(const type_const &lhs) const { return !(*this == lhs); }
 
     virtual shared_kind get_kind() { return m_kind; }
     const type_id &get_id() { return m_id; }
@@ -175,6 +177,9 @@ typedef std::shared_ptr<type_const> shared_type_const;
 // type variable
 class type_var : public type {
   public:
+    type_var(const std::string &id, shared_kind k) : m_id(id), m_kind(k) {
+        m_subtype = TYPE_VAR;
+    }
     virtual ~type_var() {}
 
     bool operator==(const type_var &lhs) const {
@@ -436,6 +441,8 @@ class classenv {
     void de_bruijn(inst *ptr);
     void de_bruijn(qual *ptr, type *ptr_type);
     std::string gensym();
+
+    bool by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds);
 };
 
 } // namespace lunar
