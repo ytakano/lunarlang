@@ -798,9 +798,9 @@ void classenv::de_bruijn(qual *ptr, type *ptr_type) {
     }
 }
 
-bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
+bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
     auto p = std::make_unique<pred>(*pd);
-    pds.push_back(std::move(p));
+    ret.push_back(std::move(p));
 
     auto it = m_env.find(pd->m_id);
     assert(it != m_env.end());
@@ -836,16 +836,15 @@ bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
             sup.m_args.push_back(sbst.apply(t));
         }
 
-        by_super(&sup, pds);
+        by_super(&sup, ret);
     }
 
     return true;
 }
 
-// check wheter the predicate (pd) can be deduced from the instances
-// whose super class is the same as pd's.
-// Instances which implies pd are stored int pds.
-void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
+// find the instance of a predicate, and return predicates required
+// by the instance
+void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
     auto it = m_env.find(pd->m_id);
     assert(it != m_env.end());
 
@@ -858,10 +857,13 @@ void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
                 for (auto &arg : sp->m_args) {
                     p->m_args.push_back(sbst->apply(arg));
                 }
-                pds.push_back(std::move(p));
+                ret.push_back(std::move(p));
             }
         }
+        return;
     }
+
+    assert(false); // never reach here
 }
 
 TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &pds, pred *pd) {
@@ -889,6 +891,32 @@ TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &pds, pred *pd) {
     }
 
     return TRI_TRUE;
+}
+
+bool classenv::to_hnfs(std::vector<std::unique_ptr<pred>> &ps,
+                       std::vector<std::unique_ptr<pred>> &ret) {
+    for (auto &p : ps) {
+        if (!to_hnf(std::move(p), ret))
+            return false;
+    }
+    return true;
+}
+
+bool classenv::to_hnf(std::unique_ptr<pred> pd,
+                      std::vector<std::unique_ptr<pred>> &ret) {
+    if (pd->in_hnf()) {
+        ret.push_back(std::move(pd));
+        return true;
+    }
+
+    std::vector<std::unique_ptr<pred>> ps;
+    by_inst(pd.get(), ps);
+    if (ps.empty()) {
+        // TODO: print error, "context reduction"
+        return false;
+    }
+
+    return to_hnfs(ps, ret);
 }
 
 void type_const::print() {

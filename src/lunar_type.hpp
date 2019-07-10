@@ -314,15 +314,37 @@ class pred {
             return false;
 
         for (int i = 0; i < m_args.size(); i++) {
-            if (*m_args[i] != *rhs.m_args[i])
+            if (!eq_type(m_args[i].get(), rhs.m_args[i].get()))
                 return false;
         }
 
         return true;
     }
 
+    bool in_hnf() {
+        for (auto &arg : m_args) {
+            if (!hnf(arg.get()))
+                return false;
+        }
+        return true;
+    }
+
     type_id m_id; // class name_id
     std::vector<shared_type> m_args;
+
+  private:
+    static bool hnf(type *p) {
+        switch (p->m_subtype) {
+        case type::TYPE_VAR:
+            return true;
+        case type::TYPE_APP: {
+            auto ap = (type_app *)p;
+            return hnf(ap->m_left.get());
+        }
+        case type::TYPE_CONST:
+            return false;
+        }
+    }
 };
 
 typedef std::shared_ptr<pred> shared_pred;
@@ -454,9 +476,13 @@ class classenv {
     void de_bruijn(qual *ptr, type *ptr_type);
     std::string gensym();
 
-    bool by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds);
-    void by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &pds);
+    bool by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret);
+    void by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &ret);
     TRIVAL entail(std::vector<std::unique_ptr<pred>> &pds, pred *pd);
+    bool to_hnfs(std::vector<std::unique_ptr<pred>> &ps,
+                 std::vector<std::unique_ptr<pred>> &ret);
+    bool to_hnf(std::unique_ptr<pred> pd,
+                std::vector<std::unique_ptr<pred>> &ret);
 };
 
 } // namespace lunar
