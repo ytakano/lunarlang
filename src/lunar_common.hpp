@@ -10,6 +10,12 @@
 
 namespace lunar {
 
+enum TRIVAL {
+    TRI_FAIL,
+    TRI_TRUE,
+    TRI_FALSE
+};
+
 enum CH_RESULT {
     CH_SUCCESS = 0x00,
     CH_EMPTY = 0x01,

@@ -309,6 +309,18 @@ class pred {
     static std::shared_ptr<pred> make(const module *ptr_mod,
                                       const ast_pred *ptr);
 
+    bool operator==(const pred &rhs) const {
+        if (m_id != rhs.m_id || m_args.size() != rhs.m_args.size())
+            return false;
+
+        for (int i = 0; i < m_args.size(); i++) {
+            if (*m_args[i] != *rhs.m_args[i])
+                return false;
+        }
+
+        return true;
+    }
+
     type_id m_id; // class name_id
     std::vector<shared_type> m_args;
 };
@@ -444,6 +456,7 @@ class classenv {
 
     bool by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds);
     void by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &pds);
+    TRIVAL entail(std::vector<std::unique_ptr<pred>> &pds, pred *pd);
 };
 
 } // namespace lunar

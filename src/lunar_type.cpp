@@ -864,6 +864,33 @@ void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
     }
 }
 
+TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &pds, pred *pd) {
+    {
+        std::vector<std::unique_ptr<pred>> super;
+        if (!by_super(pd, super))
+            return TRI_FAIL;
+
+        for (auto &s : super) {
+            if (*s == *pd)
+                return TRI_TRUE;
+        }
+    }
+
+    std::vector<std::unique_ptr<pred>> qs;
+    by_inst(pd, qs);
+    if (qs.empty())
+        return TRI_FALSE;
+
+    for (auto &s : qs) {
+        auto r = entail(pds, s.get());
+        if (r == TRI_TRUE)
+            continue;
+        return r;
+    }
+
+    return TRI_TRUE;
+}
+
 void type_const::print() {
     std::cout << "{\"type\":\"const\",\"id\":";
     m_id.print();
