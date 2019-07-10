@@ -443,6 +443,7 @@ class classenv {
     std::string gensym();
 
     bool by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds);
+    void by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &pds);
 };
 
 } // namespace lunar

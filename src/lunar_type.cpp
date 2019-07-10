@@ -842,6 +842,28 @@ bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
     return true;
 }
 
+// check wheter the predicate (pd) can be deduced from the instances
+// whose super class is the same as pd's.
+// Instances which implies pd are stored int pds.
+void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &pds) {
+    auto it = m_env.find(pd->m_id);
+    assert(it != m_env.end());
+
+    for (auto &is : it->second->m_insts) {
+        auto sbst = match_pred(&is->m_pred, pd);
+        if (sbst != nullptr) {
+            for (auto &sp : is->m_preds) {
+                auto p = std::make_unique<pred>();
+                p->m_id = pd->m_id;
+                for (auto &arg : sp->m_args) {
+                    p->m_args.push_back(sbst->apply(arg));
+                }
+                pds.push_back(std::move(p));
+            }
+        }
+    }
+}
+
 void type_const::print() {
     std::cout << "{\"type\":\"const\",\"id\":";
     m_id.print();
