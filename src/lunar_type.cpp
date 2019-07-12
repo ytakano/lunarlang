@@ -866,25 +866,27 @@ void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
     assert(false); // never reach here
 }
 
-TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &pds, pred *pd) {
+TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &ps, pred *p) {
     {
-        std::vector<std::unique_ptr<pred>> super;
-        if (!by_super(pd, super))
-            return TRI_FAIL;
+        for (auto &p0 : ps) {
+            std::vector<std::unique_ptr<pred>> super;
+            if (p0 && !by_super(p0.get, super))
+                return TRI_FAIL;
 
-        for (auto &s : super) {
-            if (*s == *pd)
-                return TRI_TRUE;
+            for (auto &s : super) {
+                if (*s == *p)
+                    return TRI_TRUE;
+            }
         }
     }
 
     std::vector<std::unique_ptr<pred>> qs;
-    by_inst(pd, qs);
+    by_inst(p, qs);
     if (qs.empty())
         return TRI_FALSE;
 
     for (auto &s : qs) {
-        auto r = entail(pds, s.get());
+        auto r = entail(ps, s.get());
         if (r == TRI_TRUE)
             continue;
         return r;
@@ -917,6 +919,33 @@ bool classenv::to_hnf(std::unique_ptr<pred> pd,
     }
 
     return to_hnfs(ps, ret);
+}
+
+bool classenv::simplify(std::vector<std::unique_ptr<pred>> &ps) {
+
+    for (int i = 0; i < ps.size(); i++) {
+        assert(ps[i]);
+        auto tmp = std::move(ps[i]);
+        switch (entail(ps, tmp.get())) {
+        case TRI_TRUE:
+            continue;
+        case TRI_FALSE:
+            ps[i] = std::move(tmp);
+            break;
+        case TRI_FAIL:
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool classenv::reduce(std::vector<std::unique_ptr<pred>> &ps,
+                      std::vector<std::unique_ptr<pred>> &ret) {
+    if (!to_hnfs(ps, ret))
+        return false;
+
+    return simplify(ret);
 }
 
 void type_const::print() {

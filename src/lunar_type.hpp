@@ -478,10 +478,13 @@ class classenv {
 
     bool by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret);
     void by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &ret);
-    TRIVAL entail(std::vector<std::unique_ptr<pred>> &pds, pred *pd);
+    TRIVAL entail(std::vector<std::unique_ptr<pred>> &ps, pred *pd);
     bool to_hnfs(std::vector<std::unique_ptr<pred>> &ps,
                  std::vector<std::unique_ptr<pred>> &ret);
     bool to_hnf(std::unique_ptr<pred> pd,
+                std::vector<std::unique_ptr<pred>> &ret);
+    bool simplify(std::vector<std::unique_ptr<pred>> &ps);
+    bool reduce(std::vector<std::unique_ptr<pred>> &ps,
                 std::vector<std::unique_ptr<pred>> &ret);
 };
 

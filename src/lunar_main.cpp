@@ -169,10 +169,10 @@ void hello(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
-    //    init_thread();
-    //    spawn_green_thread(hello, nullptr);
-    //    run_green_thread();
-
+        init_thread();
+        spawn_green_thread(hello, nullptr);
+        run_green_thread();
+/*
     lunar::opt opt;
     if (!opt.parse(argc, argv))
         return 1;
@@ -195,6 +195,6 @@ int main(int argc, char *argv[]) {
         env->print();
         std::cout << std::endl;
     }
-
+*/
     return 0;
 }
