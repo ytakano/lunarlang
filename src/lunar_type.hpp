@@ -347,6 +347,15 @@ class pred {
         return true;
     }
 
+    bool is_head_var(const std::unordered_set<std::string> &args, int n) {
+        for (auto &arg : m_args) {
+            if (!head_var(arg.get(), args))
+                return false;
+            n++;
+        }
+        return true;
+    }
+
     type_id m_id; // class name_id
     std::vector<shared_type> m_args;
 
@@ -358,6 +367,24 @@ class pred {
         case type::TYPE_APP: {
             auto ap = (type_app *)p;
             return hnf(ap->m_left.get());
+        }
+        case type::TYPE_CONST:
+            return false;
+        }
+    }
+
+    static bool head_var(type *p, const std::unordered_set<std::string> &args) {
+        switch (p->m_subtype) {
+        case type::TYPE_VAR: {
+            auto tv = (type_var *)p;
+            if (HASKEY(args, tv->get_id()))
+                return true;
+            else
+                return false;
+        }
+        case type::TYPE_APP: {
+            auto ap = (type_app *)p;
+            return head_var(ap->m_left.get(), args);
         }
         case type::TYPE_CONST:
             return false;

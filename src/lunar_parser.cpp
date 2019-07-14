@@ -819,10 +819,14 @@ ptr_ast_types module::parse_types() {
     ret->set_pos(m_parsec);
 
     for (;;) {
+        auto line = m_parsec.get_line();
+        auto column = m_parsec.get_column();
         auto t = parse_type();
         if (!t)
             return nullptr;
 
+        t->m_line = line;
+        t->m_column = column;
         ret->m_types.push_back(std::move(t));
 
         parse_spaces();

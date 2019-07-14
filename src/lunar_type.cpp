@@ -698,6 +698,19 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
             if (!cls->add_constraints(pd.get()))
                 return false;
 
+            if (!pd->in_hnf()) {
+                TYPEERR("predicate must be head normal form", ptr_mod, p);
+                return false;
+            }
+
+            int n = 0;
+            if (!pd->is_head_var(s, n)) {
+                TYPEERR("type argument's head must be involved by "
+                        "the class's arguments",
+                        ptr_mod, p->m_args->m_types[n]);
+                return false;
+            }
+
             cls->m_preds.push_back(pd);
         }
     }
