@@ -58,6 +58,7 @@ struct ast_instance;
 struct ast_pred;
 class module;
 class parser;
+class pred;
 
 class substitution;
 
@@ -72,6 +73,7 @@ class kind {
     virtual ~kind(){};
 
     virtual void print() = 0;
+    virtual std::string to_str() = 0;
 
     bool m_is_star;
 };
@@ -84,6 +86,7 @@ class star : public kind {
     star() { m_is_star = true; }
     virtual ~star() {}
     virtual void print() { std::cout << "*"; }
+    virtual std::string to_str() { return "*"; }
 };
 
 typedef std::shared_ptr<star> shared_star;
@@ -98,6 +101,12 @@ class kfun : public kind {
         m_left->print();
         std::cout << " -> ";
         m_right->print();
+    }
+
+    virtual std::string to_str() {
+        auto left = m_left->to_str();
+        auto right = m_right->to_str();
+        return left + " -> " + right;
     }
 
     shared_kind m_left;
@@ -192,9 +201,9 @@ class type_var : public type {
     bool operator<(const type_var &lhs) const {
         int ret = m_id.compare(lhs.m_id);
         if (ret == 0) {
-            return cmp_kind(m_kind.get(), lhs.m_kind.get()) == -1;
+            return cmp_kind(m_kind.get(), lhs.m_kind.get());
         } else {
-            return ret == -1;
+            return ret;
         }
     }
 
@@ -204,6 +213,14 @@ class type_var : public type {
 
     // id: type variable name
     static shared_type make(const std::string &id, unsigned int numtargs);
+
+    // id: type variable name, k: kind
+    static shared_type make(const std::string &id, shared_kind k) {
+        auto ret = std::shared_ptr<type_var>(new type_var);
+        ret->m_id = id;
+        ret->m_kind = k;
+        return ret;
+    }
 
     virtual void print();
 
@@ -289,6 +306,7 @@ class substitution {
 
     // substitute type variables in the argument
     shared_type apply(shared_type type);
+    std::unique_ptr<pred> apply(pred *p);
 
     std::map<type_var, shared_type> m_subst;
 };
@@ -404,7 +422,12 @@ class typeclass : public qual {
 
     ASYCLIC m_is_asyclic;
 
-    bool apply(std::vector<shared_type> &args);
+    bool apply_super(std::vector<shared_type> &args,
+                     std::vector<std::unique_ptr<pred>> &ret);
+
+    bool check_kind_constraint(const std::string &id, kind *k);
+    bool add_constraints(pred *p);
+    bool add_constraints(type *p);
 };
 
 typedef std::shared_ptr<typeclass> shared_typeclass;
@@ -465,12 +488,13 @@ class classenv {
     uint64_t m_de_bruijn_idx;
 
     bool add_class(const module *ptr_mod, const ast_class *ptr);
-    bool add_instance(const module *ptr_mod, const ast_instance *ptr);
+    bool add_instance(const module *ptr_mod, const ast_instance *ptr_ast);
+    bool add_instance(std::vector<std::unique_ptr<pred>> &ps,
+                      const module *ptr_mod, const ast_instance *ptr_ast);
     inst *overlap(pred &ptr);
     bool is_asyclic();
     bool is_asyclic(const module *ptr_mod, typeclass *ptr,
                     std::unordered_set<type_id> &visited);
-    void de_bruijn();
     void de_bruijn(typeclass *ptr);
     void de_bruijn(inst *ptr);
     void de_bruijn(qual *ptr, type *ptr_type);

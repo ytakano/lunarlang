@@ -722,7 +722,7 @@ class module {
                         std::string &id, unsigned int pos = 0) const;
 
     // find user defined type recursively
-    bool find_type(const ast_dotid *dotid, std::string &path, std::string &id,
+    ast *find_type(const ast_dotid *dotid, std::string &path, std::string &id,
                    unsigned int pos = 0) const;
 
     module *find_module(const ast_dotid *dotid, unsigned int &pos) const;

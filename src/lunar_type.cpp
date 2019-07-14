@@ -5,11 +5,19 @@
 
 #include <boost/lexical_cast.hpp>
 
-#define TYPEERR(MSG, M, AST)                                                   \
+#define TYPEINFO(MSG, M, AST)                                                  \
     do {                                                                       \
-        fprintf(stderr, "%s:%lu:%lu:(%d) error: " MSG "\n",                    \
+        fprintf(stderr, "%s:%lu:%lu:(%d) " MSG "\n",                           \
                 (M)->get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
                 __LINE__);                                                     \
+        print_err(AST->m_line, AST->m_column, (M)->get_parsec().get_str());    \
+    } while (0)
+
+#define TYPEERR(MSG, M, AST)                                                   \
+    do {                                                                       \
+        fprintf(stderr, "%s:%lu:%lu:(%d) error: %s\n",                         \
+                (M)->get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
+                __LINE__, MSG);                                                \
         print_err(AST->m_line, AST->m_column, (M)->get_parsec().get_str());    \
     } while (0)
 
@@ -163,7 +171,9 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
         } else {
             // normal type, which is either user defined or primitive type
             type_id id;
-            if (!ptr_mod->find_type(t->m_id.get(), id.m_path, id.m_id)) {
+            auto ptr_ast =
+                ptr_mod->find_type(t->m_id.get(), id.m_path, id.m_id);
+            if (!ptr_ast) {
                 // make built-in type
                 if (t->m_id->m_ids.size() == 1) {
                     auto ret = gen_built_in.make(t->m_id->m_ids[0]->m_id);
@@ -176,12 +186,39 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
                 return nullptr;
             }
 
+            int argnum = 0;
+            if (ptr_ast->m_asttype != ast::AST_MEMBER) {
+                assert(ptr_ast->m_asttype == ast::AST_TYPE);
+                auto t = (ast_type *)ptr_ast;
+                switch (t->m_type) {
+                case ast_type::TYPE_STRUCT: {
+                    auto st = (ast_struct *)t;
+                    if (st->m_tvars)
+                        argnum = st->m_tvars->m_args.size();
+                    break;
+                }
+                case ast_type::TYPE_UNION: {
+                    auto un = (ast_union *)t;
+                    if (un->m_tvars)
+                        argnum = un->m_tvars->m_args.size();
+                    break;
+                }
+                default:
+                    assert(false); // never reach here
+                }
+            }
+
             if (t->m_args) {
+                if (t->m_args->m_types.size() != argnum) {
+                    TYPEERR("the number of arguments is different", ptr_mod, t);
+                    return nullptr;
+                }
+
                 auto ret = type_const::make(id, t->m_args->m_types.size());
                 APP_TYPES(ret, t->m_args->m_types);
                 return ret;
             } else {
-                return type_const::make(id, 0);
+                return type_const::make(id, argnum);
             }
         }
     }
@@ -285,32 +322,30 @@ shared_type substitution::apply(shared_type type) {
 
         return s->second;
     }
-    case type::TYPE_APP:
+    case type::TYPE_APP: {
         auto tapp = std::static_pointer_cast<type_app>(type);
-
-        auto lhs = apply(tapp->m_left);
-        tapp->m_left = lhs;
-
-        auto rhs = apply(tapp->m_right);
-        tapp->m_right = rhs;
-
-        return tapp;
+        return type_app::make(apply(tapp->m_left), apply(tapp->m_right));
+    }
     }
 
     return nullptr; // never reach here
 }
 
-bool typeclass::apply(std::vector<shared_type> &args) {
-    if (args.size() != m_args.size()) {
-        // TODO: print error
-        return false;
+// [T0 -> t :: *]
+// (T0 :: * -> *, T1 :: *)
+// (T0 :: * -> *, t :: *)
+
+std::unique_ptr<pred> substitution::apply(pred *p) {
+    auto ret = std::make_unique<pred>();
+
+    for (auto &t : p->m_args) {
+        auto t0 = apply(t);
+        ret->m_args.push_back(t0);
     }
 
-    // check predicates
+    ret->m_id = p->m_id;
 
-    // check functions
-
-    return true;
+    return ret;
 }
 
 // s1 = {x1 -> t1, ..., xn -> tn}
@@ -544,22 +579,89 @@ shared_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
     return ret;
 }
 
+bool typeclass::apply_super(std::vector<shared_type> &args,
+                            std::vector<std::unique_ptr<pred>> &ret) {
+    if (args.size() != m_args.size()) {
+        // TODO: print error
+        return false;
+    }
+
+    // make substitution
+    auto s = std::make_shared<substitution>();
+    for (int i = 0; i < args.size(); i++) {
+        auto k = args[i]->get_kind();
+        if (!check_kind_constraint(m_args[i], k.get())) {
+            return false;
+        }
+
+        auto tv = type_var::make(m_args[i], args[i]->get_kind());
+        auto s0 = var_bind(tv, args[i]);
+        s = compose(*s0, *s);
+    }
+
+    // make predicates by applying the substitution to the super classes
+    for (auto &p : m_preds) {
+        auto p0 = s->apply(p.get());
+        ret.push_back(std::move(p0));
+    }
+
+    return true;
+}
+
+bool typeclass::add_constraints(pred *p) {
+    for (auto &t : p->m_args) {
+        if (!add_constraints(t.get()))
+            return false;
+    }
+
+    return true;
+}
+
+bool typeclass::add_constraints(type *p) {
+    switch (p->m_subtype) {
+    case type::TYPE_CONST:
+        return true;
+    case type::TYPE_VAR: {
+        auto tv = (type_var *)p;
+        for (auto &it : m_tvar_constraint) {
+            auto tvc = (type_var *)it.get();
+            if (tvc->get_id() == tv->get_id() &&
+                cmp_kind(tvc->get_kind().get(), tv->get_kind().get()) != 0) {
+                // TODO: print error
+                std::string err = "kinds are different. \"" + tvc->get_id() +
+                                  "\" must be \"" + tvc->get_kind()->to_str() +
+                                  "\" but its kind is \"" +
+                                  tv->get_kind()->to_str() + "\"";
+                TYPEERR(err.c_str(), m_module, m_ast);
+                return false;
+            }
+        }
+
+        auto r = type_var::make(tv->get_id(), tv->get_kind());
+        m_tvar_constraint.push_back(r);
+
+        return true;
+    }
+    case type::TYPE_APP: {
+        auto ta = (type_app *)p;
+        if (!add_constraints(ta->m_left.get()))
+            return false;
+        if (!add_constraints(ta->m_right.get()))
+            return false;
+        return true;
+    }
+    }
+
+    return true; // never reach here
+}
+
 bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     auto cls = std::make_shared<typeclass>();
 
     cls->m_id.m_path = ptr_mod->get_filename();
     cls->m_id.m_id = ptr->m_id->m_id;
 
-    if (ptr->m_preds) {
-        for (auto &p : ptr->m_preds->m_preds) {
-            auto pd = pred::make(ptr_mod, p.get());
-            if (!pd)
-                return false;
-
-            cls->m_preds.push_back(pd);
-        }
-    }
-
+    // add type arguments
     std::unordered_set<std::string> s;
     for (auto &tv : ptr->m_tvars->m_args) {
         if (HASKEY(s, tv->m_id->m_id)) {
@@ -583,15 +685,31 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         }
     }
 
-    // TODO: add arguments and functions
+    cls->m_ast = ptr;
+    cls->m_module = ptr_mod;
+
+    // add super classes
+    if (ptr->m_preds) {
+        for (auto &p : ptr->m_preds->m_preds) {
+            auto pd = pred::make(ptr_mod, p.get());
+            if (!pd)
+                return false;
+
+            if (!cls->add_constraints(pd.get()))
+                return false;
+
+            cls->m_preds.push_back(pd);
+        }
+    }
+
+    // TODO: add functions
 
     if (HASKEY(m_env, cls->m_id)) {
         TYPEERR("multiply defined class", ptr_mod, ptr);
         return false;
     }
 
-    cls->m_ast = ptr;
-    cls->m_module = ptr_mod;
+    de_bruijn(cls.get());
 
     auto e = std::make_unique<env>();
     e->m_class = cls;
@@ -615,35 +733,39 @@ inst *classenv::overlap(pred &ptr) {
     return nullptr;
 }
 
-bool classenv::add_instance(const module *ptr_mod, const ast_instance *ptr) {
+bool classenv::add_instance(const module *ptr_mod,
+                            const ast_instance *ptr_ast) {
     auto ret = std::make_shared<inst>();
-    if (!ptr_mod->find_typeclass(ptr->m_arg->m_id.get(),
+    if (!ptr_mod->find_typeclass(ptr_ast->m_arg->m_id.get(),
                                  ret->m_pred.m_id.m_path,
                                  ret->m_pred.m_id.m_id)) {
         // error, no such type class
-        TYPEERR("undefined type class", ptr_mod, ptr->m_arg->m_id);
+        TYPEERR("undefined type class", ptr_mod, ptr_ast->m_arg->m_id);
         return false;
     }
 
     auto cls = m_env.find(ret->m_pred.m_id);
     assert(cls != m_env.end());
 
-    for (auto &arg : ptr->m_arg->m_args->m_types) {
+    // type arguments
+    for (auto &arg : ptr_ast->m_arg->m_args->m_types) {
+        // TOOD: get kind of argument
         auto ta = type::make(ptr_mod, arg.get());
         if (!ta)
             return false;
         ret->m_pred.m_args.push_back(ta);
     }
 
+    // check the instance is overlapped
     auto is = overlap(ret->m_pred);
     if (is) {
         TYPEERR2("instance declarations are overlapped", ptr_mod, is->m_module,
-                 ptr->m_arg, ((ast_instance *)is->m_ast)->m_arg);
+                 ptr_ast->m_arg, ((ast_instance *)is->m_ast)->m_arg);
         return false;
     }
 
-    if (ptr->m_req) {
-        for (auto &p : ptr->m_req->m_preds) {
+    if (ptr_ast->m_req) {
+        for (auto &p : ptr_ast->m_req->m_preds) {
             auto pd = pred::make(ptr_mod, p.get());
             if (!pd)
                 return false;
@@ -651,10 +773,53 @@ bool classenv::add_instance(const module *ptr_mod, const ast_instance *ptr) {
         }
     }
 
-    ret->m_ast = ptr;
+    ret->m_ast = ptr_ast;
     ret->m_module = ptr_mod;
 
+    de_bruijn(ret.get());
+
+    // add instances to the super classes
+    std::vector<std::unique_ptr<pred>> super;
+    if (!cls->second->m_class->apply_super(ret->m_pred.m_args, super)) {
+        TYPEINFO("instantiated by", ptr_mod, ptr_ast);
+        return false;
+    }
+
+    if (!add_instance(super, ptr_mod, ptr_ast))
+        return false;
+
     cls->second->m_insts.push_back(ret);
+
+    return true;
+}
+
+bool classenv::add_instance(std::vector<std::unique_ptr<pred>> &ps,
+                            const module *ptr_mod,
+                            const ast_instance *ptr_ast) {
+    for (auto &p : ps) {
+        auto in = std::make_shared<inst>();
+        auto cls = m_env.find(p->m_id);
+        assert(cls != m_env.end());
+
+        for (auto &arg : p->m_args) {
+            in->m_pred.m_args.push_back(arg);
+        }
+
+        in->m_pred.m_id = p->m_id;
+        in->m_ast = ptr_ast;
+        in->m_module = ptr_mod;
+
+        std::vector<std::unique_ptr<pred>> super;
+        if (!cls->second->m_class->apply_super(in->m_pred.m_args, super)) {
+            TYPEINFO("instantiated by", ptr_mod, ptr_ast);
+            return false;
+        }
+
+        if (!add_instance(super, ptr_mod, ptr_ast))
+            return false;
+
+        cls->second->m_insts.push_back(in);
+    }
 
     return true;
 }
@@ -677,8 +842,6 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
 
     if (!ret->is_asyclic())
         return nullptr;
-
-    ret->de_bruijn();
 
     return ret;
 }
@@ -728,15 +891,6 @@ bool classenv::is_asyclic(const module *ptr_mod, typeclass *ptr,
 
 std::string classenv::gensym() {
     return "T" + boost::lexical_cast<std::string>(m_de_bruijn_idx++);
-}
-
-void classenv::de_bruijn() {
-    for (auto &it : m_env) {
-        de_bruijn(it.second->m_class.get());
-        for (auto &p : it.second->m_insts) {
-            de_bruijn(p.get());
-        }
-    }
 }
 
 void classenv::de_bruijn(typeclass *ptr) {
@@ -798,6 +952,31 @@ void classenv::de_bruijn(qual *ptr, type *ptr_type) {
     }
 }
 
+bool typeclass::check_kind_constraint(const std::string &id, kind *k) {
+    for (auto &tv : m_tvar_constraint) {
+        if (id == ((type_var *)tv.get())->get_id() &&
+            cmp_kind(k, tv->get_kind().get()) != 0) {
+            auto it = m_idx_tvar.left.find(id);
+            assert(it != m_idx_tvar.left.end());
+
+            auto cp = (ast_class *)m_ast;
+            for (auto &v : cp->m_tvars->m_args) {
+                if (v->m_id->m_id == it->second) {
+                    std::string err =
+                        "kinds are different. \"" + it->second +
+                        "\" must be \"" + tv->get_kind()->to_str() +
+                        "\" but the kind of the passed type was \"" +
+                        k->to_str() + "\"";
+                    TYPEERR(err.c_str(), m_module, v->m_id);
+                }
+            }
+
+            return false;
+        }
+    }
+    return true;
+}
+
 bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
     auto p = std::make_unique<pred>(*pd);
     ret.push_back(std::move(p));
@@ -815,13 +994,10 @@ bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
     for (int i = 0; i < pd->m_args.size(); i++) {
         auto const &id = it->second->m_class->m_args[i];
         auto const k = pd->m_args[i]->get_kind();
+
         // check wheter the kind of the argument satsfies the constraints
-        for (auto &tv : it->second->m_class->m_tvar_constraint) {
-            if (id == ((type_var *)tv.get())->get_id() &&
-                cmp_kind(k.get(), tv->get_kind().get()) != 0) {
-                // TODO: print error
-                return false;
-            }
+        if (!it->second->m_class->check_kind_constraint(id, k.get())) {
+            return false;
         }
 
         type_var tv(id, k);
@@ -870,7 +1046,7 @@ TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &ps, pred *p) {
     {
         for (auto &p0 : ps) {
             std::vector<std::unique_ptr<pred>> super;
-            if (p0 && !by_super(p0.get, super))
+            if (p0 && !by_super(p0.get(), super))
                 return TRI_FAIL;
 
             for (auto &s : super) {

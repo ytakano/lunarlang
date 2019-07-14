@@ -413,16 +413,24 @@ bool module::find_typeclass(const ast_dotid *dotid, std::string &path,
         if (it != (C).end()) {                                                 \
             path = m_filename;                                                 \
             id = it->second->m_id->m_id;                                       \
-            return true;                                                       \
+            return it->second.get();                                           \
         }                                                                      \
     } while (0)
 
-bool module::find_type(const ast_dotid *dotid, std::string &path,
+ast *module::find_type(const ast_dotid *dotid, std::string &path,
                        std::string &id, unsigned int pos) const {
     if (dotid->m_ids.size() - pos == 1) {
         FIND_TYPE(m_id2struct);
         FIND_TYPE(m_id2union);
-        FIND_TYPE(m_id2union_mem);
+
+        {
+            auto it = m_id2union_mem.find(dotid->m_ids[pos]->m_id);
+            if (it != m_id2union_mem.end()) {
+                path = m_filename;
+                id = it->second->m_id->m_id;
+                return it->second;
+            }
+        }
     }
 
     module *ptr_mod = find_module(dotid, pos);
@@ -431,10 +439,9 @@ bool module::find_type(const ast_dotid *dotid, std::string &path,
              ++it) {
             auto it_mod = m_parser.m_modules.find((*it)->m_full_path);
             assert(it_mod != m_parser.m_modules.end());
-            if (it_mod->second->find_type(dotid, path, id, pos))
-                return true;
+            return it_mod->second->find_type(dotid, path, id, pos);
         }
-        return false;
+        return nullptr;
     }
 
     return ptr_mod->find_type(dotid, path, id, pos);
