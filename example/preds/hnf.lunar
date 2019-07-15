@@ -1,0 +1,19 @@
+class foo<`a> {
+    func f(`a) : `a
+}
+
+struct s<`a> {
+    var : `a
+}
+
+// instance foo<s<(`a, `a)>> require foo<`a> {
+//     func f(a) { a }
+// }
+
+instance foo<(`a, `a)> require foo<`a> {
+    func f(a) { a }
+}
+
+instance foo<s<(`a, `a)>> require foo<(`a, `a)> {
+    func f(a) { a }
+}
