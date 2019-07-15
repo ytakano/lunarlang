@@ -290,6 +290,8 @@ class type_app : public type {
     type_app() { m_subtype = TYPE_APP; }
 };
 
+typedef std::unique_ptr<pred> uniq_pred;
+
 // substitution from (id, kind) to type
 // type variable -> type
 // e.g.
@@ -306,7 +308,7 @@ class substitution {
 
     // substitute type variables in the argument
     shared_type apply(shared_type type);
-    std::unique_ptr<pred> apply(pred *p);
+    uniq_pred apply(pred *p);
 
     std::map<type_var, shared_type> m_subst;
 };
@@ -324,8 +326,7 @@ class pred {
 
     void print();
 
-    static std::shared_ptr<pred> make(const module *ptr_mod,
-                                      const ast_pred *ptr);
+    static uniq_pred make(const module *ptr_mod, const ast_pred *ptr);
 
     bool operator==(const pred &rhs) const {
         if (m_id != rhs.m_id || m_args.size() != rhs.m_args.size())
@@ -392,8 +393,6 @@ class pred {
     }
 };
 
-typedef std::shared_ptr<pred> shared_pred;
-
 typedef boost::bimaps::bimap<boost::bimaps::unordered_set_of<std::string>,
                              boost::bimaps::unordered_set_of<std::string>>
     bimap_ss;
@@ -414,7 +413,7 @@ class qual {
 
     void print_preds();
 
-    std::vector<shared_pred> m_preds; // require
+    std::vector<uniq_pred> m_preds; // require
 
     // de Bruijn index <-> original type variable
     bimap_ss m_idx_tvar;
@@ -450,14 +449,14 @@ class typeclass : public qual {
     ASYCLIC m_is_asyclic;
 
     bool apply_super(std::vector<shared_type> &args,
-                     std::vector<std::unique_ptr<pred>> &ret);
+                     std::vector<uniq_pred> &ret);
 
     bool check_kind_constraint(const std::string &id, kind *k);
     bool add_constraints(pred *p);
     bool add_constraints(type *p);
 };
 
-typedef std::shared_ptr<typeclass> shared_typeclass;
+typedef std::unique_ptr<typeclass> uniq_typeclass;
 
 // class instance declaration
 class inst : public qual {
@@ -471,7 +470,7 @@ class inst : public qual {
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 };
 
-typedef std::shared_ptr<inst> shared_inst;
+typedef std::unique_ptr<inst> uniq_inst;
 
 // qualified type
 // function, struct, or union types are denoted by this class
@@ -495,13 +494,13 @@ class classenv {
 
   private:
     struct env {
-        shared_typeclass m_class; // class declaration
+        uniq_typeclass m_class; // class declaration
 
         // multiply defined instances are prohibited
         // 0 <= i, j < m_insts.size()
         // s: substitution (mgu)
         // ∀i ∀j ∃s (s m_insts[i].m_args = s m_insts[j].m_args) -> error
-        std::vector<shared_inst> m_insts; // instance declarations
+        std::vector<uniq_inst> m_insts; // instance declarations
     };
 
     typedef std::unique_ptr<env> ptr_env;
@@ -516,8 +515,8 @@ class classenv {
 
     bool add_class(const module *ptr_mod, const ast_class *ptr);
     bool add_instance(const module *ptr_mod, const ast_instance *ptr_ast);
-    bool add_instance(std::vector<std::unique_ptr<pred>> &ps,
-                      const module *ptr_mod, const ast_instance *ptr_ast);
+    bool add_instance(std::vector<uniq_pred> &ps, const module *ptr_mod,
+                      const ast_instance *ptr_ast);
     inst *overlap(pred &ptr);
     bool is_asyclic();
     bool is_asyclic(const module *ptr_mod, typeclass *ptr,
@@ -527,16 +526,13 @@ class classenv {
     void de_bruijn(qual *ptr, type *ptr_type);
     std::string gensym();
 
-    bool by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret);
-    void by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &ret);
-    TRIVAL entail(std::vector<std::unique_ptr<pred>> &ps, pred *pd);
-    bool to_hnfs(std::vector<std::unique_ptr<pred>> &ps,
-                 std::vector<std::unique_ptr<pred>> &ret);
-    bool to_hnf(std::unique_ptr<pred> pd,
-                std::vector<std::unique_ptr<pred>> &ret);
-    bool simplify(std::vector<std::unique_ptr<pred>> &ps);
-    bool reduce(std::vector<std::unique_ptr<pred>> &ps,
-                std::vector<std::unique_ptr<pred>> &ret);
+    bool by_super(pred *pd, std::vector<uniq_pred> &ret);
+    void by_inst(pred *pd, std::vector<uniq_pred> &ret);
+    TRIVAL entail(std::vector<uniq_pred> &ps, pred *pd);
+    bool to_hnfs(std::vector<uniq_pred> &ps, std::vector<uniq_pred> &ret);
+    bool to_hnf(uniq_pred pd, std::vector<uniq_pred> &ret);
+    bool simplify(std::vector<uniq_pred> &ps);
+    bool reduce(std::vector<uniq_pred> &ps);
 };
 
 } // namespace lunar

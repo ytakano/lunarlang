@@ -335,7 +335,7 @@ shared_type substitution::apply(shared_type type) {
 // (T0 :: * -> *, T1 :: *)
 // (T0 :: * -> *, t :: *)
 
-std::unique_ptr<pred> substitution::apply(pred *p) {
+uniq_pred substitution::apply(pred *p) {
     auto ret = std::make_unique<pred>();
 
     for (auto &t : p->m_args) {
@@ -559,8 +559,8 @@ shared_subst match_pred(pred *lhs, pred *rhs) {
     return s1;
 }
 
-shared_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
-    auto ret = std::make_shared<pred>();
+uniq_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
+    auto ret = std::make_unique<pred>();
     if (!ptr_mod->find_typeclass(ptr->m_id.get(), ret->m_id.m_path,
                                  ret->m_id.m_id)) {
         // error, no such type class
@@ -580,7 +580,7 @@ shared_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
 }
 
 bool typeclass::apply_super(std::vector<shared_type> &args,
-                            std::vector<std::unique_ptr<pred>> &ret) {
+                            std::vector<uniq_pred> &ret) {
     if (args.size() != m_args.size()) {
         // TODO: print error
         return false;
@@ -656,7 +656,7 @@ bool typeclass::add_constraints(type *p) {
 }
 
 bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
-    auto cls = std::make_shared<typeclass>();
+    auto cls = std::make_unique<typeclass>();
 
     cls->m_id.m_path = ptr_mod->get_filename();
     cls->m_id.m_id = ptr->m_id->m_id;
@@ -711,7 +711,7 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
                 return false;
             }
 
-            cls->m_preds.push_back(pd);
+            cls->m_preds.push_back(std::move(pd));
         }
     }
 
@@ -725,8 +725,8 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     de_bruijn(cls.get());
 
     auto e = std::make_unique<env>();
-    e->m_class = cls;
-    m_env[cls->m_id] = std::move(e);
+    e->m_class = std::move(cls);
+    m_env[e->m_class->m_id] = std::move(e);
 
     return true;
 }
@@ -748,7 +748,7 @@ inst *classenv::overlap(pred &ptr) {
 
 bool classenv::add_instance(const module *ptr_mod,
                             const ast_instance *ptr_ast) {
-    auto ret = std::make_shared<inst>();
+    auto ret = std::make_unique<inst>();
     if (!ptr_mod->find_typeclass(ptr_ast->m_arg->m_id.get(),
                                  ret->m_pred.m_id.m_path,
                                  ret->m_pred.m_id.m_id)) {
@@ -782,7 +782,7 @@ bool classenv::add_instance(const module *ptr_mod,
             auto pd = pred::make(ptr_mod, p.get());
             if (!pd)
                 return false;
-            ret->m_preds.push_back(pd);
+            ret->m_preds.push_back(std::move(pd));
         }
     }
 
@@ -792,7 +792,7 @@ bool classenv::add_instance(const module *ptr_mod,
     de_bruijn(ret.get());
 
     // add instances to the super classes
-    std::vector<std::unique_ptr<pred>> super;
+    std::vector<uniq_pred> super;
     if (!cls->second->m_class->apply_super(ret->m_pred.m_args, super)) {
         TYPEINFO("instantiated by", ptr_mod, ptr_ast);
         return false;
@@ -801,16 +801,15 @@ bool classenv::add_instance(const module *ptr_mod,
     if (!add_instance(super, ptr_mod, ptr_ast))
         return false;
 
-    cls->second->m_insts.push_back(ret);
+    cls->second->m_insts.push_back(std::move(ret));
 
     return true;
 }
 
-bool classenv::add_instance(std::vector<std::unique_ptr<pred>> &ps,
-                            const module *ptr_mod,
+bool classenv::add_instance(std::vector<uniq_pred> &ps, const module *ptr_mod,
                             const ast_instance *ptr_ast) {
     for (auto &p : ps) {
-        auto in = std::make_shared<inst>();
+        auto in = std::make_unique<inst>();
         auto cls = m_env.find(p->m_id);
         assert(cls != m_env.end());
 
@@ -822,7 +821,7 @@ bool classenv::add_instance(std::vector<std::unique_ptr<pred>> &ps,
         in->m_ast = ptr_ast;
         in->m_module = ptr_mod;
 
-        std::vector<std::unique_ptr<pred>> super;
+        std::vector<uniq_pred> super;
         if (!cls->second->m_class->apply_super(in->m_pred.m_args, super)) {
             TYPEINFO("instantiated by", ptr_mod, ptr_ast);
             return false;
@@ -831,7 +830,7 @@ bool classenv::add_instance(std::vector<std::unique_ptr<pred>> &ps,
         if (!add_instance(super, ptr_mod, ptr_ast))
             return false;
 
-        cls->second->m_insts.push_back(in);
+        cls->second->m_insts.push_back(std::move(in));
     }
 
     return true;
@@ -855,6 +854,9 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
 
     if (!ret->is_asyclic())
         return nullptr;
+
+    for (auto &e : ret->m_env) {
+    }
 
     return ret;
 }
@@ -990,7 +992,7 @@ bool typeclass::check_kind_constraint(const std::string &id, kind *k) {
     return true;
 }
 
-bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
+bool classenv::by_super(pred *pd, std::vector<uniq_pred> &ret) {
     auto p = std::make_unique<pred>(*pd);
     ret.push_back(std::move(p));
 
@@ -1033,7 +1035,7 @@ bool classenv::by_super(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
 
 // find the instance of a predicate, and return predicates required
 // by the instance
-void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
+void classenv::by_inst(pred *pd, std::vector<uniq_pred> &ret) {
     auto it = m_env.find(pd->m_id);
     assert(it != m_env.end());
 
@@ -1055,11 +1057,12 @@ void classenv::by_inst(pred *pd, std::vector<std::unique_ptr<pred>> &ret) {
     assert(false); // never reach here
 }
 
-TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &ps, pred *p) {
+TRIVAL classenv::entail(std::vector<uniq_pred> &ps, pred *p) {
     {
         for (auto &p0 : ps) {
-            std::vector<std::unique_ptr<pred>> super;
-            if (p0 && !by_super(p0.get(), super))
+            std::vector<uniq_pred> super;
+            assert(p0);
+            if (!by_super(p0.get(), super))
                 return TRI_FAIL;
 
             for (auto &s : super) {
@@ -1069,7 +1072,7 @@ TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &ps, pred *p) {
         }
     }
 
-    std::vector<std::unique_ptr<pred>> qs;
+    std::vector<uniq_pred> qs;
     by_inst(p, qs);
     if (qs.empty())
         return TRI_FALSE;
@@ -1084,8 +1087,8 @@ TRIVAL classenv::entail(std::vector<std::unique_ptr<pred>> &ps, pred *p) {
     return TRI_TRUE;
 }
 
-bool classenv::to_hnfs(std::vector<std::unique_ptr<pred>> &ps,
-                       std::vector<std::unique_ptr<pred>> &ret) {
+bool classenv::to_hnfs(std::vector<uniq_pred> &ps,
+                       std::vector<uniq_pred> &ret) {
     for (auto &p : ps) {
         if (!to_hnf(std::move(p), ret))
             return false;
@@ -1093,14 +1096,13 @@ bool classenv::to_hnfs(std::vector<std::unique_ptr<pred>> &ps,
     return true;
 }
 
-bool classenv::to_hnf(std::unique_ptr<pred> pd,
-                      std::vector<std::unique_ptr<pred>> &ret) {
+bool classenv::to_hnf(uniq_pred pd, std::vector<uniq_pred> &ret) {
     if (pd->in_hnf()) {
         ret.push_back(std::move(pd));
         return true;
     }
 
-    std::vector<std::unique_ptr<pred>> ps;
+    std::vector<uniq_pred> ps;
     by_inst(pd.get(), ps);
     if (ps.empty()) {
         // TODO: print error, "context reduction"
@@ -1110,14 +1112,17 @@ bool classenv::to_hnf(std::unique_ptr<pred> pd,
     return to_hnfs(ps, ret);
 }
 
-bool classenv::simplify(std::vector<std::unique_ptr<pred>> &ps) {
-
+bool classenv::simplify(std::vector<uniq_pred> &ps) {
     for (int i = 0; i < ps.size(); i++) {
         assert(ps[i]);
         auto tmp = std::move(ps[i]);
         switch (entail(ps, tmp.get())) {
-        case TRI_TRUE:
-            continue;
+        case TRI_TRUE: {
+            ps[i] = std::move(ps[ps.size() - 1]);
+            ps.pop_back();
+            i--;
+            break;
+        }
         case TRI_FALSE:
             ps[i] = std::move(tmp);
             break;
@@ -1129,12 +1134,17 @@ bool classenv::simplify(std::vector<std::unique_ptr<pred>> &ps) {
     return true;
 }
 
-bool classenv::reduce(std::vector<std::unique_ptr<pred>> &ps,
-                      std::vector<std::unique_ptr<pred>> &ret) {
-    if (!to_hnfs(ps, ret))
+bool classenv::reduce(std::vector<uniq_pred> &ps) {
+    std::vector<uniq_pred> r;
+    if (!to_hnfs(ps, r))
         return false;
 
-    return simplify(ret);
+    ps.clear();
+    for (auto &it : r) {
+        ps.push_back(std::move(it));
+    }
+
+    return simplify(ps);
 }
 
 void type_const::print() {
