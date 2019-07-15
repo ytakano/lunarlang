@@ -57,7 +57,7 @@
 
 #define PARSETVAR(ID, PARSEC)                                                  \
     do {                                                                       \
-        (ID) = parse_tvar();                                                   \
+        (ID) = parse_tvar_id();                                                \
         if ((PARSEC).is_fail()) {                                              \
             SYNTAXERR("expected a type variable");                             \
             return nullptr;                                                    \
@@ -534,7 +534,7 @@ ptr_ast_import module::parse_import() {
 }
 
 // $TVAR := `$ID
-ptr_ast_id module::parse_tvar() {
+ptr_ast_id module::parse_tvar_id() {
     auto ret = std::make_unique<ast_id>();
 
     ret->set_pos(m_parsec);
@@ -601,39 +601,49 @@ ptr_ast_kind module::parse_kind() {
 }
 
 // $TVARKIND := `$ID | `$ID :: $KIND
+ptr_ast_tvar module::parse_tvarkind() {
+    auto ret = std::make_unique<ast_tvar>();
+
+    ret->set_pos(m_parsec);
+    PARSETVAR(ret->m_id, m_parsec);
+
+    parse_spaces();
+
+    char c;
+    PEEK(c, m_parsec);
+
+    if (c == ':') {
+        PARSESTR("::", m_parsec);
+        parse_spaces();
+
+        ret->m_kind = parse_kind();
+        if (!ret->m_kind)
+            return nullptr;
+    }
+
+    return ret;
+}
+
 // $TVARKINDS := $TVARKIND | $TVARKIND , $TVARKINDS
 // $TVARS := <$TVARKINDS>
 ptr_ast_tvars module::parse_tvars() {
     auto tvars = std::make_unique<ast_tvars>();
 
     tvars->set_pos(m_parsec);
-
     PARSECHAR('<', m_parsec);
 
     parse_spaces();
 
     for (;;) {
-        auto arg = std::make_unique<ast_tvars::arg>();
-        PARSETVAR(arg->m_id, m_parsec);
+        auto arg = parse_tvarkind();
+        if (!arg)
+            return nullptr;
 
         parse_spaces();
 
-        char c;
-        PEEK(c, m_parsec);
-
-        if (c == ':') {
-            PARSESTR("::", m_parsec);
-            parse_spaces();
-
-            arg->m_kind = parse_kind();
-            if (!arg->m_kind)
-                return nullptr;
-
-            parse_spaces();
-        }
-
         tvars->m_args.push_back(std::move(arg));
 
+        char c;
         PEEK(c, m_parsec);
 
         if (c == '>')
@@ -660,6 +670,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     case '`': {
         // $TVAR <$TYPES>?
         auto ret = std::make_unique<ast_normaltype>();
+        ret->set_pos(m_parsec);
         PARSETVAR(ret->m_tvar, m_parsec);
 
         parse_arg_types(ret->m_args);
@@ -668,9 +679,10 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     }
     case '(': {
         // ( $TYPES? )
+        auto ret = std::make_unique<ast_tupletype>();
+        ret->set_pos(m_parsec);
         m_parsec.character('(');
         parse_spaces();
-        auto ret = std::make_unique<ast_tupletype>();
 
         PTRY(m_parsec, c, m_parsec.character(')'));
         if (m_parsec.is_fail()) {
@@ -685,9 +697,10 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     }
     case '[': {
         // [ $TYPE $ARRNUM? ]
+        auto ret = std::make_unique<ast_vectype>();
+        ret->set_pos(m_parsec);
         m_parsec.character('[');
         parse_spaces();
-        auto ret = std::make_unique<ast_vectype>();
 
         ret->m_vectype = parse_type();
         if (!ret->m_vectype)
@@ -726,6 +739,9 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     }
     default: {
         bool is_func;
+        auto line = m_parsec.get_line();
+        auto column = m_parsec.get_column();
+
         PTRY(m_parsec, is_func, [](module &m) {
             std::string id;
             PMANYONE(m.m_parsec, id,
@@ -765,6 +781,9 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             if (!ret->m_ret)
                 return nullptr;
 
+            ret->m_line = line;
+            ret->m_column = column;
+
             return ret;
         } else {
             // $TYPE <$TYPES>?
@@ -773,8 +792,8 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
             if (!ret->m_id)
                 return nullptr;
 
-            ret->m_line = ret->m_id->m_line;
-            ret->m_column = ret->m_id->m_column;
+            ret->m_line = line;
+            ret->m_column = column;
 
             if (!parse_arg_types(ret->m_args))
                 return nullptr;
@@ -820,14 +839,10 @@ ptr_ast_types module::parse_types() {
     ret->set_pos(m_parsec);
 
     for (;;) {
-        auto line = m_parsec.get_line();
-        auto column = m_parsec.get_column();
         auto t = parse_type();
         if (!t)
             return nullptr;
 
-        t->m_line = line;
-        t->m_column = column;
         ret->m_types.push_back(std::move(t));
 
         parse_spaces();
@@ -842,7 +857,7 @@ ptr_ast_types module::parse_types() {
     return ret;
 }
 
-// $PRED := $DOTID <$TYPES>
+// $PRED := $DOTID <$TYPE>
 ptr_ast_pred module::parse_pred() {
     auto ret = std::make_unique<ast_pred>();
 
@@ -856,8 +871,8 @@ ptr_ast_pred module::parse_pred() {
     parse_spaces();
 
     // arguments
-    ret->m_args = parse_types();
-    if (!ret->m_args)
+    ret->m_arg = parse_type();
+    if (!ret->m_arg)
         return nullptr;
 
     PARSECHAR('>', m_parsec);
@@ -893,7 +908,7 @@ ptr_ast_preds module::parse_preds() {
     return ret;
 }
 
-// $CLASSDECL := class $ID $TVARS $PREDS? { $INTERFACES $WHITESPACE3* }
+// $CLASSDECL := class $ID < $TVARKIND > $PREDS? { $INTERFACES $WHITESPACE3* }
 ptr_ast_class module::parse_class() {
     SPACEPLUS();
 
@@ -904,11 +919,16 @@ ptr_ast_class module::parse_class() {
 
     parse_spaces();
 
+    PARSECHAR('<', m_parsec);
+    parse_spaces();
+
     // parse type variable arguments
-    ret->m_tvars = parse_tvars();
-    if (!ret->m_tvars)
+    ret->m_tvar = parse_tvarkind();
+    if (!ret->m_tvar)
         return nullptr;
 
+    parse_spaces();
+    PARSECHAR('>', m_parsec);
     parse_spaces();
 
     char c;
@@ -2306,18 +2326,23 @@ void ast_kfun::print() const {
 
 void ast_kstar::print() const { std::cout << "\"*\""; }
 
+void ast_tvar::print() const {
+    std::cout << "{\"id\":";
+    m_id->print();
+    if (m_kind) {
+        std::cout << ",\"kind\":";
+        m_kind->print();
+    }
+
+    std::cout << "}";
+}
+
 void ast_tvars::print() const {
     std::cout << "[";
     size_t n = 1;
     for (auto &v : m_args) {
-        std::cout << "{\"id\":";
-        v->m_id->print();
-        if (v->m_kind) {
-            std::cout << ",\"kind\":";
-            v->m_kind->print();
-        }
+        v->print();
 
-        std::cout << "}";
         if (n < m_args.size())
             std::cout << ",";
 
@@ -2330,8 +2355,8 @@ void ast_class::print() const {
     std::cout << "{\"id\":";
     m_id->print();
 
-    std::cout << ",\"type variables\":";
-    m_tvars->print();
+    std::cout << ",\"type variable\":";
+    m_tvar->print();
 
     if (m_preds) {
         std::cout << ",\"predicates\":";
@@ -2410,7 +2435,7 @@ void ast_pred::print() const {
     m_id->print();
 
     std::cout << ",\"arguments\":";
-    m_args->print();
+    m_arg->print();
 
     std::cout << "}";
 }

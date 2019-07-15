@@ -34,7 +34,6 @@ struct ast {
         AST_CLASS,
         AST_KFUN,       // kind
         AST_KSTAR,      // kind
-        AST_TVARS,      // arguments of type variable
         AST_PRED,       // predicate
         AST_PREDS,      // predicates
         AST_TYPE,       // type
@@ -53,6 +52,8 @@ struct ast {
         AST_MEMBER,     // variable definition in structure or union
         AST_MEMBERS,    // variable definition in structure or union
         AST_IMPORT,     // import
+        AST_TVARS,      // type variables
+        AST_TVAR,       // type variable
     };
 
     std::size_t m_line;
@@ -130,20 +131,25 @@ typedef std::unique_ptr<ast_kstar> ptr_ast_kstar;
 
 struct ast_interface;
 
+struct ast_tvar : public ast {
+    ast_tvar() { m_asttype = AST_TVAR; }
+    virtual ~ast_tvar() {}
+
+    virtual void print() const;
+
+    ptr_ast_id m_id;
+    ptr_ast_kind m_kind;
+};
+
+typedef std::unique_ptr<ast_tvar> ptr_ast_tvar;
+
 struct ast_tvars : public ast {
-    ast_tvars() {}
+    ast_tvars() { m_asttype = AST_TVARS; }
     virtual ~ast_tvars() {}
 
     virtual void print() const;
 
-    struct arg {
-        ptr_ast_id m_id;
-        ptr_ast_kind m_kind;
-    };
-
-    typedef std::unique_ptr<arg> ptr_arg;
-
-    std::vector<ptr_arg> m_args;
+    std::vector<ptr_ast_tvar> m_args;
 };
 
 typedef std::unique_ptr<ast_tvars> ptr_ast_tvars;
@@ -162,7 +168,7 @@ struct ast_class : public ast {
     virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
-    ptr_ast_tvars m_tvars;
+    ptr_ast_tvar m_tvar;
     ptr_ast_preds m_preds;
     ptr_ast_interfaces m_interfaces;
 };
@@ -257,7 +263,7 @@ struct ast_pred : public ast {
     virtual void print() const;
 
     ptr_ast_dotid m_id;
-    ptr_ast_types m_args;
+    ptr_ast_type m_arg;
 };
 
 typedef std::unique_ptr<ast_pred> ptr_ast_pred;
@@ -764,7 +770,7 @@ class module {
 
     ptr_ast_class parse_class();
     ptr_ast_id parse_id();
-    ptr_ast_id parse_tvar();
+    ptr_ast_id parse_tvar_id();
     ptr_ast_dotid parse_dotid();
     ptr_ast_tvars parse_tvars();
     ptr_ast_kind parse_kind();
@@ -803,6 +809,7 @@ class module {
     ptr_ast_struct parse_struct();
     ptr_ast_union parse_union();
     ptr_ast_import parse_import();
+    ptr_ast_tvar parse_tvarkind();
     bool parse_st_un(const char *str);
     void parse_spaces();
     void parse_spaces_sep();

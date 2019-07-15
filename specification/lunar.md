@@ -61,7 +61,7 @@ $AS := as $ID
 ### Class Declaration
 
 ```
-$CLASSDECL := class $ID $TVARS $PREDS? { $INTERFACES $WHITESPACE3* }
+$CLASSDECL := class $ID < $TVARKIND > $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
 $INTERFACE := func $INTNAME ( $TYPES ) $TYPESPEC
 $INTNAME := $ID | infix $INFIX
@@ -103,11 +103,11 @@ instance ord<either<`a>> require ord<`a> {
 
 ### Predicate
 
-A predicate asserts <$TYPES> is a member of the class named by $ID.
+A predicate asserts <$TYPE> is a member of the class named by $ID.
 ```
 $PREDS := require $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
-$PRED := $DOTID <$TYPES>
+$PRED := $DOTID <$TYPE>
 ```
 
 Example:

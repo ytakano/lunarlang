@@ -338,11 +338,7 @@ shared_type substitution::apply(shared_type type) {
 uniq_pred substitution::apply(pred *p) {
     auto ret = std::make_unique<pred>();
 
-    for (auto &t : p->m_args) {
-        auto t0 = apply(t);
-        ret->m_args.push_back(t0);
-    }
-
+    ret->m_arg = apply(p->m_arg);
     ret->m_id = p->m_id;
 
     return ret;
@@ -515,39 +511,17 @@ shared_subst match(shared_type lhs, shared_type rhs) {
 }
 
 shared_subst mgu_pred(pred *lhs, pred *rhs) {
-    if (lhs->m_id != rhs->m_id || lhs->m_args.size() != rhs->m_args.size())
+    if (lhs->m_id != rhs->m_id)
         return nullptr;
 
-    auto s1 = mgu(lhs->m_args[0], rhs->m_args[0]);
-    if (!s1)
-        return nullptr;
-
-    for (int i = 1; i < lhs->m_args.size(); i++) {
-        auto s2 = mgu(s1->apply(lhs->m_args[i]), s1->apply(rhs->m_args[i]));
-        if (!s2)
-            return nullptr;
-        s1 = compose(*s2, *s1);
-    }
-
-    return s1;
+    return mgu(lhs->m_arg, rhs->m_arg);
 }
 
 shared_subst match_pred(pred *lhs, pred *rhs) {
-    if (lhs->m_id != rhs->m_id || lhs->m_args.size() != rhs->m_args.size())
+    if (lhs->m_id != rhs->m_id)
         return nullptr;
 
-    auto s1 = std::make_shared<substitution>();
-    for (int i = 0; i < lhs->m_args.size(); i++) {
-        auto s2 = match(lhs->m_args[i], rhs->m_args[i]);
-        if (!s2)
-            return nullptr;
-
-        s1 = merge(*s2, *s1);
-        if (!s1)
-            return nullptr;
-    }
-
-    return s1;
+    return match(lhs->m_arg, rhs->m_arg);
 }
 
 uniq_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
@@ -559,37 +533,22 @@ uniq_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
         return nullptr;
     }
 
-    for (auto &arg : ptr->m_args->m_types) {
-        auto ta = type::make(ptr_mod, arg.get());
-        if (!ta)
-            return nullptr;
-
-        ret->m_args.push_back(ta);
-    }
+    ret->m_arg = type::make(ptr_mod, ptr->m_arg.get());
+    if (!ret->m_arg)
+        return nullptr;
 
     return ret;
 }
 
-bool typeclass::apply_super(std::vector<shared_type> &args,
-                            std::vector<uniq_pred> &ret, const module *ptr_mod,
-                            const ast *ptr_ast) {
-    if (args.size() != m_args.size()) {
-        TYPEERR("the number of arguments is different", ptr_mod, ptr_ast);
+bool typeclass::apply_super(shared_type arg, std::vector<uniq_pred> &ret,
+                            const module *ptr_mod, const ast *ptr_ast) {
+    if (!check_kind_constraint(m_arg, arg->get_kind().get())) {
         return false;
     }
 
     // make substitution
-    auto s = std::make_shared<substitution>();
-    for (int i = 0; i < args.size(); i++) {
-        auto k = args[i]->get_kind();
-        if (!check_kind_constraint(m_args[i], k.get())) {
-            return false;
-        }
-
-        auto tv = type_var::make(m_args[i], args[i]->get_kind());
-        auto s0 = var_bind(tv, args[i]);
-        s = compose(*s0, *s);
-    }
+    auto tv = type_var::make(m_arg, arg->get_kind());
+    auto s = var_bind(tv, arg);
 
     // make predicates by applying the substitution to the super classes
     for (auto &p : m_preds) {
@@ -601,12 +560,7 @@ bool typeclass::apply_super(std::vector<shared_type> &args,
 }
 
 bool typeclass::add_constraints(pred *p) {
-    for (auto &t : p->m_args) {
-        if (!add_constraints(t.get()))
-            return false;
-    }
-
-    return true;
+    return add_constraints(p->m_arg.get());
 }
 
 bool typeclass::add_constraints(type *p) {
@@ -619,10 +573,9 @@ bool typeclass::add_constraints(type *p) {
             auto tvc = (type_var *)it.get();
             if (tvc->get_id() == tv->get_id() &&
                 cmp_kind(tvc->get_kind().get(), tv->get_kind().get()) != 0) {
-                // TODO: print error
                 std::string err = "kinds are different. \"" + tvc->get_id() +
-                                  "\" must be \"" + tvc->get_kind()->to_str() +
-                                  "\" but its kind is \"" +
+                                  "\" is \"" + tvc->get_kind()->to_str() +
+                                  "\" but another is \"" +
                                   tv->get_kind()->to_str() + "\"";
                 TYPEERR(err.c_str(), m_module, m_ast);
                 return false;
@@ -654,27 +607,19 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     cls->m_id.m_id = ptr->m_id->m_id;
 
     // add type arguments
-    std::unordered_set<std::string> s;
-    for (auto &tv : ptr->m_tvars->m_args) {
-        if (HASKEY(s, tv->m_id->m_id)) {
-            TYPEERR("argument name is multiply used", ptr_mod, tv->m_id);
-            return false;
-        }
+    cls->m_arg = ptr->m_tvar->m_id->m_id;
 
-        cls->m_args.push_back(tv->m_id->m_id);
-        s.insert(tv->m_id->m_id);
-
-        if (tv->m_kind) {
-            int n = 0;
-            for (auto k = tv->m_kind.get(); k->m_asttype != ast::AST_KSTAR;
-                 k = ((ast_kfun *)k)->m_right.get()) {
-                assert(k->m_asttype == ast::AST_KFUN);
-                assert(((ast_kfun *)k)->m_right->m_asttype == ast::AST_KSTAR);
-                n++;
-            }
-            auto v = type_var::make(tv->m_id->m_id, n);
-            cls->m_tvar_constraint.push_back(v);
+    // get the number of arguments of the class
+    if (ptr->m_tvar->m_kind) {
+        int n = 0; // the number of arguments
+        for (auto k = ptr->m_tvar->m_kind.get(); k->m_asttype != ast::AST_KSTAR;
+             k = ((ast_kfun *)k)->m_right.get()) {
+            assert(k->m_asttype == ast::AST_KFUN);
+            assert(((ast_kfun *)k)->m_right->m_asttype == ast::AST_KSTAR);
+            n++;
         }
+        auto v = type_var::make(ptr->m_tvar->m_id->m_id, n);
+        cls->m_tvar_constraint.push_back(v);
     }
 
     cls->m_ast = ptr;
@@ -691,15 +636,14 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
                 return false;
 
             if (!pd->in_hnf()) {
-                TYPEERR("predicate must be head normal form", ptr_mod, p);
+                TYPEERR("the predicate must be head normal form", ptr_mod, p);
                 return false;
             }
 
-            int n = 0;
-            if (!pd->is_head_var(s, n)) {
-                TYPEERR("type argument's head must be involved by "
-                        "the class's arguments",
-                        ptr_mod, p->m_args->m_types[n]);
+            if (!pd->is_head_var(cls->m_arg)) {
+                TYPEERR("the head of the type arguments must be same as "
+                        "the class's argument",
+                        ptr_mod, p->m_arg);
                 return false;
             }
 
@@ -753,13 +697,8 @@ bool classenv::add_instance(const module *ptr_mod,
     assert(cls != m_env.end());
 
     // type arguments
-    for (auto &arg : ptr_ast->m_arg->m_args->m_types) {
-        // TOOD: get kind of argument
-        auto ta = type::make(ptr_mod, arg.get());
-        if (!ta)
-            return false;
-        ret->m_pred.m_args.push_back(ta);
-    }
+    // TOOD: get kind of argument ???
+    ret->m_pred.m_arg = type::make(ptr_mod, ptr_ast->m_arg->m_arg.get());
 
     // check the instance is overlapped
     auto is = overlap(ret->m_pred);
@@ -777,12 +716,6 @@ bool classenv::add_instance(const module *ptr_mod,
             if (!pd)
                 return false;
 
-            if (m_env[pd->m_id]->m_class->m_args.size() != pd->m_args.size()) {
-                TYPEERR("the number of arguments is different", ptr_mod,
-                        ptr_ast->m_req->m_preds[n]);
-                return false;
-            }
-
             ret->m_preds.push_back(std::move(pd));
             n++;
         }
@@ -796,7 +729,7 @@ bool classenv::add_instance(const module *ptr_mod,
     // add instances to the super classes
     std::vector<uniq_pred> super;
     auto ptr_inst = (const ast_instance *)ptr_ast;
-    if (!cls->second->m_class->apply_super(ret->m_pred.m_args, super, ptr_mod,
+    if (!cls->second->m_class->apply_super(ret->m_pred.m_arg, super, ptr_mod,
                                            ptr_inst->m_arg.get())) {
         TYPEINFO("instantiated by", ptr_mod, ptr_ast);
         return false;
@@ -817,17 +750,14 @@ bool classenv::add_instance(std::vector<uniq_pred> &ps, const module *ptr_mod,
         auto cls = m_env.find(p->m_id);
         assert(cls != m_env.end());
 
-        for (auto &arg : p->m_args) {
-            in->m_pred.m_args.push_back(arg);
-        }
-
+        in->m_pred.m_arg = p->m_arg;
         in->m_pred.m_id = p->m_id;
         in->m_ast = ptr_ast;
         in->m_module = ptr_mod;
 
         std::vector<uniq_pred> super;
-        if (!cls->second->m_class->apply_super(in->m_pred.m_args, super,
-                                               ptr_mod, ptr_ast->m_arg.get())) {
+        if (!cls->second->m_class->apply_super(in->m_pred.m_arg, super, ptr_mod,
+                                               ptr_ast->m_arg.get())) {
             TYPEINFO("instantiated by", ptr_mod, ptr_ast);
             return false;
         }
@@ -925,10 +855,12 @@ std::string classenv::gensym() {
 }
 
 void classenv::de_bruijn(typeclass *ptr) {
-    for (auto &arg : ptr->m_args) {
-        std::string tmp = arg;
-        arg = gensym();
-        ptr->m_idx_tvar.insert(bimap_ss::value_type(arg, tmp));
+    std::string tmp = ptr->m_arg;
+    ptr->m_arg = gensym();
+    ptr->m_idx_tvar.insert(bimap_ss::value_type(ptr->m_arg, tmp));
+
+    for (auto &p : ptr->m_preds) {
+        de_bruijn(ptr, p->m_arg.get());
     }
 
     for (auto &tv : ptr->m_tvar_constraint) {
@@ -938,23 +870,13 @@ void classenv::de_bruijn(typeclass *ptr) {
         if (it != ptr->m_idx_tvar.right.end())
             t->set_id(it->second);
     }
-
-    for (auto &p : ptr->m_preds) {
-        for (auto &t : p->m_args) {
-            de_bruijn(ptr, t.get());
-        }
-    }
 }
 
 void classenv::de_bruijn(inst *ptr) {
-    for (auto &t : ptr->m_pred.m_args) {
-        de_bruijn(ptr, t.get());
-    }
+    de_bruijn(ptr, ptr->m_pred.m_arg.get());
 
     for (auto &p : ptr->m_preds) {
-        for (auto &t : p->m_args) {
-            de_bruijn(ptr, t.get());
-        }
+        de_bruijn(ptr, p->m_arg.get());
     }
 }
 
@@ -991,16 +913,11 @@ bool typeclass::check_kind_constraint(const std::string &id, kind *k) {
             assert(it != m_idx_tvar.left.end());
 
             auto cp = (ast_class *)m_ast;
-            for (auto &v : cp->m_tvars->m_args) {
-                if (v->m_id->m_id == it->second) {
-                    std::string err =
-                        "kinds are different. \"" + it->second +
-                        "\" must be \"" + tv->get_kind()->to_str() +
-                        "\" but the kind of the passed type was \"" +
-                        k->to_str() + "\"";
-                    TYPEERR(err.c_str(), m_module, v->m_id);
-                }
-            }
+            std::string err = "kinds are different. \"" + it->second +
+                              "\" must be \"" + tv->get_kind()->to_str() +
+                              "\" but the kind of the passed type was \"" +
+                              k->to_str() + "\"";
+            TYPEERR(err.c_str(), m_module, cp->m_id);
 
             return false;
         }
@@ -1015,35 +932,23 @@ bool classenv::by_super(pred *pd, std::vector<uniq_pred> &ret) {
     auto it = m_env.find(pd->m_id);
     assert(it != m_env.end());
 
-    if (pd->m_args.size() != it->second->m_class->m_args.size()) {
-        // TODO: print error
-        fprintf(stderr, "the number of arguments is different\n");
+    // check wheter the kind of the argument satsfies the constraints
+    auto const &id = it->second->m_class->m_arg;
+    auto const k = pd->m_arg->get_kind();
+    if (!it->second->m_class->check_kind_constraint(id, k.get())) {
         return false;
     }
 
     // get variable bindings
     substitution sbst;
-    for (int i = 0; i < pd->m_args.size(); i++) {
-        auto const &id = it->second->m_class->m_args[i];
-        auto const k = pd->m_args[i]->get_kind();
-
-        // check wheter the kind of the argument satsfies the constraints
-        if (!it->second->m_class->check_kind_constraint(id, k.get())) {
-            return false;
-        }
-
-        type_var tv(id, k);
-        sbst.m_subst[tv] = pd->m_args[i];
-    }
+    type_var tv(id, k);
+    sbst.m_subst[tv] = pd->m_arg;
 
     for (auto &s : it->second->m_class->m_preds) { // get super classes
         // apply the substitution to the super classes
         pred sup;
         sup.m_id = s->m_id;
-        for (auto &t : s->m_args) {
-            sup.m_args.push_back(sbst.apply(t));
-        }
-
+        sup.m_arg = sbst.apply(s->m_arg);
         by_super(&sup, ret);
     }
 
@@ -1182,15 +1087,9 @@ void type_app::print() {
 void pred::print() {
     std::cout << "{\"id\":";
     m_id.print();
-    std::cout << ",\"args\":[";
-    int n = 0;
-    for (auto &arg : m_args) {
-        if (n > 0)
-            std::cout << ",";
-        arg->print();
-        n++;
-    }
-    std::cout << "]}";
+    std::cout << ",\"arg\":";
+    m_arg->print();
+    std::cout << "}";
 }
 
 void qual::print_preds() {
@@ -1213,17 +1112,9 @@ void typeclass::print() {
 
     // TODO: print arguments and functions
 
-    std::cout << ",\"args\":[";
-    int n = 0;
-    for (auto &arg : m_args) {
-        if (n > 0)
-            std::cout << ",";
-        std::cout << "\"" << arg << "\"";
-        n++;
-    }
+    std::cout << ",\"args\":\"" << m_arg << "\",\"constraints\":[";
 
-    std::cout << "],\"constraints\":[";
-    n = 0;
+    int n = 0;
     for (auto &tv : m_tvar_constraint) {
         if (n > 0)
             std::cout << ",";

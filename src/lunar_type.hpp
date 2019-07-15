@@ -329,36 +329,20 @@ class pred {
     static uniq_pred make(const module *ptr_mod, const ast_pred *ptr);
 
     bool operator==(const pred &rhs) const {
-        if (m_id != rhs.m_id || m_args.size() != rhs.m_args.size())
+        if (m_id != rhs.m_id)
             return false;
 
-        for (int i = 0; i < m_args.size(); i++) {
-            if (!eq_type(m_args[i].get(), rhs.m_args[i].get()))
-                return false;
-        }
-
-        return true;
+        return eq_type(m_arg.get(), rhs.m_arg.get());
     }
 
-    bool in_hnf() {
-        for (auto &arg : m_args) {
-            if (!hnf(arg.get()))
-                return false;
-        }
-        return true;
-    }
+    bool in_hnf() { return hnf(m_arg.get()); }
 
-    bool is_head_var(const std::unordered_set<std::string> &args, int n) {
-        for (auto &arg : m_args) {
-            if (!head_var(arg.get(), args))
-                return false;
-            n++;
-        }
-        return true;
+    bool is_head_var(const std::string &arg) {
+        return head_var(m_arg.get(), arg);
     }
 
     type_id m_id; // class name_id
-    std::vector<shared_type> m_args;
+    shared_type m_arg;
 
   private:
     static bool hnf(type *p) {
@@ -374,18 +358,18 @@ class pred {
         }
     }
 
-    static bool head_var(type *p, const std::unordered_set<std::string> &args) {
+    static bool head_var(type *p, const std::string &arg) {
         switch (p->m_subtype) {
         case type::TYPE_VAR: {
             auto tv = (type_var *)p;
-            if (HASKEY(args, tv->get_id()))
+            if (arg == tv->get_id())
                 return true;
             else
                 return false;
         }
         case type::TYPE_APP: {
             auto ap = (type_app *)p;
-            return head_var(ap->m_left.get(), args);
+            return head_var(ap->m_left.get(), arg);
         }
         case type::TYPE_CONST:
             return false;
@@ -443,14 +427,13 @@ class typeclass : public qual {
     // ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
     // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
     std::vector<shared_type> m_tvar_constraint; // type variable constraint
-    std::vector<std::string> m_args;            // arguments
+    std::string m_arg;                          // arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 
     ASYCLIC m_is_asyclic;
 
-    bool apply_super(std::vector<shared_type> &args,
-                     std::vector<uniq_pred> &ret, const module *ptr_mod,
-                     const ast *ptr_ast);
+    bool apply_super(shared_type arg, std::vector<uniq_pred> &ret,
+                     const module *ptr_mod, const ast *ptr_ast);
 
     bool check_kind_constraint(const std::string &id, kind *k);
     bool add_constraints(pred *p);
