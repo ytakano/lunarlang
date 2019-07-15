@@ -449,7 +449,8 @@ class typeclass : public qual {
     ASYCLIC m_is_asyclic;
 
     bool apply_super(std::vector<shared_type> &args,
-                     std::vector<uniq_pred> &ret);
+                     std::vector<uniq_pred> &ret, const module *ptr_mod,
+                     const ast *ptr_ast);
 
     bool check_kind_constraint(const std::string &id, kind *k);
     bool add_constraints(pred *p);
@@ -529,10 +530,11 @@ class classenv {
     bool by_super(pred *pd, std::vector<uniq_pred> &ret);
     void by_inst(pred *pd, std::vector<uniq_pred> &ret);
     TRIVAL entail(std::vector<uniq_pred> &ps, pred *pd);
-    bool to_hnfs(std::vector<uniq_pred> &ps, std::vector<uniq_pred> &ret);
+    bool to_hnfs(std::vector<uniq_pred> &ps, std::vector<uniq_pred> &ret,
+                 int &idx);
     bool to_hnf(uniq_pred pd, std::vector<uniq_pred> &ret);
     bool simplify(std::vector<uniq_pred> &ps);
-    bool reduce(std::vector<uniq_pred> &ps);
+    bool reduce(std::vector<uniq_pred> &ps, int &idx);
 };
 
 } // namespace lunar

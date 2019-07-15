@@ -538,22 +538,13 @@ shared_subst match_pred(pred *lhs, pred *rhs) {
 
     auto s1 = std::make_shared<substitution>();
     for (int i = 0; i < lhs->m_args.size(); i++) {
-        auto lapp = std::static_pointer_cast<type_app>(lhs->m_args[i]);
-        auto rapp = std::static_pointer_cast<type_app>(rhs->m_args[i]);
-
-        auto sl = match(lapp->m_left, rapp->m_left);
-        if (!sl)
-            return nullptr;
-
-        auto sr = match(lapp->m_right, rapp->m_right);
-        if (!sr)
-            return nullptr;
-
-        auto s2 = merge(*sl, *sr);
+        auto s2 = match(lhs->m_args[i], rhs->m_args[i]);
         if (!s2)
             return nullptr;
 
         s1 = merge(*s2, *s1);
+        if (!s1)
+            return nullptr;
     }
 
     return s1;
@@ -580,9 +571,10 @@ uniq_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
 }
 
 bool typeclass::apply_super(std::vector<shared_type> &args,
-                            std::vector<uniq_pred> &ret) {
+                            std::vector<uniq_pred> &ret, const module *ptr_mod,
+                            const ast *ptr_ast) {
     if (args.size() != m_args.size()) {
-        // TODO: print error
+        TYPEERR("the number of arguments is different", ptr_mod, ptr_ast);
         return false;
     }
 
@@ -777,12 +769,22 @@ bool classenv::add_instance(const module *ptr_mod,
         return false;
     }
 
+    // add requirements
     if (ptr_ast->m_req) {
+        int n = 0;
         for (auto &p : ptr_ast->m_req->m_preds) {
             auto pd = pred::make(ptr_mod, p.get());
             if (!pd)
                 return false;
+
+            if (m_env[pd->m_id]->m_class->m_args.size() != pd->m_args.size()) {
+                TYPEERR("the number of arguments is different", ptr_mod,
+                        ptr_ast->m_req->m_preds[n]);
+                return false;
+            }
+
             ret->m_preds.push_back(std::move(pd));
+            n++;
         }
     }
 
@@ -793,7 +795,9 @@ bool classenv::add_instance(const module *ptr_mod,
 
     // add instances to the super classes
     std::vector<uniq_pred> super;
-    if (!cls->second->m_class->apply_super(ret->m_pred.m_args, super)) {
+    auto ptr_inst = (const ast_instance *)ptr_ast;
+    if (!cls->second->m_class->apply_super(ret->m_pred.m_args, super, ptr_mod,
+                                           ptr_inst->m_arg.get())) {
         TYPEINFO("instantiated by", ptr_mod, ptr_ast);
         return false;
     }
@@ -822,7 +826,8 @@ bool classenv::add_instance(std::vector<uniq_pred> &ps, const module *ptr_mod,
         in->m_module = ptr_mod;
 
         std::vector<uniq_pred> super;
-        if (!cls->second->m_class->apply_super(in->m_pred.m_args, super)) {
+        if (!cls->second->m_class->apply_super(in->m_pred.m_args, super,
+                                               ptr_mod, ptr_ast->m_arg.get())) {
             TYPEINFO("instantiated by", ptr_mod, ptr_ast);
             return false;
         }
@@ -856,6 +861,17 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
         return nullptr;
 
     for (auto &e : ret->m_env) {
+        for (auto &it : e.second->m_insts) {
+            int idx = 0;
+            if (!ret->reduce(it->m_preds, idx)) {
+                assert(it->m_ast->m_asttype == ast::AST_INSTANCE);
+                auto p = (ast_instance *)it->m_ast;
+                TYPEERR("failed context reduction. predicates must be head "
+                        "normal form, or could be reduced to head normal form",
+                        it->m_module, p->m_req->m_preds[idx]);
+                return nullptr;
+            }
+        }
     }
 
     return ret;
@@ -1001,6 +1017,7 @@ bool classenv::by_super(pred *pd, std::vector<uniq_pred> &ret) {
 
     if (pd->m_args.size() != it->second->m_class->m_args.size()) {
         // TODO: print error
+        fprintf(stderr, "the number of arguments is different\n");
         return false;
     }
 
@@ -1061,8 +1078,7 @@ TRIVAL classenv::entail(std::vector<uniq_pred> &ps, pred *p) {
     {
         for (auto &p0 : ps) {
             std::vector<uniq_pred> super;
-            assert(p0);
-            if (!by_super(p0.get(), super))
+            if (p0 && !by_super(p0.get(), super))
                 return TRI_FAIL;
 
             for (auto &s : super) {
@@ -1087,11 +1103,13 @@ TRIVAL classenv::entail(std::vector<uniq_pred> &ps, pred *p) {
     return TRI_TRUE;
 }
 
-bool classenv::to_hnfs(std::vector<uniq_pred> &ps,
-                       std::vector<uniq_pred> &ret) {
+bool classenv::to_hnfs(std::vector<uniq_pred> &ps, std::vector<uniq_pred> &ret,
+                       int &idx) {
     for (auto &p : ps) {
-        if (!to_hnf(std::move(p), ret))
+        if (!to_hnf(std::move(p), ret)) {
             return false;
+        }
+        idx++;
     }
     return true;
 }
@@ -1104,12 +1122,11 @@ bool classenv::to_hnf(uniq_pred pd, std::vector<uniq_pred> &ret) {
 
     std::vector<uniq_pred> ps;
     by_inst(pd.get(), ps);
-    if (ps.empty()) {
-        // TODO: print error, "context reduction"
+    if (ps.empty())
         return false;
-    }
 
-    return to_hnfs(ps, ret);
+    int idx = 0;
+    return to_hnfs(ps, ret, idx);
 }
 
 bool classenv::simplify(std::vector<uniq_pred> &ps) {
@@ -1134,9 +1151,9 @@ bool classenv::simplify(std::vector<uniq_pred> &ps) {
     return true;
 }
 
-bool classenv::reduce(std::vector<uniq_pred> &ps) {
+bool classenv::reduce(std::vector<uniq_pred> &ps, int &idx) {
     std::vector<uniq_pred> r;
-    if (!to_hnfs(ps, r))
+    if (!to_hnfs(ps, r, idx))
         return false;
 
     ps.clear();

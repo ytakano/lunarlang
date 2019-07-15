@@ -668,6 +668,7 @@ ptr_ast_type module::parse_type(bool is_funret = false) {
     }
     case '(': {
         // ( $TYPES? )
+        m_parsec.character('(');
         parse_spaces();
         auto ret = std::make_unique<ast_tupletype>();
 
