@@ -507,7 +507,7 @@ shared_subst match(shared_type lhs, shared_type rhs) {
 
     if (lhs->m_subtype == type::TYPE_CONST &&
         rhs->m_subtype == type::TYPE_CONST) {
-        if (eq_type(lhs.get(), rhs.get()) == 0)
+        if (eq_type(lhs.get(), rhs.get()))
             return std::make_shared<substitution>();
     }
 
@@ -1058,20 +1058,13 @@ void classenv::by_inst(pred *pd, std::vector<uniq_pred> &ret) {
 
     for (auto &is : it->second->m_insts) {
         auto sbst = match_pred(&is->m_pred, pd);
-        if (sbst != nullptr) {
-            for (auto &sp : is->m_preds) {
-                auto p = std::make_unique<pred>();
-                p->m_id = pd->m_id;
-                for (auto &arg : sp->m_args) {
-                    p->m_args.push_back(sbst->apply(arg));
-                }
-                ret.push_back(std::move(p));
+        if (sbst) {
+            for (auto &p : is->m_preds) {
+                auto np = sbst->apply(p.get());
+                ret.push_back(std::move(np));
             }
         }
-        return;
     }
-
-    assert(false); // never reach here
 }
 
 TRIVAL classenv::entail(std::vector<uniq_pred> &ps, pred *p) {
