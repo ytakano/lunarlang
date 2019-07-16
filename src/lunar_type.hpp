@@ -124,6 +124,7 @@ class type {
     virtual ~type(){};
 
     virtual void print() = 0;
+    virtual std::string to_str() = 0;
 
     enum subtype {
         TYPE_CONST, // constant type
@@ -151,6 +152,7 @@ class type_const : public type {
   public:
     virtual ~type_const() {}
     virtual void print();
+    virtual std::string to_str();
 
     enum CTYPE {
         CTYPE_PRIMTIVE, // primitive type
@@ -223,6 +225,7 @@ class type_var : public type {
     }
 
     virtual void print();
+    virtual std::string to_str();
 
   private:
     type_var() { m_subtype = TYPE_VAR; }
@@ -285,6 +288,8 @@ class type_app : public type {
     shared_type m_right;
 
     virtual void print();
+    virtual std::string to_str();
+    std::string to_str(bool is_top);
 
   private:
     type_app() { m_subtype = TYPE_APP; }
@@ -325,6 +330,7 @@ class pred {
     virtual ~pred() {}
 
     void print();
+    std::string to_str() { return m_id.m_id + "<" + m_arg->to_str() + ">"; }
 
     static uniq_pred make(const module *ptr_mod, const ast_pred *ptr);
 
@@ -499,8 +505,8 @@ class classenv {
 
     bool add_class(const module *ptr_mod, const ast_class *ptr);
     bool add_instance(const module *ptr_mod, const ast_instance *ptr_ast);
-    bool add_instance(std::vector<uniq_pred> &ps, const module *ptr_mod,
-                      const ast_instance *ptr_ast);
+    bool is_inherit_instance(const pred &p, const module *ptr_mod,
+                             const ast *ptr_ast);
     inst *overlap(pred &ptr);
     bool is_asyclic();
     bool is_asyclic(const module *ptr_mod, typeclass *ptr,

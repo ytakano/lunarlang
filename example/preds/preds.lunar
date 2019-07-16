@@ -6,31 +6,34 @@ class bar<`a> require foo<`a> {
     func g(`a) : `a
 }
 
-class buz<`a> require foo<`a<`b>> {
-    func q(`a<`b>) : `a<`b>
-}
+// class buz<`a> require foo<`a<`b>> {
+//     func q(`a<`b>) : `a<`b>
+// }
 
 struct s {
     var : u64
 }
 
-struct t<`a> {
+struct t<`a, `b> {
     var : u64
 }
 
-instance bar<s> {
-    func f(a) { a }
+struct u<`a> {
+    var : u64
+}
+
+instance bar<t<`a, u<`b>>> {
     func g(a) { a }
 }
 
-instance buz<t> {
-    func f(a) { a }
-}
+// instance buz<t> {
+//     func f(a) { a }
+// }
 
-func h(a : `a) require foo<`a> {
-    a
-}
+// func h(a : `a) require foo<`a> {
+//     a
+// }
 
-func m(a : st) {
-    h(a)
-}
+// func m(a : st) {
+//     h(a)
+// }

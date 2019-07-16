@@ -682,6 +682,46 @@ inst *classenv::overlap(pred &ptr) {
     return nullptr;
 }
 
+bool classenv::is_inherit_instance(const pred &p, const module *ptr_mod,
+                                   const ast *ptr_ast) {
+
+    auto cls = m_env.find(p.m_id);
+    assert(cls != m_env.end());
+
+    std::vector<uniq_pred> super;
+    if (!cls->second->m_class->apply_super(p.m_arg, super, ptr_mod, ptr_ast)) {
+        TYPEINFO("instantiated by", ptr_mod, ptr_ast);
+        return false;
+    }
+
+    if (super.empty())
+        return true;
+
+    int idx = 0;
+    for (auto &sp : super) {
+        std::vector<uniq_pred> ret;
+        by_inst(sp.get(), ret);
+        auto clsast = (const ast_class *)cls->second->m_class->m_ast;
+        if (ret.empty()) {
+            auto errmsg = sp->to_str() + " was not instantiated";
+            TYPEERR(errmsg.c_str(), cls->second->m_class->m_module,
+                    clsast->m_preds->m_preds[idx]);
+            TYPEINFO("instantiated by", ptr_mod, ptr_ast);
+            return false;
+        }
+
+        if (!is_inherit_instance(*sp, cls->second->m_class->m_module,
+                                 clsast->m_preds->m_preds[idx].get())) {
+            TYPEINFO("instantiated by", ptr_mod, ptr_ast);
+            return false;
+        }
+
+        idx++;
+    }
+
+    return true;
+}
+
 bool classenv::add_instance(const module *ptr_mod,
                             const ast_instance *ptr_ast) {
     auto ret = std::make_unique<inst>();
@@ -726,47 +766,7 @@ bool classenv::add_instance(const module *ptr_mod,
 
     de_bruijn(ret.get());
 
-    // add instances to the super classes
-    std::vector<uniq_pred> super;
-    auto ptr_inst = (const ast_instance *)ptr_ast;
-    if (!cls->second->m_class->apply_super(ret->m_pred.m_arg, super, ptr_mod,
-                                           ptr_inst->m_arg.get())) {
-        TYPEINFO("instantiated by", ptr_mod, ptr_ast);
-        return false;
-    }
-
-    if (!add_instance(super, ptr_mod, ptr_ast))
-        return false;
-
     cls->second->m_insts.push_back(std::move(ret));
-
-    return true;
-}
-
-bool classenv::add_instance(std::vector<uniq_pred> &ps, const module *ptr_mod,
-                            const ast_instance *ptr_ast) {
-    for (auto &p : ps) {
-        auto in = std::make_unique<inst>();
-        auto cls = m_env.find(p->m_id);
-        assert(cls != m_env.end());
-
-        in->m_pred.m_arg = p->m_arg;
-        in->m_pred.m_id = p->m_id;
-        in->m_ast = ptr_ast;
-        in->m_module = ptr_mod;
-
-        std::vector<uniq_pred> super;
-        if (!cls->second->m_class->apply_super(in->m_pred.m_arg, super, ptr_mod,
-                                               ptr_ast->m_arg.get())) {
-            TYPEINFO("instantiated by", ptr_mod, ptr_ast);
-            return false;
-        }
-
-        if (!add_instance(super, ptr_mod, ptr_ast))
-            return false;
-
-        cls->second->m_insts.push_back(std::move(in));
-    }
 
     return true;
 }
@@ -790,6 +790,7 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
     if (!ret->is_asyclic())
         return nullptr;
 
+    // reduce contexts of instances' predicates
     for (auto &e : ret->m_env) {
         for (auto &it : e.second->m_insts) {
             int idx = 0;
@@ -799,6 +800,17 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
                 TYPEERR("failed context reduction. predicates must be head "
                         "normal form, or could be reduced to head normal form",
                         it->m_module, p->m_req->m_preds[idx]);
+                return nullptr;
+            }
+        }
+    }
+
+    // check wheter instances are also the instances of the classes
+    for (auto &e : ret->m_env) {
+        for (auto &it : e.second->m_insts) {
+            auto inast = (const ast_instance *)it->m_ast;
+            if (!ret->is_inherit_instance(it->m_pred, it->m_module,
+                                          inast->m_arg.get())) {
                 return nullptr;
             }
         }
@@ -1060,6 +1072,37 @@ bool classenv::reduce(std::vector<uniq_pred> &ps, int &idx) {
     }
 
     return simplify(ps);
+}
+
+std::string type_const::to_str() { return m_id.m_id; }
+
+std::string type_var::to_str() { return m_id; }
+
+std::string type_app::to_str() { return to_str(true); }
+
+std::string type_app::to_str(bool is_top) {
+    std::string sl;
+    auto sr = m_right->to_str();
+
+    std::string ret;
+    switch (m_left->m_subtype) {
+    case type::TYPE_CONST:
+    case type::TYPE_VAR:
+        sl = m_left->to_str();
+        ret = sl + "<" + sr;
+        break;
+    case type::TYPE_APP: {
+        auto tapp = (type_app *)m_left.get();
+        sl = tapp->to_str(false);
+        ret = sl + ", " + sr;
+        break;
+    }
+    }
+
+    if (is_top)
+        ret += ">";
+
+    return ret;
 }
 
 void type_const::print() {
