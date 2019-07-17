@@ -1,9 +1,9 @@
 class foo<`a> {
-    func f(`a) : `a
+    f :: func(`a) : `a
 }
 
 class bar<`a> require foo<`a> {
-    func g(`a) : `a
+    g :: func(`a) : `a
 }
 
 // class buz<`a> require foo<`a<`b>> {
@@ -20,6 +20,10 @@ struct t<`a, `b> {
 
 struct u<`a> {
     var : u64
+}
+
+instance foo<t<`a, u<`b>>> {
+    func f(a) { a }
 }
 
 instance bar<t<`a, u<`b>>> {

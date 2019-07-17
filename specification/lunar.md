@@ -63,15 +63,16 @@ $AS := as $ID
 ```
 $CLASSDECL := class $ID < $TVARKIND > $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
-$INTERFACE := func $INTNAME ( $TYPES ) $TYPESPEC
+$INTERFACE := $INTNAMES :: func ( $TYPES? ) $TYPESPEC
+$INTNAMES := $INTNAME | $INTNAME , $INTNAMES
 $INTNAME := $ID | infix $INFIX
 ```
 
 Example:
 ```
 class ord<`a> require eq<`a> {
-    func infix < (`a, `a) : bool
-    func funcA (`a) : `a
+    funcA, funcB :: func(`a) : `a
+    infix <, infix > :: func(`a, `a) : bool
 }
 ```
 This class definition define a class "ord" taking

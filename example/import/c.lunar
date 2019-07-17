@@ -1,7 +1,7 @@
 class foo<`a> {
-    func f(`a) : `a
+    f :: func(`a) : `a
 }
 
 class bar<`a :: * -> *> require foo<`a<`b>> {
-    func g(`a) : `a
+    g :: func(`a) : `a
 }

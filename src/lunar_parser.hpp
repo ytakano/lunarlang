@@ -296,8 +296,8 @@ struct ast_interface : public ast {
 
     virtual void print() const;
 
-    ptr_ast_id m_id;
-    ptr_ast_infix m_infix;
+    std::vector<ptr_ast_id> m_id;
+    std::vector<ptr_ast_infix> m_infix;
     ptr_ast_types m_args;
     ptr_ast_type m_ret;
 };

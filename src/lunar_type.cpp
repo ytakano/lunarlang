@@ -700,15 +700,28 @@ bool classenv::is_inherit_instance(const pred &p, const module *ptr_mod,
     int idx = 0;
     for (auto &sp : super) {
         std::vector<uniq_pred> ret;
-        by_inst(sp.get(), ret);
+
+        auto c = m_env.find(sp->m_id);
+        assert(c != m_env.end());
         auto clsast = (const ast_class *)cls->second->m_class->m_ast;
-        if (ret.empty()) {
-            auto errmsg = sp->to_str() + " was not instantiated";
-            TYPEERR(errmsg.c_str(), cls->second->m_class->m_module,
-                    clsast->m_preds->m_preds[idx]);
-            TYPEINFO("instantiated by", ptr_mod, ptr_ast);
-            return false;
+
+        for (auto &in : c->second->m_insts) {
+            auto sbst = match_pred(&in->m_pred, sp.get());
+            if (sbst)
+                goto found;
         }
+
+        {
+            if (ret.empty()) {
+                auto errmsg = sp->to_str() + " was not instantiated";
+                TYPEERR(errmsg.c_str(), cls->second->m_class->m_module,
+                        clsast->m_preds->m_preds[idx]);
+                TYPEINFO("instantiated by", ptr_mod, ptr_ast);
+                return false;
+            }
+        }
+
+    found:
 
         if (!is_inherit_instance(*sp, cls->second->m_class->m_module,
                                  clsast->m_preds->m_preds[idx].get())) {

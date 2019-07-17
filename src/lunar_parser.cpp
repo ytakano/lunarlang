@@ -953,24 +953,49 @@ ptr_ast_class module::parse_class() {
     return ret;
 }
 
-// $INTERFACE := func $INTNAME ( $TYPES ) $TYPESPEC
+// $INTERFACE := $INTNAMES :: func ( $TYPES? ) $TYPESPEC
+// $INTNAMES := $INTNAME | $INTNAME , $INTNAMES
 // $INTNAME := $ID | infix $INFIX
 ptr_ast_interface module::parse_interface() {
     auto ret = std::make_unique<ast_interface>();
 
     ret->set_pos(m_parsec);
 
+    for (;;) {
+        ptr_ast_id id;
+        PARSEID(id, m_parsec);
+        if (id->m_id == "infix") {
+            parse_spaces();
+            auto infix = parse_infix();
+            if (!infix)
+                return nullptr;
+            ret->m_infix.push_back(std::move(infix));
+        } else {
+            ret->m_id.push_back(std::move(id));
+        }
+
+        parse_spaces();
+
+        char c;
+        PEEK(c, m_parsec);
+        if (c == ':') {
+            m_parsec.character(':');
+            PARSECHAR(':', m_parsec);
+            break;
+        } else if (c == ',') {
+            m_parsec.character(',');
+            parse_spaces();
+        } else {
+            m_parsec.any();
+            SYNTAXERR("unexpected character");
+            return nullptr;
+        }
+    }
+
+    parse_spaces();
+
     // func $INTNAME
     PARSESTR("func", m_parsec);
-    SPACEPLUS();
-
-    PARSEID(ret->m_id, m_parsec);
-    if (ret->m_id->m_id == "infix") {
-        parse_spaces();
-        ret->m_infix = parse_infix();
-        if (!ret->m_infix)
-            return nullptr;
-    }
 
     parse_spaces();
     PARSECHAR('(', m_parsec);
@@ -2446,12 +2471,10 @@ void ast_infix::print() const { std::cout << "\"" << m_infix << "\""; }
 
 void ast_interface::print() const {
     std::cout << "{\"id\":";
-    m_id->print();
 
-    if (m_infix) {
-        std::cout << ",\"infix\":";
-        m_infix->print();
-    }
+    PRINTLIST(m_id);
+    std::cout << ",\"infix\":";
+    PRINTLIST(m_infix);
 
     if (m_args) {
         std::cout << ",\"arguments\":";

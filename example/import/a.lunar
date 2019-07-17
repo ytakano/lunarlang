@@ -2,7 +2,7 @@ import b
 import d here
 
 class buz<`a> {
-    func h(`a) : `a
+    h :: func(`a) : `a
 }
 
 struct st2<`a> {
