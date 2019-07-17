@@ -1,5 +1,5 @@
 class foo<`a> {
-    f :: func(`a) : `a
+    f :: func(`a) : `b<`a>
 }
 
 struct s<`a> {

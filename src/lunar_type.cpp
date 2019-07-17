@@ -670,6 +670,12 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         auto r = type::make(ptr_mod, fun->m_ret.get());
         ft = type_app::make(ft, r);
 
+        if (!cls->add_constraints(ft.get())) {
+            TYPEINFO("instantiated by", ptr_mod,
+                     ptr->m_interfaces->m_interfaces[idx]);
+            return false;
+        }
+
         int n = 0;
         for (auto &i : fun->m_id) {
             id.m_id = i->m_id;
@@ -928,6 +934,10 @@ void classenv::de_bruijn(typeclass *ptr) {
 
     for (auto &p : ptr->m_preds) {
         de_bruijn(ptr, p->m_arg.get());
+    }
+
+    for (auto &fun : ptr->m_funcs) {
+        de_bruijn(ptr, fun.second.get());
     }
 
     for (auto &tv : ptr->m_tvar_constraint) {
