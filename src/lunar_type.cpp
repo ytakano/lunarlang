@@ -128,7 +128,7 @@ static inline shared_type mk_tuple(unsigned int num) {
 
 // make function type
 // input:
-//   num: 1 + the sum of the number of the arguments and the type arguments
+//   num: 1 + the sum of the number of the arguments
 static inline shared_type mk_func(unsigned int num) {
     type_id id;
     id.m_id = "func";
@@ -606,6 +606,11 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     cls->m_id.m_path = ptr_mod->get_filename();
     cls->m_id.m_id = ptr->m_id->m_id;
 
+    if (HASKEY(m_env, cls->m_id)) {
+        TYPEERR("multiply defined class", ptr_mod, ptr);
+        return false;
+    }
+
     // add type arguments
     cls->m_arg = ptr->m_tvar->m_id->m_id;
 
@@ -651,11 +656,48 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         }
     }
 
-    // TODO: add functions
+    // add functions
+    type_id id;
+    id.m_path = cls->m_id.m_path;
+    int idx = 0;
+    for (auto &fun : ptr->m_interfaces->m_interfaces) {
+        auto ft = mk_func(fun->m_args->m_types.size() + 1);
+        for (auto &arg : fun->m_args->m_types) {
+            auto t = type::make(ptr_mod, arg.get());
+            ft = type_app::make(ft, t);
+        }
 
-    if (HASKEY(m_env, cls->m_id)) {
-        TYPEERR("multiply defined class", ptr_mod, ptr);
-        return false;
+        auto r = type::make(ptr_mod, fun->m_ret.get());
+        ft = type_app::make(ft, r);
+
+        int n = 0;
+        for (auto &i : fun->m_id) {
+            id.m_id = i->m_id;
+            if (HASKEY(cls->m_funcs, id)) {
+                TYPEERR("multiply defined method", ptr_mod,
+                        ptr->m_interfaces->m_interfaces[idx]->m_id[n]);
+                return false;
+            }
+            cls->m_funcs[id] = ft;
+            n++;
+        }
+
+        n = 0;
+        for (auto &i : fun->m_infix) {
+            id.m_id = i->m_infix;
+            if (HASKEY(cls->m_funcs, id)) {
+                if (HASKEY(cls->m_funcs, id)) {
+                    TYPEERR("multiply defined method", ptr_mod,
+                            ptr->m_interfaces->m_interfaces[idx]->m_id[n]);
+                    return false;
+                }
+                return false;
+            }
+            cls->m_funcs[id] = ft;
+            n++;
+        }
+
+        idx++;
     }
 
     de_bruijn(cls.get());
@@ -1166,9 +1208,20 @@ void typeclass::print() {
     std::cout << ",\"predicates\":";
     print_preds();
 
-    // TODO: print arguments and functions
+    std::cout << ",\"methods\":[";
+    int i = 0;
+    for (auto &func : m_funcs) {
+        if (i > 0)
+            std::cout << ",";
+        std::cout << "{\"id\":";
+        func.first.print();
+        std::cout << ",\"type\":";
+        func.second->print();
+        std::cout << "}";
+        i++;
+    }
 
-    std::cout << ",\"args\":\"" << m_arg << "\",\"constraints\":[";
+    std::cout << "],\"args\":\"" << m_arg << "\",\"constraints\":[";
 
     int n = 0;
     for (auto &tv : m_tvar_constraint) {

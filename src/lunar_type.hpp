@@ -21,7 +21,7 @@ struct type_id {
     std::string m_path;
     std::string m_id;
 
-    void print() {
+    void print() const {
         std::cout << "{\"path\":\"" << m_path << "\",\"id\":\"" << m_id
                   << "\"}";
     }
@@ -427,11 +427,6 @@ class typeclass : public qual {
 
     type_id m_id; // class name
 
-    // satisfy
-    // x ∈ tv(m_args)
-    // y, z ∈ tv(m_funcs)
-    // ∀x ∀y x->m_id = y->m_id -> x->m_kind = y->m_kind
-    // ∀y ∀z y->m_id = z->m_id -> y->m_kind = z->m_kind
     std::vector<shared_type> m_tvar_constraint; // type variable constraint
     std::string m_arg;                          // arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
