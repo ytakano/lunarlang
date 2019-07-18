@@ -70,6 +70,12 @@ class built_in_type {
 
 static built_in_type gen_built_in;
 
+static uint64_t de_bruijn_idx = 0;
+
+std::string gensym() {
+    return "T" + boost::lexical_cast<std::string>(de_bruijn_idx++);
+}
+
 // numtargs = 0 then return *
 //            1 then return * -> *
 //            2 then return * -> * -> *
@@ -258,6 +264,35 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
         break;
     }
     return nullptr;
+}
+
+std::shared_ptr<type> type::make(const module *ptr_mod,
+                                 const ast_defun *ptr_defun) {
+    auto ret = mk_func(ptr_defun->m_args->m_args.size() + 1);
+
+    for (auto &arg : ptr_defun->m_args->m_args) {
+        if (arg->m_type) {
+            auto t = type::make(ptr_mod, arg->m_type.get());
+            if (!t)
+                return nullptr;
+            ret = type_app::make(ret, t);
+        } else {
+            auto tv = type_var::make(gensym(), 0);
+            ret = type_app::make(ret, tv);
+        }
+    }
+
+    if (ptr_defun->m_ret) {
+        auto t = type::make(ptr_mod, ptr_defun->m_ret.get());
+        if (!t)
+            return nullptr;
+        ret = type_app::make(ret, t);
+    } else {
+        auto tv = type_var::make(gensym(), 0);
+        ret = type_app::make(ret, tv);
+    }
+
+    return ret;
 }
 
 // if * , * then 0
@@ -559,11 +594,9 @@ bool typeclass::apply_super(shared_type arg, std::vector<uniq_pred> &ret,
     return true;
 }
 
-bool typeclass::add_constraints(pred *p) {
-    return add_constraints(p->m_arg.get());
-}
+bool qual::add_constraints(pred *p) { return add_constraints(p->m_arg.get()); }
 
-bool typeclass::add_constraints(type *p) {
+bool qual::add_constraints(type *p) {
     switch (p->m_subtype) {
     case type::TYPE_CONST:
         return true;
@@ -656,7 +689,7 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         }
     }
 
-    // add functions
+    // add interfaces
     type_id id;
     id.m_path = cls->m_id.m_path;
     int idx = 0;
@@ -670,6 +703,7 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         auto r = type::make(ptr_mod, fun->m_ret.get());
         ft = type_app::make(ft, r);
 
+        // TODO: fix this
         if (!cls->add_constraints(ft.get())) {
             TYPEINFO("instantiated by", ptr_mod,
                      ptr->m_interfaces->m_interfaces[idx]);
@@ -794,12 +828,16 @@ bool classenv::add_instance(const module *ptr_mod,
         return false;
     }
 
+    ret->m_ast = ptr_ast;
+    ret->m_module = ptr_mod;
+
     auto cls = m_env.find(ret->m_pred.m_id);
     assert(cls != m_env.end());
 
     // type arguments
-    // TOOD: get kind of argument ???
     ret->m_pred.m_arg = type::make(ptr_mod, ptr_ast->m_arg->m_arg.get());
+    if (!ret->add_constraints(ret->m_pred.m_arg.get()))
+        return false;
 
     // check the instance is overlapped
     auto is = overlap(ret->m_pred);
@@ -817,13 +855,28 @@ bool classenv::add_instance(const module *ptr_mod,
             if (!pd)
                 return false;
 
+            if (!ret->add_constraints(pd.get()))
+                return false;
+
             ret->m_preds.push_back(std::move(pd));
             n++;
         }
     }
 
-    ret->m_ast = ptr_ast;
-    ret->m_module = ptr_mod;
+    // add interfaces
+    for (auto &fun : ptr_ast->m_id2defun) {
+        auto f = type::make(ptr_mod, fun.second.get());
+        if (!f)
+            return false;
+        auto pf = std::make_unique<qual_type>();
+        pf->m_ast = fun.second.get();
+        pf->m_module = ptr_mod;
+        pf->m_type = std::move(f);
+
+        // TODO: check kind constraints
+
+        ret->m_funcs[fun.first] = std::move(pf);
+    }
 
     de_bruijn(ret.get());
 
@@ -923,10 +976,6 @@ bool classenv::is_asyclic(const module *ptr_mod, typeclass *ptr,
     return true;
 }
 
-std::string classenv::gensym() {
-    return "T" + boost::lexical_cast<std::string>(m_de_bruijn_idx++);
-}
-
 void classenv::de_bruijn(typeclass *ptr) {
     std::string tmp = ptr->m_arg;
     ptr->m_arg = gensym();
@@ -955,6 +1004,8 @@ void classenv::de_bruijn(inst *ptr) {
     for (auto &p : ptr->m_preds) {
         de_bruijn(ptr, p->m_arg.get());
     }
+
+    // TODO: interfaces
 }
 
 void classenv::de_bruijn(qual *ptr, type *ptr_type) {
@@ -968,6 +1019,9 @@ void classenv::de_bruijn(qual *ptr, type *ptr_type) {
     case type::TYPE_VAR: {
         auto var = (type_var *)ptr_type;
         auto id = var->get_id();
+        if (id[0] == 'T')
+            return;
+
         auto it = ptr->m_idx_tvar.right.find(id);
         if (it == ptr->m_idx_tvar.right.end()) {
             var->set_id(gensym());
@@ -982,7 +1036,7 @@ void classenv::de_bruijn(qual *ptr, type *ptr_type) {
     }
 }
 
-bool typeclass::check_kind_constraint(const std::string &id, kind *k) {
+bool qual::check_kind_constraint(const std::string &id, kind *k) {
     for (auto &tv : m_tvar_constraint) {
         if (id == ((type_var *)tv.get())->get_id() &&
             cmp_kind(k, tv->get_kind().get()) != 0) {
@@ -1274,7 +1328,19 @@ void inst::print() {
     m_pred.print();
     std::cout << ",\"predicates\":";
     print_preds();
-    std::cout << "}";
+    std::cout << ",\"methods\":[";
+
+    int n = 0;
+    for (auto &fun : m_funcs) {
+        if (n > 0)
+            std::cout << ",";
+        std::cout << "{\"id\":\"" << fun.first << "\",\"type\":";
+        fun.second->m_type->print();
+        std::cout << "}";
+        n++;
+    }
+
+    std::cout << "]}";
 }
 
 void typing(ptr_ast_type &ast) {}

@@ -15,5 +15,5 @@ instance foo<(`a, `a)> require foo<`a> {
 }
 
 instance foo<s<(`a, `a)>> require foo<(`a, `a)> {
-    func f(a) { a }
+    func f(a : `a) { a }
 }

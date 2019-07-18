@@ -2026,6 +2026,12 @@ ptr_ast_instance module::parse_instance() {
         fn->m_line = line;
         fn->m_column = column;
 
+        if (HASKEY(ret->m_id2defun, fn->m_id->m_id)) {
+            SYNTAXERR2("multiply defined method", fn->m_id->m_line,
+                       fn->m_id->m_column);
+            return nullptr;
+        }
+
         ret->m_id2defun[fn->m_id->m_id] = std::move(fn);
     }
 }

@@ -56,6 +56,7 @@ struct ast_type;
 struct ast_class;
 struct ast_instance;
 struct ast_pred;
+struct ast_defun;
 class module;
 class parser;
 class pred;
@@ -136,6 +137,8 @@ class type {
 
     static std::shared_ptr<type> make(const module *ptr_mod,
                                       const ast_type *ptr);
+    static std::shared_ptr<type> make(const module *ptr_mod,
+                                      const ast_defun *ptr_defun);
 
     virtual shared_kind get_kind() = 0;
 };
@@ -410,7 +413,25 @@ class qual {
 
     const ast *m_ast;
     const module *m_module;
+
+    std::vector<shared_type> m_tvar_constraint; // type variable constraint
+
+    bool check_kind_constraint(const std::string &id, kind *k);
+    bool add_constraints(pred *p);
+    bool add_constraints(type *p);
 };
+
+// qualified type
+// function, struct, or union types are denoted by this class
+class qual_type : public qual {
+  public:
+    qual_type() {}
+    virtual ~qual_type() {}
+
+    shared_type m_type;
+};
+
+typedef std::unique_ptr<qual_type> ptr_qual_type;
 
 // class declaration
 class typeclass : public qual {
@@ -427,18 +448,13 @@ class typeclass : public qual {
 
     type_id m_id; // class name
 
-    std::vector<shared_type> m_tvar_constraint; // type variable constraint
-    std::string m_arg;                          // arguments
+    std::string m_arg;                                // arguments
     std::unordered_map<type_id, shared_type> m_funcs; // interfaces
 
     ASYCLIC m_is_asyclic;
 
     bool apply_super(shared_type arg, std::vector<uniq_pred> &ret,
                      const module *ptr_mod, const ast *ptr_ast);
-
-    bool check_kind_constraint(const std::string &id, kind *k);
-    bool add_constraints(pred *p);
-    bool add_constraints(type *p);
 };
 
 typedef std::unique_ptr<typeclass> uniq_typeclass;
@@ -452,25 +468,14 @@ class inst : public qual {
     void print();
 
     pred m_pred;
-    std::unordered_map<type_id, shared_type> m_funcs; // interfaces
+    std::unordered_map<std::string, ptr_qual_type> m_funcs; // interfaces
 };
 
 typedef std::unique_ptr<inst> uniq_inst;
 
-// qualified type
-// function, struct, or union types are denoted by this class
-class qual_type : public qual {
-  public:
-    qual_type() {}
-    virtual ~qual_type() {}
-
-    shared_type m_type;
-    std::vector<shared_type_var> m_args; // type arguments
-};
-
 class classenv {
   public:
-    classenv() : m_de_bruijn_idx(0) {}
+    classenv() {}
     virtual ~classenv() {}
 
     static std::unique_ptr<classenv> make(const parser &ps);
@@ -496,8 +501,6 @@ class classenv {
     // function name -> class name
     std::unordered_map<type_id, std::string> m_func2class;
 
-    uint64_t m_de_bruijn_idx;
-
     bool add_class(const module *ptr_mod, const ast_class *ptr);
     bool add_instance(const module *ptr_mod, const ast_instance *ptr_ast);
     bool is_inherit_instance(const pred &p, const module *ptr_mod,
@@ -509,7 +512,6 @@ class classenv {
     void de_bruijn(typeclass *ptr);
     void de_bruijn(inst *ptr);
     void de_bruijn(qual *ptr, type *ptr_type);
-    std::string gensym();
 
     bool by_super(pred *pd, std::vector<uniq_pred> &ret);
     void by_inst(pred *pd, std::vector<uniq_pred> &ret);
