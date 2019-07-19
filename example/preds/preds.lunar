@@ -23,7 +23,7 @@ struct u<`a> {
 }
 
 instance foo<t<`a, u<`b>>> {
-    func f(a) { a }
+    func f(a) : `a { a }
 }
 
 instance bar<t<`a, u<`b>>> {

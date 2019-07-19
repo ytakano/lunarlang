@@ -577,7 +577,8 @@ uniq_pred pred::make(const module *ptr_mod, const ast_pred *ptr) {
 
 bool typeclass::apply_super(shared_type arg, std::vector<uniq_pred> &ret,
                             const module *ptr_mod, const ast *ptr_ast) {
-    if (!check_kind_constraint(m_arg, arg->get_kind().get())) {
+    bool found;
+    if (!check_kind_constraint(m_arg, arg->get_kind().get(), found)) {
         return false;
     }
 
@@ -602,21 +603,15 @@ bool qual::add_constraints(type *p) {
         return true;
     case type::TYPE_VAR: {
         auto tv = (type_var *)p;
-        for (auto &it : m_tvar_constraint) {
-            auto tvc = (type_var *)it.get();
-            if (tvc->get_id() == tv->get_id() &&
-                cmp_kind(tvc->get_kind().get(), tv->get_kind().get()) != 0) {
-                std::string err = "kinds are different. \"" + tvc->get_id() +
-                                  "\" is \"" + tvc->get_kind()->to_str() +
-                                  "\" but another is \"" +
-                                  tv->get_kind()->to_str() + "\"";
-                TYPEERR(err.c_str(), m_module, m_ast);
-                return false;
-            }
-        }
+        auto k = tv->get_kind();
+        bool found;
+        if (!check_kind_constraint(tv->get_id(), k.get(), found))
+            return false;
 
-        auto r = type_var::make(tv->get_id(), tv->get_kind());
-        m_tvar_constraint.push_back(r);
+        if (!found) {
+            auto r = type_var::make(tv->get_id(), k);
+            m_tvar_constraint.push_back(r);
+        }
 
         return true;
     }
@@ -703,13 +698,6 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
         auto r = type::make(ptr_mod, fun->m_ret.get());
         ft = type_app::make(ft, r);
 
-        // TODO: fix this
-        if (!cls->add_constraints(ft.get())) {
-            TYPEINFO("instantiated by", ptr_mod,
-                     ptr->m_interfaces->m_interfaces[idx]);
-            return false;
-        }
-
         int n = 0;
         for (auto &i : fun->m_id) {
             id.m_id = i->m_id;
@@ -718,10 +706,20 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
                         ptr->m_interfaces->m_interfaces[idx]->m_id[n]);
                 return false;
             }
-            cls->m_funcs[id] = ft;
+            auto qt = std::make_unique<qual_type>();
+            qt->m_type = ft;
+            qt->m_parent = cls.get();
+            qt->m_ast = fun.get();
+            qt->m_module = ptr_mod;
+
+            if (!qt->add_constraints(ft.get()))
+                return false;
+
+            cls->m_funcs[id] = std::move(qt);
             n++;
         }
 
+        // add infix
         n = 0;
         for (auto &i : fun->m_infix) {
             id.m_id = i->m_infix;
@@ -733,7 +731,16 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
                 }
                 return false;
             }
-            cls->m_funcs[id] = ft;
+            auto qt = std::make_unique<qual_type>();
+            qt->m_type = ft;
+            qt->m_parent = cls.get();
+            qt->m_ast = fun.get();
+            qt->m_module = ptr_mod;
+
+            if (!qt->add_constraints(ft.get()))
+                return false;
+
+            cls->m_funcs[id] = std::move(qt);
             n++;
         }
 
@@ -871,9 +878,12 @@ bool classenv::add_instance(const module *ptr_mod,
         auto pf = std::make_unique<qual_type>();
         pf->m_ast = fun.second.get();
         pf->m_module = ptr_mod;
+        pf->m_parent = ret.get();
         pf->m_type = std::move(f);
 
-        // TODO: check kind constraints
+        // check kind constraints
+        if (!pf->add_constraints(pf->m_type.get()))
+            return false;
 
         ret->m_funcs[fun.first] = std::move(pf);
     }
@@ -986,7 +996,7 @@ void classenv::de_bruijn(typeclass *ptr) {
     }
 
     for (auto &fun : ptr->m_funcs) {
-        de_bruijn(ptr, fun.second.get());
+        de_bruijn(ptr, fun.second->m_type.get());
     }
 
     for (auto &tv : ptr->m_tvar_constraint) {
@@ -1036,21 +1046,31 @@ void classenv::de_bruijn(qual *ptr, type *ptr_type) {
     }
 }
 
-bool qual::check_kind_constraint(const std::string &id, kind *k) {
-    for (auto &tv : m_tvar_constraint) {
-        if (id == ((type_var *)tv.get())->get_id() &&
-            cmp_kind(k, tv->get_kind().get()) != 0) {
-            auto it = m_idx_tvar.left.find(id);
-            assert(it != m_idx_tvar.left.end());
+bool qual::check_kind_constraint(const std::string &id, kind *k, bool &found) {
+    found = false;
+    for (const qual *p = this; p != nullptr; p = p->m_parent) {
+        for (auto &tv : p->m_tvar_constraint) {
+            if (id == ((type_var *)tv.get())->get_id()) {
+                found = true;
+                if (cmp_kind(k, tv->get_kind().get()) != 0) {
+                    std::string oid;
 
-            auto cp = (ast_class *)m_ast;
-            std::string err = "kinds are different. \"" + it->second +
-                              "\" must be \"" + tv->get_kind()->to_str() +
-                              "\" but the kind of the passed type was \"" +
-                              k->to_str() + "\"";
-            TYPEERR(err.c_str(), m_module, cp->m_id);
+                    auto it = p->m_idx_tvar.left.find(id);
+                    if (it != p->m_idx_tvar.left.end()) {
+                        oid = it->second;
+                    } else {
+                        oid = id;
+                    }
 
-            return false;
+                    std::string err =
+                        "kinds are different. \"" + oid + "\" must be \"" +
+                        tv->get_kind()->to_str() + "\" but used as was \"" +
+                        k->to_str() + "\"";
+                    TYPEERR(err.c_str(), m_module, m_ast);
+
+                    return false;
+                }
+            }
         }
     }
     return true;
@@ -1066,7 +1086,8 @@ bool classenv::by_super(pred *pd, std::vector<uniq_pred> &ret) {
     // check wheter the kind of the argument satsfies the constraints
     auto const &id = it->second->m_class->m_arg;
     auto const k = pd->m_arg->get_kind();
-    if (!it->second->m_class->check_kind_constraint(id, k.get())) {
+    bool found;
+    if (!it->second->m_class->check_kind_constraint(id, k.get(), found)) {
         return false;
     }
 
@@ -1280,7 +1301,7 @@ void typeclass::print() {
         std::cout << "{\"id\":";
         func.first.print();
         std::cout << ",\"type\":";
-        func.second->print();
+        func.second->m_type->print();
         std::cout << "}";
         i++;
     }

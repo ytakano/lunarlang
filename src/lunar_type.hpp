@@ -401,7 +401,7 @@ typedef boost::bimaps::bimap<boost::bimaps::unordered_set_of<std::string>,
 //     struct data<`a, `b> require num<`a>, bool<`b>
 class qual {
   public:
-    qual() {}
+    qual() : m_parent(nullptr) {}
     virtual ~qual() {}
 
     void print_preds();
@@ -413,10 +413,11 @@ class qual {
 
     const ast *m_ast;
     const module *m_module;
+    const qual *m_parent;
 
     std::vector<shared_type> m_tvar_constraint; // type variable constraint
 
-    bool check_kind_constraint(const std::string &id, kind *k);
+    bool check_kind_constraint(const std::string &id, kind *k, bool &found);
     bool add_constraints(pred *p);
     bool add_constraints(type *p);
 };
@@ -448,8 +449,8 @@ class typeclass : public qual {
 
     type_id m_id; // class name
 
-    std::string m_arg;                                // arguments
-    std::unordered_map<type_id, shared_type> m_funcs; // interfaces
+    std::string m_arg;                                  // arguments
+    std::unordered_map<type_id, ptr_qual_type> m_funcs; // interfaces
 
     ASYCLIC m_is_asyclic;
 
