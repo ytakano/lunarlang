@@ -1,10 +1,10 @@
 class foo<`a> {
-    f :: func(`a) : `a
+    f, h :: func(`a) : `b
 }
 
-class bar<`a> require foo<`a> {
-    g :: func(`a) : `a
-}
+// class bar<`a> require foo<`a> {
+//     g :: func(`a) : `a
+// }
 
 // class buz<`a> require foo<`a<`b>> {
 //     func q(`a<`b>) : `a<`b>
@@ -14,25 +14,26 @@ struct s {
     var : u64
 }
 
-struct t<`a, `b> {
-    var : u64
-}
-
-struct u<`a> {
-    var : u64
-}
-
-instance foo<t<`a, u<`b>>> {
-    func f(a) : `a { a }
-}
-
-instance bar<t<`a, u<`b>>> {
-    func g(a) { a }
-}
-
-// instance buz<t> {
-//     func f(a) { a }
+// struct t<`a, `b> {
+//     var : u64
 // }
+
+// struct u<`a> {
+//     var : u64
+// }
+
+// instance foo<t<`a, u<`b>>> {
+//     func f(a) : `a { a }
+// }
+
+// instance bar<t<`a, u<`b>>> {
+//     func g(a) { a }
+// }
+
+instance foo<s> {
+    func f(a : `a) : `a { a }
+    func h(a : `a) : `a { a }
+}
 
 // func h(a : `a) require foo<`a> {
 //     a

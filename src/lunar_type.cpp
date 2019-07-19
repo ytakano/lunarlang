@@ -628,6 +628,55 @@ bool qual::add_constraints(type *p) {
     return true; // never reach here
 }
 
+shared_type typeclass::make_funtype(const module *ptr_mod,
+                                    ast_interface *ptr_ast) {
+    auto ft = mk_func(ptr_ast->m_args->m_types.size() + 1);
+    for (auto &arg : ptr_ast->m_args->m_types) {
+        auto t = type::make(ptr_mod, arg.get());
+        if (!t)
+            return nullptr;
+
+        ft = type_app::make(ft, t);
+    }
+
+    auto r = type::make(ptr_mod, ptr_ast->m_ret.get());
+    if (!r)
+        return nullptr;
+
+    ft = type_app::make(ft, r);
+
+    return ft;
+}
+
+bool typeclass::add_interface(const module *ptr_mod, const std::string &id,
+                              ast_interface *ptr_ast) {
+    type_id tid;
+    tid.m_path = m_id.m_path;
+
+    tid.m_id = id;
+    if (HASKEY(m_funcs, tid)) {
+        TYPEERR("multiply defined method", ptr_mod, ptr_ast);
+        return false;
+    }
+
+    auto ft = make_funtype(ptr_mod, ptr_ast);
+    if (!ft)
+        return false;
+
+    auto qt = std::make_unique<qual_type>();
+    qt->m_type = ft;
+    qt->m_parent = this;
+    qt->m_ast = ptr_ast;
+    qt->m_module = ptr_mod;
+
+    if (!qt->add_constraints(ft.get()))
+        return false;
+
+    m_funcs[tid] = std::move(qt);
+
+    return true;
+}
+
 bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     auto cls = std::make_unique<typeclass>();
 
@@ -689,62 +738,15 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
     id.m_path = cls->m_id.m_path;
     int idx = 0;
     for (auto &fun : ptr->m_interfaces->m_interfaces) {
-        auto ft = mk_func(fun->m_args->m_types.size() + 1);
-        for (auto &arg : fun->m_args->m_types) {
-            auto t = type::make(ptr_mod, arg.get());
-            ft = type_app::make(ft, t);
-        }
-
-        auto r = type::make(ptr_mod, fun->m_ret.get());
-        ft = type_app::make(ft, r);
-
-        int n = 0;
+        // add interface
         for (auto &i : fun->m_id) {
-            id.m_id = i->m_id;
-            if (HASKEY(cls->m_funcs, id)) {
-                TYPEERR("multiply defined method", ptr_mod,
-                        ptr->m_interfaces->m_interfaces[idx]->m_id[n]);
-                return false;
-            }
-            auto qt = std::make_unique<qual_type>();
-            qt->m_type = ft;
-            qt->m_parent = cls.get();
-            qt->m_ast = fun.get();
-            qt->m_module = ptr_mod;
-
-            if (!qt->add_constraints(ft.get()))
-                return false;
-
-            cls->m_funcs[id] = std::move(qt);
-            n++;
+            cls->add_interface(ptr_mod, i->m_id, fun.get());
         }
 
         // add infix
-        n = 0;
         for (auto &i : fun->m_infix) {
-            id.m_id = i->m_infix;
-            if (HASKEY(cls->m_funcs, id)) {
-                if (HASKEY(cls->m_funcs, id)) {
-                    TYPEERR("multiply defined method", ptr_mod,
-                            ptr->m_interfaces->m_interfaces[idx]->m_id[n]);
-                    return false;
-                }
-                return false;
-            }
-            auto qt = std::make_unique<qual_type>();
-            qt->m_type = ft;
-            qt->m_parent = cls.get();
-            qt->m_ast = fun.get();
-            qt->m_module = ptr_mod;
-
-            if (!qt->add_constraints(ft.get()))
-                return false;
-
-            cls->m_funcs[id] = std::move(qt);
-            n++;
+            cls->add_interface(ptr_mod, i->m_infix, fun.get());
         }
-
-        idx++;
     }
 
     de_bruijn(cls.get());
@@ -843,6 +845,9 @@ bool classenv::add_instance(const module *ptr_mod,
 
     // type arguments
     ret->m_pred.m_arg = type::make(ptr_mod, ptr_ast->m_arg->m_arg.get());
+    if (!ret->m_pred.m_arg)
+        return false;
+
     if (!ret->add_constraints(ret->m_pred.m_arg.get()))
         return false;
 
@@ -943,6 +948,18 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
     return ret;
 }
 
+std::string qual::find_tvar_idx(const std::string &id) const {
+    auto it = m_idx_tvar.left.find(id);
+    if (it == m_idx_tvar.left.end()) {
+        if (m_parent)
+            return m_parent->find_tvar_idx(id);
+        else
+            return "";
+    }
+
+    return it->second;
+}
+
 bool classenv::is_asyclic() {
     for (auto &it : m_env) {
         std::unordered_set<type_id> visited;
@@ -996,7 +1013,9 @@ void classenv::de_bruijn(typeclass *ptr) {
     }
 
     for (auto &fun : ptr->m_funcs) {
-        de_bruijn(ptr, fun.second->m_type.get());
+        fun.second->m_type->print();
+        std::cout << std::endl;
+        de_bruijn(fun.second.get(), fun.second->m_type.get());
     }
 
     for (auto &tv : ptr->m_tvar_constraint) {
@@ -1015,7 +1034,9 @@ void classenv::de_bruijn(inst *ptr) {
         de_bruijn(ptr, p->m_arg.get());
     }
 
-    // TODO: interfaces
+    for (auto &f : ptr->m_funcs) {
+        de_bruijn(f.second.get(), f.second->m_type.get());
+    }
 }
 
 void classenv::de_bruijn(qual *ptr, type *ptr_type) {
@@ -1032,12 +1053,12 @@ void classenv::de_bruijn(qual *ptr, type *ptr_type) {
         if (id[0] == 'T')
             return;
 
-        auto it = ptr->m_idx_tvar.right.find(id);
-        if (it == ptr->m_idx_tvar.right.end()) {
+        auto s = ptr->find_tvar_idx(id);
+        if (s == "") {
             var->set_id(gensym());
             ptr->m_idx_tvar.insert(bimap_ss::value_type(var->get_id(), id));
         } else {
-            var->set_id(it->second);
+            var->set_id(s);
         }
         break;
     }

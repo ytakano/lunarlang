@@ -57,6 +57,7 @@ struct ast_class;
 struct ast_instance;
 struct ast_pred;
 struct ast_defun;
+struct ast_interface;
 class module;
 class parser;
 class pred;
@@ -420,6 +421,13 @@ class qual {
     bool check_kind_constraint(const std::string &id, kind *k, bool &found);
     bool add_constraints(pred *p);
     bool add_constraints(type *p);
+    std::string
+
+    // find oritinal type variable from de Bruijn index
+    // id: de Bruijn index
+    // if found this returns original type variable name,
+    // otherwise returns ""
+    find_tvar_idx(const std::string &id) const;
 };
 
 // qualified type
@@ -456,6 +464,11 @@ class typeclass : public qual {
 
     bool apply_super(shared_type arg, std::vector<uniq_pred> &ret,
                      const module *ptr_mod, const ast *ptr_ast);
+    bool add_interface(const module *ptr_mod, const std::string &id,
+                       ast_interface *ptr_ast);
+
+  private:
+    shared_type make_funtype(const module *ptr_mod, ast_interface *ptr_ast);
 };
 
 typedef std::unique_ptr<typeclass> uniq_typeclass;
