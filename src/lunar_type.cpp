@@ -390,12 +390,7 @@ uniq_pred substitution::apply(pred *p) {
 static shared_subst compose(substitution &s1, substitution &s2) {
     auto ret = std::make_shared<substitution>();
     for (auto &y : s2.m_subst) {
-        auto t = s1.apply(y.second);
-        if (t->m_subtype == type::TYPE_VAR) {
-            auto tvar = (type_var *)t.get();
-            if (*tvar != y.first)
-                ret->m_subst[y.first] = t;
-        }
+        ret->m_subst[y.first] = s1.apply(y.second);
     }
 
     for (auto &x : s1.m_subst) {
@@ -949,10 +944,12 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
         for (auto &in : e.second->m_insts) {
             for (auto &f : in->m_funcs) {
                 // check interfaces' type
-                if (!ret->check_if_type(e.second->m_class.get(), in.get(),
-                                        f.first, f.second.get())) {
+                auto sbst = ret->mgu_if_type(e.second->m_class.get(), in.get(),
+                                             f.first, f.second.get());
+                if (!sbst)
                     return nullptr;
-                }
+
+                f.second->m_type = sbst->apply(f.second->m_type);
             }
 
             for (auto &sf : e.second->m_class->m_funcs) {
@@ -969,8 +966,8 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
     return ret;
 }
 
-bool classenv::check_if_type(typeclass *cls, inst *in, const std::string &id,
-                             qual_type *qt) {
+shared_subst classenv::mgu_if_type(typeclass *cls, inst *in,
+                                   const std::string &id, qual_type *qt) {
     type_id tid;
     tid.m_id = id;
     tid.m_path = cls->m_id.m_path;
@@ -978,7 +975,7 @@ bool classenv::check_if_type(typeclass *cls, inst *in, const std::string &id,
     if (parent == cls->m_funcs.end()) {
         std::string err = "class \"" + cls->m_id.m_id + "\" has no such method";
         TYPEERR(err.c_str(), in->m_module, in->m_funcs[id]->m_ast);
-        return false;
+        return nullptr;
     }
 
     substitution sbst;
@@ -987,16 +984,16 @@ bool classenv::check_if_type(typeclass *cls, inst *in, const std::string &id,
 
     auto pt = sbst.apply(parent->second->m_type);
 
-    auto m = mgu(qt->m_type, pt);
-    if (!m) {
+    auto ret = mgu(qt->m_type, pt);
+    if (!ret) {
         std::string err =
             "method type is incompatible with the definition of the class";
         TYPEERR(err.c_str(), in->m_module, in->m_funcs[id]->m_ast);
         TYPEINFO("defined by", cls->m_module, parent->second->m_ast);
-        return false;
+        return nullptr;
     }
 
-    return true;
+    return ret;
 }
 
 std::string qual::find_tvar_idx(const std::string &id) const {

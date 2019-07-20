@@ -206,11 +206,9 @@ class type_var : public type {
 
     bool operator<(const type_var &lhs) const {
         int ret = m_id.compare(lhs.m_id);
-        if (ret == 0) {
-            return cmp_kind(m_kind.get(), lhs.m_kind.get());
-        } else {
-            return ret;
-        }
+        if (ret == 0)
+            ret = cmp_kind(m_kind.get(), lhs.m_kind.get());
+        return ret > 0 ? true : false;
     }
 
     virtual shared_kind get_kind() { return m_kind; }
@@ -536,8 +534,8 @@ class classenv {
     bool simplify(std::vector<uniq_pred> &ps);
     bool reduce(std::vector<uniq_pred> &ps, int &idx);
     bool check_ifs_type(); // check type of interfaces
-    bool check_if_type(typeclass *cls, inst *in, const std::string &id,
-                       qual_type *qt);
+    shared_subst mgu_if_type(typeclass *cls, inst *in, const std::string &id,
+                             qual_type *qt);
 };
 
 } // namespace lunar

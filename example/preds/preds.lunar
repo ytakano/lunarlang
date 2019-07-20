@@ -1,5 +1,5 @@
 class foo<`a> {
-    f, h :: func(`a) : `a
+    h :: func(`a) : `a
 }
 
 // class bar<`a> require foo<`a> {
@@ -31,7 +31,6 @@ struct s {
 // }
 
 instance foo<s> {
-    func f(a) : s { a }
     func h(a) { a }
 }
 
