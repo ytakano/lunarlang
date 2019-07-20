@@ -535,6 +535,9 @@ class classenv {
     bool to_hnf(uniq_pred pd, std::vector<uniq_pred> &ret);
     bool simplify(std::vector<uniq_pred> &ps);
     bool reduce(std::vector<uniq_pred> &ps, int &idx);
+    bool check_ifs_type(); // check type of interfaces
+    bool check_if_type(typeclass *cls, inst *in, const std::string &id,
+                       qual_type *qt);
 };
 
 } // namespace lunar

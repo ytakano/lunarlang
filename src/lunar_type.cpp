@@ -934,7 +934,7 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
         }
     }
 
-    // check wheter instances are also the instances of the classes
+    // check wheter instances are also the instances of the super classes
     for (auto &e : ret->m_env) {
         for (auto &it : e.second->m_insts) {
             auto inast = (const ast_instance *)it->m_ast;
@@ -945,12 +945,63 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
         }
     }
 
+    for (auto &e : ret->m_env) {
+        for (auto &in : e.second->m_insts) {
+            for (auto &f : in->m_funcs) {
+                // check interfaces' type
+                if (!ret->check_if_type(e.second->m_class.get(), in.get(),
+                                        f.first, f.second.get())) {
+                    return nullptr;
+                }
+            }
+
+            for (auto &sf : e.second->m_class->m_funcs) {
+                if (!HASKEY(in->m_funcs, sf.first.m_id)) {
+                    std::string err = "class method \"" + sf.first.m_id +
+                                      "\" is not implemented";
+                    TYPEERR(err.c_str(), in->m_module, in->m_ast);
+                    return nullptr;
+                }
+            }
+        }
+    }
+
     return ret;
 }
 
+bool classenv::check_if_type(typeclass *cls, inst *in, const std::string &id,
+                             qual_type *qt) {
+    type_id tid;
+    tid.m_id = id;
+    tid.m_path = cls->m_id.m_path;
+    auto parent = cls->m_funcs.find(tid);
+    if (parent == cls->m_funcs.end()) {
+        std::string err = "class \"" + cls->m_id.m_id + "\" has no such method";
+        TYPEERR(err.c_str(), in->m_module, in->m_funcs[id]->m_ast);
+        return false;
+    }
+
+    substitution sbst;
+    type_var tv(cls->m_arg, in->m_pred.m_arg->get_kind());
+    sbst.m_subst[tv] = in->m_pred.m_arg;
+
+    auto pt = sbst.apply(parent->second->m_type);
+
+    auto m = mgu(qt->m_type, pt);
+    if (!m) {
+        std::string err =
+            "method type is incompatible with the definition of the class";
+        TYPEERR(err.c_str(), in->m_module, in->m_funcs[id]->m_ast);
+        TYPEINFO("defined by", cls->m_module, parent->second->m_ast);
+        return false;
+    }
+
+    return true;
+}
+
 std::string qual::find_tvar_idx(const std::string &id) const {
-    auto it = m_idx_tvar.left.find(id);
-    if (it == m_idx_tvar.left.end()) {
+    auto it = m_idx_tvar.right.find(id);
+    if (it == m_idx_tvar.right.end()) {
         if (m_parent)
             return m_parent->find_tvar_idx(id);
         else
@@ -1013,8 +1064,6 @@ void classenv::de_bruijn(typeclass *ptr) {
     }
 
     for (auto &fun : ptr->m_funcs) {
-        fun.second->m_type->print();
-        std::cout << std::endl;
         de_bruijn(fun.second.get(), fun.second->m_type.get());
     }
 
@@ -1138,6 +1187,8 @@ void classenv::by_inst(pred *pd, std::vector<uniq_pred> &ret) {
         auto sbst = match_pred(&is->m_pred, pd);
         if (sbst) {
             for (auto &p : is->m_preds) {
+                if (!p)
+                    continue;
                 auto np = sbst->apply(p.get());
                 ret.push_back(std::move(np));
             }
