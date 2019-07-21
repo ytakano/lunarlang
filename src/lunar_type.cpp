@@ -195,16 +195,16 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
             int argnum = 0;
             if (ptr_ast->m_asttype != ast::AST_MEMBER) {
                 assert(ptr_ast->m_asttype == ast::AST_TYPE);
-                auto t = (ast_type *)ptr_ast;
-                switch (t->m_type) {
+                auto tn = (ast_type *)ptr_ast;
+                switch (tn->m_type) {
                 case ast_type::TYPE_STRUCT: {
-                    auto st = (ast_struct *)t;
+                    auto st = (ast_struct *)tn;
                     if (st->m_tvars)
                         argnum = st->m_tvars->m_args.size();
                     break;
                 }
                 case ast_type::TYPE_UNION: {
-                    auto un = (ast_union *)t;
+                    auto un = (ast_union *)tn;
                     if (un->m_tvars)
                         argnum = un->m_tvars->m_args.size();
                     break;
@@ -943,13 +943,21 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
     for (auto &e : ret->m_env) {
         for (auto &in : e.second->m_insts) {
             for (auto &f : in->m_funcs) {
-                // check interfaces' type
+                // check interfaces' type is compatible with the class's
                 auto sbst = ret->mgu_if_type(e.second->m_class.get(), in.get(),
                                              f.first, f.second.get());
                 if (!sbst)
                     return nullptr;
 
                 f.second->m_type = sbst->apply(f.second->m_type);
+
+                for (auto &p : in->m_preds) {
+                    p->m_arg = sbst->apply(p->m_arg);
+                }
+
+                for (auto &p : f.second->m_preds) {
+                    p->m_arg = sbst->apply(p->m_arg);
+                }
             }
 
             for (auto &sf : e.second->m_class->m_funcs) {
@@ -984,7 +992,7 @@ shared_subst classenv::mgu_if_type(typeclass *cls, inst *in,
 
     auto pt = sbst.apply(parent->second->m_type);
 
-    auto ret = mgu(qt->m_type, pt);
+    auto ret = mgu(pt, qt->m_type);
     if (!ret) {
         std::string err =
             "method type is incompatible with the definition of the class";

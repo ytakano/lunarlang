@@ -30,8 +30,8 @@ struct s {
 //     func g(a) { a }
 // }
 
-instance foo<s> {
-    func h(a) { a }
+instance foo<s> require foo<`a> {
+    func h(a) : `a { a }
 }
 
 // func h(a : `a) require foo<`a> {

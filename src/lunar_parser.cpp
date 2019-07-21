@@ -273,6 +273,12 @@ bool module::parse() {
             if (is_defined(cls->m_id->m_id, cls.get()))
                 return false;
 
+            for (auto &iface : cls->m_interfaces->m_interfaces) {
+                for (auto &id : iface->m_id) {
+                    m_id2interface[id->m_id] = iface.get();
+                }
+            }
+
             m_id2class[cls->m_id->m_id] = std::move(cls);
         } else if (id->m_id == "struct") {
             auto st = parse_struct();
@@ -352,6 +358,7 @@ bool module::is_defined(const std::string &str, ast *ptr) {
     IS_DEFINED(m_id2union);
     IS_DEFINED(m_id2import);
     IS_DEFINED(m_id2union_mem);
+    IS_DEFINED(m_id2interface);
 
     auto id = ptr->get_ast_id();
     auto it = m_modules.m_children.find(str);
@@ -407,30 +414,32 @@ bool module::find_typeclass(const ast_dotid *dotid, std::string &path,
     return ptr_mod->find_typeclass(dotid, path, id, pos);
 }
 
+#define FIND_TYPE_UNIQ(C)                                                      \
+    do {                                                                       \
+        auto it = (C).find(dotid->m_ids[pos]->m_id);                           \
+        if (it != (C).end()) {                                                 \
+            path = m_filename;                                                 \
+            id = it->first;                                                    \
+            return it->second.get();                                           \
+        }                                                                      \
+    } while (0)
+
 #define FIND_TYPE(C)                                                           \
     do {                                                                       \
         auto it = (C).find(dotid->m_ids[pos]->m_id);                           \
         if (it != (C).end()) {                                                 \
             path = m_filename;                                                 \
-            id = it->second->m_id->m_id;                                       \
-            return it->second.get();                                           \
+            id = it->first;                                                    \
+            return it->second;                                                 \
         }                                                                      \
     } while (0)
 
 ast *module::find_type(const ast_dotid *dotid, std::string &path,
                        std::string &id, unsigned int pos) const {
     if (dotid->m_ids.size() - pos == 1) {
-        FIND_TYPE(m_id2struct);
-        FIND_TYPE(m_id2union);
-
-        {
-            auto it = m_id2union_mem.find(dotid->m_ids[pos]->m_id);
-            if (it != m_id2union_mem.end()) {
-                path = m_filename;
-                id = it->second->m_id->m_id;
-                return it->second;
-            }
-        }
+        FIND_TYPE_UNIQ(m_id2struct);
+        FIND_TYPE_UNIQ(m_id2union);
+        FIND_TYPE(m_id2union_mem);
     }
 
     module *ptr_mod = find_module(dotid, pos);
@@ -445,6 +454,27 @@ ast *module::find_type(const ast_dotid *dotid, std::string &path,
     }
 
     return ptr_mod->find_type(dotid, path, id, pos);
+}
+
+ast *module::find_func(const ast_dotid *dotid, std::string &path,
+                       std::string &id, unsigned int pos) const {
+    if (dotid->m_ids.size() - pos == 1) {
+        FIND_TYPE_UNIQ(m_id2defun);
+        FIND_TYPE(m_id2interface);
+    }
+
+    module *ptr_mod = find_module(dotid, pos);
+    if (ptr_mod == nullptr) {
+        for (auto it = m_vec_modules.rbegin(); it != m_vec_modules.rend();
+             ++it) {
+            auto it_mod = m_parser.m_modules.find((*it)->m_full_path);
+            assert(it_mod != m_parser.m_modules.end());
+            return it_mod->second->find_func(dotid, path, id, pos);
+        }
+        return nullptr;
+    }
+
+    return ptr_mod->find_func(dotid, path, id, pos);
 }
 
 // $ID := [^0-9$WHITESPACE][^$WHITESPACE]+

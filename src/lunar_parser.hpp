@@ -728,7 +728,13 @@ class module {
                         std::string &id, unsigned int pos = 0) const;
 
     // find user defined type recursively
+    // return a pointer of ast_struct, ast_union, or ast_member
     ast *find_type(const ast_dotid *dotid, std::string &path, std::string &id,
+                   unsigned int pos = 0) const;
+
+    // find function recursively
+    // return eitehr a pointer of ast_interface or ast_defun
+    ast *find_func(const ast_dotid *dotid, std::string &path, std::string &id,
                    unsigned int pos = 0) const;
 
     module *find_module(const ast_dotid *dotid, unsigned int &pos) const;
@@ -754,6 +760,7 @@ class module {
     std::unordered_map<std::string, ptr_ast_defun> m_id2defun;
     std::unordered_map<std::string, ptr_ast_struct> m_id2struct;
     std::unordered_map<std::string, ptr_ast_union> m_id2union;
+    std::unordered_map<std::string, ast_interface *> m_id2interface;
     std::unordered_map<std::string, ast_member *> m_id2union_mem;
     std::unordered_multimap<std::string, ptr_ast_instance> m_id2inst;
 
