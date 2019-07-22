@@ -471,6 +471,21 @@ class typeclass : public qual {
 
 typedef std::unique_ptr<typeclass> uniq_typeclass;
 
+class defun : public qual {
+  public:
+    defun() {}
+    virtual ~defun() {}
+
+    static std::unique_ptr<defun> make(ast_defun *p); // TODO
+
+    shared_type m_type;
+    std::vector<std::pair<std::string, shared_type>> m_args;
+    shared_type m_ret;
+    std::unordered_map<std::string, shared_type> m_assump;
+};
+
+typedef std::unique_ptr<defun> ptr_defun;
+
 // class instance declaration
 class inst : public qual {
   public:
@@ -480,7 +495,7 @@ class inst : public qual {
     void print();
 
     pred m_pred;
-    std::unordered_map<std::string, ptr_qual_type> m_funcs; // interfaces
+    std::unordered_map<std::string, ptr_defun> m_funcs; // interfaces
 };
 
 typedef std::unique_ptr<inst> uniq_inst;
@@ -535,7 +550,31 @@ class classenv {
     bool reduce(std::vector<uniq_pred> &ps, int &idx);
     bool check_ifs_type(); // check type of interfaces
     shared_subst mgu_if_type(typeclass *cls, inst *in, const std::string &id,
-                             qual_type *qt);
+                             defun *qt);
+};
+
+class funcenv {
+  public:
+    funcenv() {}
+    virtual ~funcenv() {}
+
+    static std::unique_ptr<funcenv> make(const parser &ps);
+
+  private:
+    std::unordered_map<type_id, ptr_defun> m_defuns;
+};
+
+class typing {
+  public:
+    typing(classenv &env) : m_classenv(env) {}
+    virtual ~typing() {}
+
+  private:
+    std::vector<uniq_pred> m_preds;
+    std::unordered_map<std::string, shared_type> m_assump;
+    std::unordered_map<std::string, shared_kind> m_kind_constraint;
+    substitution m_sbst;
+    classenv &m_classenv;
 };
 
 } // namespace lunar

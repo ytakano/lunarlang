@@ -875,7 +875,7 @@ bool classenv::add_instance(const module *ptr_mod,
         auto f = type::make(ptr_mod, fun.second.get());
         if (!f)
             return false;
-        auto pf = std::make_unique<qual_type>();
+        auto pf = std::make_unique<defun>();
         pf->m_ast = fun.second.get();
         pf->m_module = ptr_mod;
         pf->m_parent = ret.get();
@@ -975,7 +975,7 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
 }
 
 shared_subst classenv::mgu_if_type(typeclass *cls, inst *in,
-                                   const std::string &id, qual_type *qt) {
+                                   const std::string &id, defun *qt) {
     type_id tid;
     tid.m_id = id;
     tid.m_path = cls->m_id.m_path;
@@ -1440,7 +1440,5 @@ void inst::print() {
 
     std::cout << "]}";
 }
-
-void typing(ptr_ast_type &ast) {}
 
 } // namespace lunar
