@@ -475,6 +475,8 @@ class defun : public qual {
     defun() {}
     virtual ~defun() {}
 
+    void print();
+
     static std::unique_ptr<defun>
     make(const module *ptr_mod, const qual *parent, const ast_defun *ast);
 
@@ -554,6 +556,8 @@ class funcenv {
   public:
     funcenv() {}
     virtual ~funcenv() {}
+
+    void print();
 
     static std::unique_ptr<funcenv> make(const parser &ps);
 

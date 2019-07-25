@@ -4,7 +4,7 @@ compile memo (Mac)
 
 ```
 $ cd src
-$ cmake -DCMAKE_PREFIX_PATH=/homebrew/opt/llvm -G Ninja .
+$ cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=/homebrew/opt/llvm/bin/clang++ -DLLVM_DIR=/homebrew/opt/llvm/share/cmake/modules -G Ninja .
 $ ninja -v
 ```
 

@@ -16,8 +16,8 @@ bool opt::parse(int argc, char *argv[]) {
             m_is_ast = true;
         } else if (C(argv[n], "-l") || C(argv[n], "--llvm")) {
             m_is_llvm = true;
-        } else if (C(argv[n], "-c") || C(argv[n], "--class")) {
-            m_is_classenv = true;
+        } else if (C(argv[n], "-e") || C(argv[n], "--env")) {
+            m_is_env = true;
         } else if (C(argv[n], "-h") || C(argv[n], "--help")) {
             print_help(argv);
             return false;
@@ -39,7 +39,9 @@ void opt::print_help(char *argv[]) {
     std::cerr << argv[0] << "\n    -i,--ir:\tprint intermediate language\n"
               << "    -l,--llvm:\tprint LLVM IR\n"
               << "    -a,--ast:\tprint AST\n"
-              << "    -h,--help:\tshow this help" << std::endl;
+              << "    -h,--help:\tshow this help"
+              << "    -c,--env:\tshow class and function environment"
+              << std::endl;
 }
 
 } // namespace lunar

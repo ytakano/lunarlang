@@ -38,6 +38,6 @@ instance foo<s> require foo<`a> {
 //     a
 // }
 
-// func m(a : st) {
-//     h(a)
-// }
+func m(a : `a, b : s) require foo<`a> {
+    h(a)
+}

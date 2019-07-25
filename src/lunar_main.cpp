@@ -188,12 +188,24 @@ int main(int argc, char *argv[]) {
 
     if (opt.m_is_ast) {
         parser.print();
+        return 0;
     }
 
-    auto env = lunar::classenv::make(parser);
-    if (opt.m_is_classenv && env) {
-        env->print();
-        std::cout << std::endl;
+    auto cenv = lunar::classenv::make(parser);
+    if (!cenv)
+        return 1;
+
+    auto fenv = lunar::funcenv::make(parser);
+    if (!fenv)
+        return 1;
+
+    if (opt.m_is_env) {
+        std::cout << "{\"classes\":";
+        cenv->print();
+        std::cout << ",\"functions\":";
+        fenv->print();
+        std::cout << "}";
+        return 0;
     }
 
     return 0;

@@ -393,13 +393,14 @@ std::unique_ptr<defun> defun::make(const module *ptr_mod, const qual *parent,
         if (!rt)
             return nullptr;
     } else {
-        auto tv = type_var::make(gensym(), 0);
+        rt = type_var::make(gensym(), 0);
     }
     ret->m_ret = rt;
     ft = type_app::make(ft, rt);
 
     ret->m_type = std::move(ft);
 
+    // check kind constraints
     if (!ret->add_constraints(ret->m_type.get()))
         return nullptr;
 
@@ -1338,11 +1339,15 @@ std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
             if (!f)
                 return nullptr;
 
+            for (auto &p : f->m_preds) {
+                de_bruijn(f.get(), p->m_arg.get());
+            }
+
             de_bruijn(f.get(), f->m_type.get());
 
             type_id id;
             id.m_id = fun.first;
-            id.m_id = m.second->get_filename();
+            id.m_path = m.second->get_filename();
 
             ret->m_defuns[id] = std::move(f);
         }
@@ -1499,6 +1504,59 @@ void inst::print() {
     }
 
     std::cout << "]}";
+}
+
+void defun::print() {
+    std::cout << "{\"type\":";
+    m_type->print();
+
+    std::cout << ",\"return\":";
+    m_ret->print();
+
+    int n = 0;
+    std::cout << ",\"args\":[";
+    for (auto &arg : m_args) {
+        if (n > 0)
+            std::cout << ",";
+        n++;
+        std::cout << "{\"id\":\"" << arg.first << "\",\"type\":";
+        arg.second->print();
+        std::cout << "}";
+    }
+    std::cout << "],\"assumption\":[";
+
+    n = 0;
+    for (auto &assump : m_assump) {
+        if (n > 0)
+            std::cout << ",";
+        n++;
+        std::cout << "{\"id\":\"" << assump.first << "\",\"type\":";
+        assump.second->print();
+        std::cout << "}";
+    }
+
+    std::cout << "]}";
+}
+
+void funcenv::print() {
+    int n = 0;
+    std::cout << "[";
+    for (auto &f : m_defuns) {
+        if (n > 0)
+            std::cout << ",";
+        n++;
+        std::cout << "{\"id\":";
+        f.first.print();
+        std::cout << ",\"defun\":";
+        f.second->print();
+
+        std::cout << ",\"predicates\":";
+        f.second->print_preds();
+
+        std::cout << "}";
+    }
+
+    std::cout << "]";
 }
 
 } // namespace lunar
