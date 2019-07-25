@@ -76,6 +76,71 @@ std::string gensym() {
     return "T" + boost::lexical_cast<std::string>(de_bruijn_idx++);
 }
 
+static void de_bruijn(qual *ptr, type *ptr_type) {
+    switch (ptr_type->m_subtype) {
+    case type::TYPE_APP: {
+        auto app = (type_app *)ptr_type;
+        de_bruijn(ptr, app->m_left.get());
+        de_bruijn(ptr, app->m_right.get());
+        break;
+    }
+    case type::TYPE_VAR: {
+        auto var = (type_var *)ptr_type;
+        auto id = var->get_id();
+        if (id[0] == 'T')
+            return;
+
+        auto s = ptr->find_tvar_idx(id);
+        if (s == "") {
+            var->set_id(gensym());
+            ptr->m_idx_tvar.insert(bimap_ss::value_type(var->get_id(), id));
+        } else {
+            var->set_id(s);
+        }
+        break;
+    }
+    case type::TYPE_CONST:
+        break;
+    }
+}
+
+static void de_bruijn(inst *ptr) {
+    de_bruijn(ptr, ptr->m_pred.m_arg.get());
+
+    for (auto &p : ptr->m_preds) {
+        de_bruijn(ptr, p->m_arg.get());
+    }
+
+    for (auto &f : ptr->m_funcs) {
+        for (auto &p : f.second->m_preds) {
+            de_bruijn(f.second.get(), p->m_arg.get());
+        }
+        de_bruijn(f.second.get(), f.second->m_type.get());
+    }
+}
+
+static void de_bruijn(typeclass *ptr) {
+    std::string tmp = ptr->m_arg;
+    ptr->m_arg = gensym();
+    ptr->m_idx_tvar.insert(bimap_ss::value_type(ptr->m_arg, tmp));
+
+    for (auto &p : ptr->m_preds) {
+        de_bruijn(ptr, p->m_arg.get());
+    }
+
+    for (auto &fun : ptr->m_funcs) {
+        de_bruijn(fun.second.get(), fun.second->m_type.get());
+    }
+
+    for (auto &tv : ptr->m_tvar_constraint) {
+        assert(tv->m_subtype == type::TYPE_VAR);
+        auto t = (type_var *)tv.get();
+        auto it = ptr->m_idx_tvar.right.find(t->get_id());
+        if (it != ptr->m_idx_tvar.right.end())
+            t->set_id(it->second);
+    }
+}
+
 // numtargs = 0 then return *
 //            1 then return * -> *
 //            2 then return * -> * -> *
@@ -266,31 +331,77 @@ std::shared_ptr<type> type::make(const module *ptr_mod, const ast_type *ptr) {
     return nullptr;
 }
 
-std::shared_ptr<type> type::make(const module *ptr_mod,
-                                 const ast_defun *ptr_defun) {
-    auto ret = mk_func(ptr_defun->m_args->m_args.size() + 1);
+std::unique_ptr<defun> defun::make(const module *ptr_mod, const qual *parent,
+                                   const ast_defun *ast) {
+    auto ret = std::make_unique<defun>();
+    ret->m_ast = ast;
+    ret->m_module = ptr_mod;
+    ret->m_parent = parent;
 
-    for (auto &arg : ptr_defun->m_args->m_args) {
-        if (arg->m_type) {
-            auto t = type::make(ptr_mod, arg->m_type.get());
-            if (!t)
+    // predicates
+    if (ast->m_preds) {
+        for (auto &p : ast->m_preds->m_preds) {
+            auto pd = pred::make(ptr_mod, p.get());
+            if (!pd)
                 return nullptr;
-            ret = type_app::make(ret, t);
-        } else {
-            auto tv = type_var::make(gensym(), 0);
-            ret = type_app::make(ret, tv);
+
+            if (!ret->add_constraints(pd.get()))
+                return nullptr;
+
+            ret->m_preds.push_back(std::move(pd));
         }
     }
 
-    if (ptr_defun->m_ret) {
-        auto t = type::make(ptr_mod, ptr_defun->m_ret.get());
-        if (!t)
+    // type of function
+    auto ft = mk_func(ast->m_args->m_args.size() + 1);
+
+    // types of arguments
+    std::unordered_set<std::string> ids;
+    star ks;
+    for (auto &arg : ast->m_args->m_args) {
+        if (HASKEY(ids, arg->m_id->m_id)) {
+            TYPEERR("same argument name is used", ptr_mod, arg->m_id);
             return nullptr;
-        ret = type_app::make(ret, t);
+        }
+
+        ids.insert(arg->m_id->m_id);
+
+        shared_type t;
+        if (arg->m_type) {
+            t = type::make(ptr_mod, arg->m_type.get());
+            if (!t)
+                return nullptr;
+
+            if (cmp_kind(t->get_kind().get(), &ks) != 0) {
+                TYPEERR("not normal type", ptr_mod, arg->m_type);
+                return nullptr;
+            }
+        } else {
+            t = type_var::make(gensym(), 0);
+        }
+
+        ret->m_args.push_back(
+            std::pair<std::string, shared_type>(arg->m_id->m_id, t));
+        ret->m_assump[arg->m_id->m_id] = t;
+        ft = type_app::make(ft, t);
+    }
+
+    // type of return value
+    shared_type rt;
+    if (ast->m_ret) {
+        rt = type::make(ptr_mod, ast->m_ret.get());
+        if (!rt)
+            return nullptr;
     } else {
         auto tv = type_var::make(gensym(), 0);
-        ret = type_app::make(ret, tv);
     }
+    ret->m_ret = rt;
+    ft = type_app::make(ft, rt);
+
+    ret->m_type = std::move(ft);
+
+    if (!ret->add_constraints(ret->m_type.get()))
+        return nullptr;
 
     return ret;
 }
@@ -856,7 +967,6 @@ bool classenv::add_instance(const module *ptr_mod,
 
     // add requirements
     if (ptr_ast->m_req) {
-        int n = 0;
         for (auto &p : ptr_ast->m_req->m_preds) {
             auto pd = pred::make(ptr_mod, p.get());
             if (!pd)
@@ -866,23 +976,13 @@ bool classenv::add_instance(const module *ptr_mod,
                 return false;
 
             ret->m_preds.push_back(std::move(pd));
-            n++;
         }
     }
 
     // add interfaces
     for (auto &fun : ptr_ast->m_id2defun) {
-        auto f = type::make(ptr_mod, fun.second.get());
-        if (!f)
-            return false;
-        auto pf = std::make_unique<defun>();
-        pf->m_ast = fun.second.get();
-        pf->m_module = ptr_mod;
-        pf->m_parent = ret.get();
-        pf->m_type = std::move(f);
-
-        // check kind constraints
-        if (!pf->add_constraints(pf->m_type.get()))
+        auto pf = defun::make(ptr_mod, ret.get(), fun.second.get());
+        if (!pf)
             return false;
 
         ret->m_funcs[fun.first] = std::move(pf);
@@ -1059,68 +1159,6 @@ bool classenv::is_asyclic(const module *ptr_mod, typeclass *ptr,
     return true;
 }
 
-void classenv::de_bruijn(typeclass *ptr) {
-    std::string tmp = ptr->m_arg;
-    ptr->m_arg = gensym();
-    ptr->m_idx_tvar.insert(bimap_ss::value_type(ptr->m_arg, tmp));
-
-    for (auto &p : ptr->m_preds) {
-        de_bruijn(ptr, p->m_arg.get());
-    }
-
-    for (auto &fun : ptr->m_funcs) {
-        de_bruijn(fun.second.get(), fun.second->m_type.get());
-    }
-
-    for (auto &tv : ptr->m_tvar_constraint) {
-        assert(tv->m_subtype == type::TYPE_VAR);
-        auto t = (type_var *)tv.get();
-        auto it = ptr->m_idx_tvar.right.find(t->get_id());
-        if (it != ptr->m_idx_tvar.right.end())
-            t->set_id(it->second);
-    }
-}
-
-void classenv::de_bruijn(inst *ptr) {
-    de_bruijn(ptr, ptr->m_pred.m_arg.get());
-
-    for (auto &p : ptr->m_preds) {
-        de_bruijn(ptr, p->m_arg.get());
-    }
-
-    for (auto &f : ptr->m_funcs) {
-        de_bruijn(f.second.get(), f.second->m_type.get());
-    }
-}
-
-void classenv::de_bruijn(qual *ptr, type *ptr_type) {
-    switch (ptr_type->m_subtype) {
-    case type::TYPE_APP: {
-        auto app = (type_app *)ptr_type;
-        de_bruijn(ptr, app->m_left.get());
-        de_bruijn(ptr, app->m_right.get());
-        break;
-    }
-    case type::TYPE_VAR: {
-        auto var = (type_var *)ptr_type;
-        auto id = var->get_id();
-        if (id[0] == 'T')
-            return;
-
-        auto s = ptr->find_tvar_idx(id);
-        if (s == "") {
-            var->set_id(gensym());
-            ptr->m_idx_tvar.insert(bimap_ss::value_type(var->get_id(), id));
-        } else {
-            var->set_id(s);
-        }
-        break;
-    }
-    case type::TYPE_CONST:
-        break;
-    }
-}
-
 bool qual::check_kind_constraint(const std::string &id, kind *k, bool &found) {
     found = false;
     for (const qual *p = this; p != nullptr; p = p->m_parent) {
@@ -1289,6 +1327,28 @@ bool classenv::reduce(std::vector<uniq_pred> &ps, int &idx) {
     }
 
     return simplify(ps);
+}
+
+std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
+    auto ret = std::make_unique<funcenv>();
+
+    for (auto &m : ps.get_modules()) {
+        for (auto &fun : m.second->get_funcs()) {
+            auto f = defun::make(m.second.get(), nullptr, fun.second.get());
+            if (!f)
+                return nullptr;
+
+            de_bruijn(f.get(), f->m_type.get());
+
+            type_id id;
+            id.m_id = fun.first;
+            id.m_id = m.second->get_filename();
+
+            ret->m_defuns[id] = std::move(f);
+        }
+    }
+
+    return ret;
 }
 
 std::string type_const::to_str() { return m_id.m_id; }

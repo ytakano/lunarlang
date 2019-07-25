@@ -61,6 +61,7 @@ struct ast_interface;
 class module;
 class parser;
 class pred;
+class defun;
 
 class substitution;
 
@@ -138,8 +139,6 @@ class type {
 
     static std::shared_ptr<type> make(const module *ptr_mod,
                                       const ast_type *ptr);
-    static std::shared_ptr<type> make(const module *ptr_mod,
-                                      const ast_defun *ptr_defun);
 
     virtual shared_kind get_kind() = 0;
 };
@@ -476,7 +475,8 @@ class defun : public qual {
     defun() {}
     virtual ~defun() {}
 
-    static std::unique_ptr<defun> make(ast_defun *p); // TODO
+    static std::unique_ptr<defun>
+    make(const module *ptr_mod, const qual *parent, const ast_defun *ast);
 
     shared_type m_type;
     std::vector<std::pair<std::string, shared_type>> m_args;
@@ -536,9 +536,6 @@ class classenv {
     bool is_asyclic();
     bool is_asyclic(const module *ptr_mod, typeclass *ptr,
                     std::unordered_set<type_id> &visited);
-    void de_bruijn(typeclass *ptr);
-    void de_bruijn(inst *ptr);
-    void de_bruijn(qual *ptr, type *ptr_type);
 
     bool by_super(pred *pd, std::vector<uniq_pred> &ret);
     void by_inst(pred *pd, std::vector<uniq_pred> &ret);

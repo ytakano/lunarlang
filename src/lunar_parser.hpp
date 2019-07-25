@@ -751,6 +751,10 @@ class module {
         return m_id2inst;
     }
 
+    const std::unordered_map<std::string, ptr_ast_defun> &get_funcs() const {
+        return m_id2defun;
+    }
+
   private:
     parsec m_parsec;
     const std::string m_filename;
