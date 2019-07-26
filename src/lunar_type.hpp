@@ -578,14 +578,22 @@ class type_infer {
     bool typing();
 
   private:
-    uniq_subst m_sbst;
     defun &m_defun;
     classenv &m_classenv;
     funcenv &m_funcenv;
     shared_type m_type;
+    shared_type m_ret;
     std::vector<uniq_pred> m_preds;
-    std::unordered_map<std::string, shared_type> m_assump;
-    std::unordered_map<std::string, shared_kind> m_kind_constraint;
+    uniq_subst m_sbst;
+    ast_defun *m_ast;
+
+    // assumpsion: variable names to types
+    std::unordered_map<std::string, std::vector<shared_type>> m_assump;
+
+    std::unordered_map<std::string, shared_kind> m_tvar_constraint;
+    std::vector<std::unique_ptr<std::unordered_multiset<std::string>>>
+        m_block_ids;                             // variables in function
+    std::unordered_multiset<std::string> *m_ids; // variables in current scope
 
     shared_type typing(ast_expr *expr);
     shared_type typing_id(ast_expr_id *expr);

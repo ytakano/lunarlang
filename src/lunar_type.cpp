@@ -1356,7 +1356,46 @@ std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
 }
 
 type_infer::type_infer(defun &fun, classenv &cenv, funcenv &fenv)
-    : m_defun(fun), m_classenv(cenv), m_funcenv(fenv) {}
+    : m_defun(fun), m_classenv(cenv), m_funcenv(fenv) {
+    // initialize a storage for variable names
+    auto ids = std::make_unique<std::unordered_multiset<std::string>>();
+    m_ids = ids.get(); // variables in current scope
+    m_block_ids.push_back(std::move(ids));
+
+    // initialize assumption
+    for (auto &assump : fun.m_assump) {
+        m_assump[assump.first].push_back(assump.second);
+        m_ids->insert(assump.first);
+    }
+
+    for (const qual *q = &fun; q != nullptr; q = q->m_parent) {
+        // initialize predicates
+        for (auto &p : q->m_preds) {
+            auto np = std::make_unique<pred>(*p);
+            m_preds.push_back(std::move(np));
+        }
+
+        // initialize constraints of kind
+        for (auto &t : q->m_tvar_constraint) {
+            assert(t->m_subtype == type::TYPE_VAR);
+            auto tv = (type_var *)t.get();
+            assert(!HASKEY(m_tvar_constraint, tv->get_id()));
+            m_tvar_constraint[tv->get_id()] = tv->get_kind();
+        }
+    }
+
+    // type of this function
+    m_type = fun.m_type;
+
+    // type of return value
+    m_ret = fun.m_ret;
+
+    // initialize substitution
+    m_sbst = std::make_unique<substitution>();
+
+    // AST of function definition
+    m_ast = (ast_defun *)fun.m_ast;
+}
 
 bool typing(classenv &cenv, funcenv &fenv) {
     for (auto &fun : fenv.m_defuns) {
@@ -1369,38 +1408,34 @@ bool typing(classenv &cenv, funcenv &fenv) {
 }
 
 bool type_infer::typing() {
-    m_assump = m_defun.m_assump;
-
-    auto def = (ast_defun *)m_defun.m_ast;
     shared_type t;
     ast_expr *e;
-    for (auto &expr : def->m_exprs->m_exprs) {
+    for (auto &expr : m_ast->m_exprs->m_exprs) {
         t = typing(expr.get());
         if (!t)
             return false;
         e = expr.get();
     }
 
-    auto s = mgu(t, m_defun.m_ret);
+    auto s = mgu(t, m_ret);
     if (!s) {
         std::string msg = "type of return value is incompatible. expected \"" +
-                          m_defun.m_ret->to_str() + "\"";
-        TYPEERR(msg.c_str(), m_defun.m_module, def);
+                          m_ret->to_str() + "\"";
+        TYPEERR(msg.c_str(), m_defun.m_module, m_ast);
 
         msg = "actually returned \"" + t->to_str() + "\"";
         TYPEINFO(msg.c_str(), m_defun.m_module, e);
         return false;
     }
 
-    m_type = s->apply(m_defun.m_type);
+    m_sbst = compose(*s, *m_sbst);
+    m_type = m_sbst->apply(m_type);
 
     m_defun.m_type->print();
     std::cout << std::endl;
 
     m_type->print();
     std::cout << std::endl;
-
-    // TODO: parent's predicates
 
     return true;
 }
@@ -1424,7 +1459,7 @@ shared_type type_infer::typing_id(ast_expr_id *expr) {
         return nullptr;
     }
 
-    return ret->second;
+    return *(ret->second.rbegin());
 }
 
 std::string type_const::to_str() { return m_id.m_id; }
