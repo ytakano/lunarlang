@@ -204,9 +204,11 @@ int main(int argc, char *argv[]) {
         cenv->print();
         std::cout << ",\"functions\":";
         fenv->print();
-        std::cout << "}";
+        std::cout << "}" << std::endl;
         return 0;
     }
+
+    lunar::typing(*cenv, *fenv);
 
     return 0;
 }

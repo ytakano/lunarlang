@@ -389,6 +389,7 @@ struct ast_expr : public ast {
         EXPR_VECTOR,
         EXPR_DICT,
         EXPR_PARENTHESIS,
+        EXPR_ID,
         EXPRS,
     };
 
@@ -407,7 +408,7 @@ struct ast_exprs : public ast_expr {
 };
 
 struct ast_expr_id : public ast_expr {
-    ast_expr_id() {}
+    ast_expr_id() { m_exprtype = EXPR_ID; }
     virtual ~ast_expr_id() {}
 
     virtual void print() const;

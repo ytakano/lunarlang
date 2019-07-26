@@ -7,9 +7,8 @@
 
 #define TYPEINFO(MSG, M, AST)                                                  \
     do {                                                                       \
-        fprintf(stderr, "%s:%lu:%lu:(%d) " MSG "\n",                           \
-                (M)->get_filename().c_str(), (AST)->m_line, (AST)->m_column,   \
-                __LINE__);                                                     \
+        fprintf(stderr, "%s:%lu:%lu:(%d) %s\n", (M)->get_filename().c_str(),   \
+                (AST)->m_line, (AST)->m_column, __LINE__, MSG);                \
         print_err(AST->m_line, AST->m_column, (M)->get_parsec().get_str());    \
     } while (0)
 
@@ -499,8 +498,8 @@ uniq_pred substitution::apply(pred *p) {
 //   s4 = {s | s ∈ s1 ∧ ¬(dom(s) ∈ dom(s2))}
 // 3.
 //   s3 ∪ s4
-static shared_subst compose(substitution &s1, substitution &s2) {
-    auto ret = std::make_shared<substitution>();
+static uniq_subst compose(substitution &s1, substitution &s2) {
+    auto ret = std::make_unique<substitution>();
     for (auto &y : s2.m_subst) {
         ret->m_subst[y.first] = s1.apply(y.second);
     }
@@ -536,12 +535,12 @@ static bool occurs_check(type_var &tvar, type *ty) {
     return false;
 }
 
-static shared_subst var_bind(shared_type var, shared_type ty) {
+static uniq_subst var_bind(shared_type var, shared_type ty) {
     auto tv1 = std::static_pointer_cast<type_var>(var);
     if (ty->m_subtype == type::TYPE_VAR) {
         auto tv2 = std::static_pointer_cast<type_var>(ty);
         if (*tv1 == *tv2)
-            return std::make_shared<substitution>();
+            return std::make_unique<substitution>();
     }
 
     if (occurs_check(*tv1, ty.get()))
@@ -550,7 +549,7 @@ static shared_subst var_bind(shared_type var, shared_type ty) {
     if (cmp_kind(var->get_kind().get(), ty->get_kind().get()) != 0)
         return nullptr;
 
-    auto s = std::make_shared<substitution>();
+    auto s = std::make_unique<substitution>();
     s->m_subst[*tv1] = ty;
     return s;
 }
@@ -560,7 +559,7 @@ static shared_subst var_bind(shared_type var, shared_type ty) {
 // if ∃s (s L) = (s R)
 // then s (s is the most general unifier)
 // else nullptr
-shared_subst mgu(shared_type lhs, shared_type rhs) {
+uniq_subst mgu(shared_type lhs, shared_type rhs) {
     if (lhs->m_subtype == type::TYPE_APP && rhs->m_subtype == type::TYPE_APP) {
         auto l = std::static_pointer_cast<type_app>(lhs);
         auto r = std::static_pointer_cast<type_app>(rhs);
@@ -583,7 +582,7 @@ shared_subst mgu(shared_type lhs, shared_type rhs) {
         if (*((type_const *)lhs.get()) != *((type_const *)rhs.get())) {
             return nullptr;
         }
-        return std::make_shared<substitution>();
+        return std::make_unique<substitution>();
     }
 
     return nullptr;
@@ -595,8 +594,8 @@ shared_subst mgu(shared_type lhs, shared_type rhs) {
 // if ∀x ∀y (x = y) -> (s1 x = s2 x)
 // then s1 ∪ s2
 // else nullptr
-static shared_subst merge(substitution &s1, substitution &s2) {
-    auto ret = std::make_shared<substitution>();
+static uniq_subst merge(substitution &s1, substitution &s2) {
+    auto ret = std::make_unique<substitution>();
     for (auto &it1 : s1.m_subst) {
         auto it2 = s2.m_subst.find(it1.first);
         if (it2 != s2.m_subst.end()) {
@@ -618,7 +617,7 @@ static shared_subst merge(substitution &s1, substitution &s2) {
 // if ∃s (s L) = R
 // then s
 // else nullptr
-shared_subst match(shared_type lhs, shared_type rhs) {
+uniq_subst match(shared_type lhs, shared_type rhs) {
     if (lhs->m_subtype == type::TYPE_APP && rhs->m_subtype == type::TYPE_APP) {
         auto lapp = std::static_pointer_cast<type_app>(lhs);
         auto rapp = std::static_pointer_cast<type_app>(rhs);
@@ -637,7 +636,7 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     if (lhs->m_subtype == type::TYPE_VAR) {
         auto tv = std::static_pointer_cast<type_var>(lhs);
         if (cmp_kind(tv->get_kind().get(), rhs->get_kind().get()) == 0) {
-            auto s = std::make_shared<substitution>();
+            auto s = std::make_unique<substitution>();
             s->m_subst[*tv] = rhs;
             return s;
         }
@@ -646,20 +645,20 @@ shared_subst match(shared_type lhs, shared_type rhs) {
     if (lhs->m_subtype == type::TYPE_CONST &&
         rhs->m_subtype == type::TYPE_CONST) {
         if (eq_type(lhs.get(), rhs.get()))
-            return std::make_shared<substitution>();
+            return std::make_unique<substitution>();
     }
 
     return nullptr;
 }
 
-shared_subst mgu_pred(pred *lhs, pred *rhs) {
+uniq_subst mgu_pred(pred *lhs, pred *rhs) {
     if (lhs->m_id != rhs->m_id)
         return nullptr;
 
     return mgu(lhs->m_arg, rhs->m_arg);
 }
 
-shared_subst match_pred(pred *lhs, pred *rhs) {
+uniq_subst match_pred(pred *lhs, pred *rhs) {
     if (lhs->m_id != rhs->m_id)
         return nullptr;
 
@@ -1075,8 +1074,8 @@ std::unique_ptr<classenv> classenv::make(const parser &ps) {
     return ret;
 }
 
-shared_subst classenv::mgu_if_type(typeclass *cls, inst *in,
-                                   const std::string &id, defun *qt) {
+uniq_subst classenv::mgu_if_type(typeclass *cls, inst *in,
+                                 const std::string &id, defun *qt) {
     type_id tid;
     tid.m_id = id;
     tid.m_path = cls->m_id.m_path;
@@ -1354,6 +1353,78 @@ std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
     }
 
     return ret;
+}
+
+type_infer::type_infer(defun &fun, classenv &cenv, funcenv &fenv)
+    : m_defun(fun), m_classenv(cenv), m_funcenv(fenv) {}
+
+bool typing(classenv &cenv, funcenv &fenv) {
+    for (auto &fun : fenv.m_defuns) {
+        type_infer ti(*(fun.second), cenv, fenv);
+        if (!ti.typing())
+            return false;
+    }
+
+    return true;
+}
+
+bool type_infer::typing() {
+    m_assump = m_defun.m_assump;
+
+    auto def = (ast_defun *)m_defun.m_ast;
+    shared_type t;
+    ast_expr *e;
+    for (auto &expr : def->m_exprs->m_exprs) {
+        t = typing(expr.get());
+        if (!t)
+            return false;
+        e = expr.get();
+    }
+
+    auto s = mgu(t, m_defun.m_ret);
+    if (!s) {
+        std::string msg = "type of return value is incompatible. expected \"" +
+                          m_defun.m_ret->to_str() + "\"";
+        TYPEERR(msg.c_str(), m_defun.m_module, def);
+
+        msg = "actually returned \"" + t->to_str() + "\"";
+        TYPEINFO(msg.c_str(), m_defun.m_module, e);
+        return false;
+    }
+
+    m_type = s->apply(m_defun.m_type);
+
+    m_defun.m_type->print();
+    std::cout << std::endl;
+
+    m_type->print();
+    std::cout << std::endl;
+
+    // TODO: parent's predicates
+
+    return true;
+}
+
+shared_type type_infer::typing(ast_expr *expr) {
+    switch (expr->m_exprtype) {
+    case ast_expr::EXPR_ID:
+        return typing_id((ast_expr_id *)expr);
+    default:
+        assert(false); // not yet implemented
+        break;
+    }
+
+    return nullptr;
+}
+
+shared_type type_infer::typing_id(ast_expr_id *expr) {
+    auto ret = m_assump.find(expr->m_id->m_id);
+    if (ret == m_assump.end()) {
+        TYPEERR("undefined variable is used", m_defun.m_module, expr);
+        return nullptr;
+    }
+
+    return ret->second;
 }
 
 std::string type_const::to_str() { return m_id.m_id; }

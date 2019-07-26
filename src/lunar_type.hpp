@@ -58,6 +58,8 @@ struct ast_instance;
 struct ast_pred;
 struct ast_defun;
 struct ast_interface;
+struct ast_expr;
+struct ast_expr_id;
 class module;
 class parser;
 class pred;
@@ -319,7 +321,7 @@ class substitution {
     std::map<type_var, shared_type> m_subst;
 };
 
-typedef std::shared_ptr<substitution> shared_subst;
+typedef std::unique_ptr<substitution> uniq_subst;
 
 // a predicate asserts that m_types are members of a class named m_id
 // e.g.
@@ -548,8 +550,8 @@ class classenv {
     bool simplify(std::vector<uniq_pred> &ps);
     bool reduce(std::vector<uniq_pred> &ps, int &idx);
     bool check_ifs_type(); // check type of interfaces
-    shared_subst mgu_if_type(typeclass *cls, inst *in, const std::string &id,
-                             defun *qt);
+    uniq_subst mgu_if_type(typeclass *cls, inst *in, const std::string &id,
+                           defun *qt);
 };
 
 class funcenv {
@@ -561,22 +563,35 @@ class funcenv {
 
     static std::unique_ptr<funcenv> make(const parser &ps);
 
+    friend class type_infer;
+    friend bool typing(classenv &cenv, funcenv &fenv);
+
   private:
     std::unordered_map<type_id, ptr_defun> m_defuns;
 };
 
-class typing {
+class type_infer {
   public:
-    typing(classenv &env) : m_classenv(env) {}
-    virtual ~typing() {}
+    type_infer(defun &fun, classenv &cenv, funcenv &fenv);
+    virtual ~type_infer() {}
+
+    bool typing();
 
   private:
+    uniq_subst m_sbst;
+    defun &m_defun;
+    classenv &m_classenv;
+    funcenv &m_funcenv;
+    shared_type m_type;
     std::vector<uniq_pred> m_preds;
     std::unordered_map<std::string, shared_type> m_assump;
     std::unordered_map<std::string, shared_kind> m_kind_constraint;
-    substitution m_sbst;
-    classenv &m_classenv;
+
+    shared_type typing(ast_expr *expr);
+    shared_type typing_id(ast_expr_id *expr);
 };
+
+bool typing(classenv &cenv, funcenv &fenv);
 
 } // namespace lunar
 

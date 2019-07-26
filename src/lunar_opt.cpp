@@ -39,8 +39,8 @@ void opt::print_help(char *argv[]) {
     std::cerr << argv[0] << "\n    -i,--ir:\tprint intermediate language\n"
               << "    -l,--llvm:\tprint LLVM IR\n"
               << "    -a,--ast:\tprint AST\n"
-              << "    -h,--help:\tshow this help"
-              << "    -c,--env:\tshow class and function environment"
+              << "    -h,--help:\tshow this help\n"
+              << "    -e,--env:\tshow class and function environment"
               << std::endl;
 }
 
