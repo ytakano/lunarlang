@@ -1356,16 +1356,15 @@ std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
 }
 
 type_infer::type_infer(defun &fun, classenv &cenv, funcenv &fenv)
-    : m_defun(fun), m_classenv(cenv), m_funcenv(fenv) {
+    : m_defun(fun), m_classenv(cenv), m_funcenv(fenv), m_de_bruijn_idx(0) {
     // initialize a storage for variable names
-    auto ids = std::make_unique<std::unordered_multiset<std::string>>();
-    m_ids = ids.get(); // variables in current scope
-    m_block_ids.push_back(std::move(ids));
+    m_block_ids.push_back(std::vector<std::string>());
+    m_ids = m_block_ids.rbegin();
 
     // initialize assumption
     for (auto &assump : fun.m_assump) {
-        m_assump[assump.first].push_back(assump.second);
-        m_ids->insert(assump.first);
+        auto id = gensym_for(assump.first);
+        m_assump[id].push_back(assump.second);
     }
 
     for (const qual *q = &fun; q != nullptr; q = q->m_parent) {
@@ -1395,6 +1394,45 @@ type_infer::type_infer(defun &fun, classenv &cenv, funcenv &fenv)
 
     // AST of function definition
     m_ast = (ast_defun *)fun.m_ast;
+}
+
+std::string type_infer::gensym_for(const std::string &var) {
+    std::string ret = boost::lexical_cast<std::string>(m_de_bruijn_idx++);
+
+    m_ids->push_back(ret);
+    m_idx2name[ret] = var;
+    m_name2idx[var].push_back(ret);
+
+    return ret;
+}
+
+std::string type_infer::name2idx(const std::string &var) {
+    auto it = m_name2idx.find(var);
+    if (it == m_name2idx.end()) {
+        return "";
+    }
+
+    return *it->second.rbegin();
+}
+
+void type_infer::pop_variables() {
+    assert(!m_block_ids.empty());
+
+    for (auto it = (*m_ids).rbegin(); it != (*m_ids).rend(); ++it) {
+        // remove bindings of de Bruijn index to variable name
+        auto name = m_idx2name[*it];
+        m_idx2name.erase(name);
+
+        // remove bindings of variable name to de Bruijn index
+        auto &v = m_name2idx[name];
+        v.pop_back();
+        if (v.empty()) {
+            m_name2idx.erase(name);
+        }
+    }
+
+    m_block_ids.pop_back();
+    m_ids = m_block_ids.rbegin();
 }
 
 bool typing(classenv &cenv, funcenv &fenv) {
@@ -1453,7 +1491,8 @@ shared_type type_infer::typing(ast_expr *expr) {
 }
 
 shared_type type_infer::typing_id(ast_expr_id *expr) {
-    auto ret = m_assump.find(expr->m_id->m_id);
+    auto id = name2idx(expr->m_id->m_id);
+    auto ret = m_assump.find(id);
     if (ret == m_assump.end()) {
         TYPEERR("undefined variable is used", m_defun.m_module, expr);
         return nullptr;

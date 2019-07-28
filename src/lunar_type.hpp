@@ -586,17 +586,39 @@ class type_infer {
     std::vector<uniq_pred> m_preds;
     uniq_subst m_sbst;
     ast_defun *m_ast;
+    uint64_t m_de_bruijn_idx;
 
     // assumpsion: variable names to types
     std::unordered_map<std::string, std::vector<shared_type>> m_assump;
 
+    // constraints of kind
     std::unordered_map<std::string, shared_kind> m_tvar_constraint;
-    std::vector<std::unique_ptr<std::unordered_multiset<std::string>>>
-        m_block_ids;                             // variables in function
-    std::unordered_multiset<std::string> *m_ids; // variables in current scope
+
+    // variable names in function
+    // storead variable name as de Bruijn index
+    std::vector<std::vector<std::string>> m_block_ids;
+
+    // variable names in current scope
+    // storead variable name as de Bruijn index
+    std::vector<std::vector<std::string>>::reverse_iterator m_ids;
+
+    // de Bruijn index to original variable name
+    std::unordered_map<std::string, std::string> m_idx2name;
+
+    // original variable name to de Bruijn index
+    std::unordered_map<std::string, std::vector<std::string>> m_name2idx;
 
     shared_type typing(ast_expr *expr);
     shared_type typing_id(ast_expr_id *expr);
+
+    // generate de Bruijn index for var, and returned the generated index
+    std::string gensym_for(const std::string &var);
+
+    // return de Bruijn index of var
+    // if no variable name is found, return ""
+    std::string name2idx(const std::string &var);
+
+    void pop_variables();
 };
 
 bool typing(classenv &cenv, funcenv &fenv);
