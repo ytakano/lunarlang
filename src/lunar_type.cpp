@@ -1482,6 +1482,8 @@ shared_type type_infer::typing(ast_expr *expr) {
     switch (expr->m_exprtype) {
     case ast_expr::EXPR_ID:
         return typing_id((ast_expr_id *)expr);
+    case ast_expr::EXPR_BINEXPR:
+        return typing_dotexpr((ast_binexpr *)expr);
     default:
         assert(false); // not yet implemented
         break;
@@ -1499,6 +1501,66 @@ shared_type type_infer::typing_id(ast_expr_id *expr) {
     }
 
     return *(ret->second.rbegin());
+}
+
+shared_type type_infer::typing_dotexpr(ast_binexpr *expr) {
+    std::list<std::string> ids;
+
+    // the right hand side must be ID
+    if (expr->m_right->m_exprtype != ast_expr::EXPR_ID) {
+        TYPEERR("must be identifier", m_defun.m_module, expr->m_right);
+        return nullptr;
+    }
+
+    auto rhs = (ast_expr_id *)expr->m_right.get();
+    ids.push_back(rhs->m_id->m_id);
+
+    return typing_dotexpr(expr->m_right.get(), ids);
+}
+
+shared_type type_infer::typing_dotexpr(ast_expr *expr,
+                                       std::list<std::string> &ids) {
+    switch (expr->m_exprtype) {
+    case ast_expr::EXPR_ID: {
+        auto ast = (ast_expr_id *)expr;
+        auto id = name2idx(ast->m_id->m_id);
+        auto it = m_assump.find(id);
+        if (it == m_assump.end()) {
+            // not variable name
+            ids.push_front(ast->m_id->m_id);
+
+            // TODO: function or user defined type generation
+            // function
+
+            // struct
+            // union
+        }
+    }
+    case ast_expr::EXPR_BINEXPR: {
+        auto bin = (ast_binexpr *)expr;
+
+        // the right hand side must be ID
+        if (bin->m_right->m_exprtype != ast_expr::EXPR_ID) {
+            TYPEERR("must be identifier", m_defun.m_module, bin->m_right);
+            return nullptr;
+        }
+
+        auto rhs = (ast_expr_id *)bin->m_right.get();
+        ids.push_front(rhs->m_id->m_id);
+
+        return typing_dotexpr(bin->m_left.get(), ids);
+    }
+    default:
+        break;
+    }
+
+    auto lhs = typing(expr);
+    if (!lhs)
+        return nullptr;
+
+    // TODO: resolve type in struct or union
+
+    return nullptr;
 }
 
 std::string type_const::to_str() { return m_id.m_id; }

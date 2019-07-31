@@ -60,6 +60,7 @@ struct ast_defun;
 struct ast_interface;
 struct ast_expr;
 struct ast_expr_id;
+struct ast_binexpr;
 class module;
 class parser;
 class pred;
@@ -610,6 +611,8 @@ class type_infer {
 
     shared_type typing(ast_expr *expr);
     shared_type typing_id(ast_expr_id *expr);
+    shared_type typing_dotexpr(ast_binexpr *expr);
+    shared_type typing_dotexpr(ast_expr *expr, std::list<std::string> &ids);
 
     // generate de Bruijn index for var, and returned the generated index
     std::string gensym_for(const std::string &var);
