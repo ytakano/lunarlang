@@ -186,7 +186,7 @@ func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
 $EXPR := $EXPR0 $EXPR' | $EXPR0 $EXPR' $INFIX+ $EXPR
 $EXPR0 := $PREFIX? $EXPR0'
 $EXPR0' := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
-           { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
+           { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL | $MALLOC
 $EXPR' := ∅ | [ $EXPR ] $EXPR' | $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
 $EXPRS_ := $EXPR | $EXPR , $EXPR
@@ -216,6 +216,14 @@ $LET := let $DEFVARS $IN?
 $DEFVAR := $ID $TYPESPEC? = $EXPR
 $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
 $IN := in $EXPR
+```
+
+### New
+
+```
+$MALLOC = $NEW | $SHARED
+$NEW = new $DOTID $APPLY
+$SHARED = shared $DOTID $APPLY
 ```
 
 ### Dict
@@ -269,4 +277,155 @@ then "/home/usr/.lunar/include/bar/buzz.lunar" is looked up finally.
 
 ```
 bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | void
+```
+
+## References and Data Creation
+
+### Constrained Reference
+
+Data on stack is created as follows.
+
+```
+func expr() {
+    let v = u32(10)    // CRef<u32>
+    let w = bool(true) // CRef<bool>
+}
+```
+
+```
+struct foo {
+    a : u32
+    b : bool
+}
+
+func expr() {
+    let v = foo(10, true) // CRef<10>
+}
+```
+
+```
+struct foo<`t> {
+    a : `t
+    b : bool
+}
+
+func expr() {
+    let v = foo(20, false) // CRef<foo<s64>>
+}
+```
+
+```
+union foo {
+    a
+    b : true
+}
+
+func expr() {
+    let v = a       // a of CRef<foo>
+    let w = b(true) // b of CRef<foo>
+}
+```
+
+```
+struct foo {
+    a : u32
+    b : bool
+}
+
+union bar {
+    L1
+    L2 : foo
+}
+
+func expr() {
+    let v = L2(10, true) // L2 of CRef<bar>
+}
+```
+
+```
+union foo {
+    a
+    b : bool
+}
+
+union bar {
+    c
+    d : foo
+}
+
+func expr() {
+    let v = d(b(false)) // CRef<bar>
+}
+```
+
+### Linear Type and It's Reference
+
+Linear data type, which is stored on heap, is created as follows.
+
+```
+func expr() {
+    let v = new u32(10) // Lin<u32>
+}
+```
+
+```
+struct foo {
+    a : LinRef<u32>  // Lin<u32> or null
+}
+```
+
+```
+struct foo {
+    a : u32
+}
+
+struct bar {
+    b : LinRef<foo>
+}
+
+func expr() {
+    let v = new bar(foo())
+    v.a
+}
+```
+
+Linear type contained by struct or union cannot be moved.
+```
+struct foo {
+    a : Lin<u32>
+}
+
+func expr() {
+    let v = new foo(new u32(10))
+    let w = v.a // error
+}
+```
+
+### Shared Reference
+
+Shared data type, which is stored on heap, is created as follows.
+
+```
+func expr() {
+    let v = shared u32(10) // Shared<u32>
+}
+```
+
+```
+struct foo {
+    a : SharedRef<u32> // Shared<u32> or Null
+}
+```
+
+## Pattern Match
+
+TODO:
+```
+struct foo {
+    a : LinRef<u32> // Lin<u32> or Null
+}
+
+func expr() {
+    let x = new foo(new u32(10)) // Lin<foo>
+}
 ```

@@ -1223,7 +1223,7 @@ ptr_ast_prefix module::parse_prefix() {
 
 // $EXPR0 := $PREFIX? $EXPR0'
 // $EXPR0' := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
-//           { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
+//           { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL | $MALLOC
 ptr_ast_expr module::parse_expr0() {
     auto prefix = parse_prefix();
     if (prefix)
@@ -1296,6 +1296,16 @@ ptr_ast_expr module::parse_expr0() {
         ret->m_column = id->m_column;
         ret->m_prefix = std::move(prefix);
         return ret;
+    } else if (id->m_id == "new" || id->m_id == "shared") {
+        auto ret = parse_malloc(id->m_id == "new" ? ast_malloc::MEM_NEW
+                                                  : ast_malloc::MEM_SHARED);
+        if (!ret)
+            return nullptr;
+
+        ret->m_line = id->m_line;
+        ret->m_column = id->m_column;
+        ret->m_prefix = std::move(prefix);
+        return ret;
     } else {
         // $ID
         auto ret = std::make_unique<ast_expr_id>();
@@ -1307,6 +1317,24 @@ ptr_ast_expr module::parse_expr0() {
     }
 
     return nullptr;
+}
+
+ptr_ast_malloc module::parse_malloc(ast_malloc::MEM memtype) {
+    SPACEPLUS();
+
+    auto ret = std::make_unique<ast_malloc>(memtype);
+
+    ret->m_id = parse_dotid();
+    if (!ret->m_id)
+        return nullptr;
+
+    parse_spaces();
+
+    ret->m_args = parse_apply();
+    if (!ret->m_args)
+        return nullptr;
+
+    return ret;
 }
 
 ptr_ast_num module::parse_num() {
@@ -1560,8 +1588,16 @@ ptr_ast_expr module::parse_exprp(ptr_ast_expr lhs) {
         return parse_exprp(std::move(index));
     }
     case '(': {
-        auto apply = parse_apply(std::move(lhs));
-        return parse_exprp(std::move(apply));
+        auto ret = std::make_unique<ast_apply>();
+        ret->m_args = parse_apply();
+        if (!ret->m_args)
+            return nullptr;
+
+        ret->m_line = lhs->m_line;
+        ret->m_column = lhs->m_column;
+        ret->m_func = std::move(lhs);
+
+        return parse_exprp(std::move(ret));
     }
     }
 
@@ -1569,11 +1605,8 @@ ptr_ast_expr module::parse_exprp(ptr_ast_expr lhs) {
 }
 
 // $APPLY := ( $EXPRS_? )
-ptr_ast_apply module::parse_apply(ptr_ast_expr fun) {
-    auto ret = std::make_unique<ast_apply>();
-    ret->m_line = fun->m_line;
-    ret->m_column = fun->m_column;
-    ret->m_func = std::move(fun);
+ptr_ast_exprs module::parse_apply() {
+    auto ret = std::make_unique<ast_exprs>();
 
     PARSECHAR('(', m_parsec);
     parse_spaces();
@@ -1588,7 +1621,7 @@ ptr_ast_apply module::parse_apply(ptr_ast_expr fun) {
         if (!e)
             return nullptr;
 
-        ret->m_args.push_back(std::move(e));
+        ret->m_exprs.push_back(std::move(e));
 
         parse_spaces();
         PTRY(m_parsec, c, m_parsec.character(')'));
@@ -2589,11 +2622,25 @@ void ast_expr_id::print() const {
     std::cout << "\"id\":\"" << m_id->m_id << "\"}";
 }
 
+void ast_malloc::print() const {
+    std::cout << "{\"";
+    if (m_memtype == MEM_NEW)
+        std::cout << "new";
+    else
+        std::cout << "shared";
+
+    std::cout << "\":{\"id\":";
+    m_id->print();
+    std::cout << ",\"args\":";
+    m_args->print();
+    std::cout << "}}";
+}
+
 void ast_apply::print() const {
     std::cout << "{\"apply\":{\"func\":";
     m_func->print();
     std::cout << ",\"arguemnts\":";
-    PRINTLIST(m_args);
+    m_args->print();
     std::cout << "}}";
 }
 

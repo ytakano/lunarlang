@@ -1529,11 +1529,10 @@ shared_type type_infer::typing_dotexpr(ast_expr *expr,
             // not variable name
             ids.push_front(ast->m_id->m_id);
 
-            // TODO: function or user defined type generation
-            // function
+            // TODO: function or data creation
+            // function type
 
-            // struct
-            // union
+            // struct, union, or primitive types
         }
     }
     case ast_expr::EXPR_BINEXPR: {

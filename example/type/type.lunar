@@ -1,4 +1,4 @@
-import vec
+//import vec
 
 union t0 {
     a: bool
@@ -8,6 +8,7 @@ union t0 {
 func mkt0() {
     let a = a(false) // CRef<a@t0>
     let b = b(10)    // CRef<b@t0>
+    let c = new t0(true, 10)
 }
 
 struct t1 {

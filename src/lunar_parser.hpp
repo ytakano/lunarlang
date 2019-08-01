@@ -390,6 +390,8 @@ struct ast_expr : public ast {
         EXPR_DICT,
         EXPR_PARENTHESIS,
         EXPR_ID,
+        EXPR_NEW,
+        EXPR_SHARED,
         EXPRS,
     };
 
@@ -407,6 +409,24 @@ struct ast_exprs : public ast_expr {
     std::vector<ptr_ast_expr> m_exprs;
 };
 
+struct ast_malloc : public ast_expr {
+    enum MEM {
+        MEM_NEW,   // linear type
+        MEM_SHARED // shared type
+    };
+
+    ast_malloc(MEM memtype) : m_memtype(memtype) { m_exprtype = EXPR_NEW; }
+    virtual ~ast_malloc() {}
+
+    virtual void print() const;
+
+    ptr_ast_dotid m_id;
+    ptr_ast_exprs m_args;
+    MEM m_memtype;
+};
+
+typedef std::unique_ptr<ast_malloc> ptr_ast_malloc;
+
 struct ast_expr_id : public ast_expr {
     ast_expr_id() { m_exprtype = EXPR_ID; }
     virtual ~ast_expr_id() {}
@@ -423,7 +443,7 @@ struct ast_apply : public ast_expr {
     virtual void print() const;
 
     ptr_ast_expr m_func;
-    std::vector<ptr_ast_expr> m_args;
+    ptr_ast_exprs m_args;
 };
 
 typedef std::unique_ptr<ast_apply> ptr_ast_apply;
@@ -801,7 +821,7 @@ class module {
     ptr_ast_expr parse_expr0();
     ptr_ast_expr parse_expr();
     ptr_ast_expr parse_exprp(ptr_ast_expr lhs);
-    ptr_ast_apply parse_apply(ptr_ast_expr fun);
+    ptr_ast_exprs parse_apply();
     ptr_ast_if parse_if();
     ptr_ast_let parse_let();
     ptr_ast_defvar parse_defvar();
@@ -822,6 +842,7 @@ class module {
     ptr_ast_union parse_union();
     ptr_ast_import parse_import();
     ptr_ast_tvar parse_tvarkind();
+    ptr_ast_malloc parse_malloc(ast_malloc::MEM memtype);
     bool parse_st_un(const char *str);
     void parse_spaces();
     void parse_spaces_sep();
