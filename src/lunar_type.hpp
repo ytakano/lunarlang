@@ -571,6 +571,25 @@ class funcenv {
     std::unordered_map<type_id, ptr_defun> m_defuns;
 };
 
+class typeenv {
+  public:
+    typeenv() {}
+    virtual ~typeenv() {}
+
+    static std::unique_ptr<typeenv> make(const parser &ps);
+
+    friend class type_infer;
+    friend bool typing(classenv &cenv, funcenv &fenv);
+
+  private:
+    struct typeinfo {
+        ptr_qual_type m_type;
+        ast_type *m_ast;
+    };
+
+    std::unordered_map<type_id, typeinfo> m_types;
+};
+
 class type_infer {
   public:
     type_infer(defun &fun, classenv &cenv, funcenv &fenv);

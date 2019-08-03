@@ -411,8 +411,9 @@ struct ast_exprs : public ast_expr {
 
 struct ast_malloc : public ast_expr {
     enum MEM {
-        MEM_NEW,   // linear type
-        MEM_SHARED // shared type
+        MEM_NEW,    // linear type
+        MEM_SHARED, // shared type
+        MEM_STACK,  // stack
     };
 
     ast_malloc(MEM memtype) : m_memtype(memtype) { m_exprtype = EXPR_NEW; }
@@ -421,6 +422,7 @@ struct ast_malloc : public ast_expr {
     virtual void print() const;
 
     ptr_ast_dotid m_id;
+    ptr_ast_types m_types;
     ptr_ast_exprs m_args;
     MEM m_memtype;
 };

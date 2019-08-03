@@ -27,8 +27,8 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 
 ```
 $RESERVED := class | type | if | let | instance | require | func |
-             match | module | import | return | as | here |
-             infix | $INFIX
+             match | module | import | return | as | here | new |
+             shared | stack | infix | $INFIX
 ```
 
 ## Identifier
@@ -221,9 +221,10 @@ $IN := in $EXPR
 ### New
 
 ```
-$MALLOC = $NEW | $SHARED
-$NEW = new $DOTID $APPLY
-$SHARED = shared $DOTID $APPLY
+$MALLOC = $NEW | $SHARED | $STACK
+$NEW = new $DOTID <$TYPES>? $APPLY
+$SHARED = shared $DOTID <$TYPES>? $APPLY
+$STACK = stack $DOTID <$TYPES>? $APPLY
 ```
 
 ### Dict
@@ -292,6 +293,15 @@ func expr() {
 }
 ```
 
+or
+
+```
+func expr() {
+    let v = stack u32(10)    // CRef<u32>
+    let w = stack bool(true) // CRef<bool>
+}
+```
+
 ```
 struct foo {
     a : u32
@@ -303,6 +313,21 @@ func expr() {
 }
 ```
 
+or
+
+```
+struct foo {
+    a : u32
+    b : bool
+}
+
+func expr() {
+    let v = stack foo(10, true) // CRef<10>
+}
+```
+
+If you want to specify types for struct or unin, use "stack" operator.
+
 ```
 struct foo<`t> {
     a : `t
@@ -311,6 +336,17 @@ struct foo<`t> {
 
 func expr() {
     let v = foo(20, false) // CRef<foo<s64>>
+}
+```
+
+```
+struct foo<`t> {
+    a : `t
+    b : bool
+}
+
+func expr() {
+    let v = stack foo<u32>(20, false) // CRef<foo<u32>>
 }
 ```
 
@@ -358,7 +394,25 @@ func expr() {
 }
 ```
 
-### Linear Type and It's Reference
+```
+struct foo {
+    a : u32
+}
+
+struct bar {
+    b : foo
+    c : bool
+}
+
+func expr() {
+    let v = bar((20), true)     // OK
+    let w = bar(foo(20), false) // OK
+    let z = foo(30)
+    let x = bar(z, true) // OK
+}
+```
+
+### Linear Type and Reference
 
 Linear data type, which is stored on heap, is created as follows.
 
@@ -384,7 +438,7 @@ struct bar {
 }
 
 func expr() {
-    let v = new bar(foo())
+    let v = new bar(new foo(20))
     v.a
 }
 ```
@@ -401,7 +455,7 @@ func expr() {
 }
 ```
 
-### Shared Reference
+### Shared Type and Reference
 
 Shared data type, which is stored on heap, is created as follows.
 

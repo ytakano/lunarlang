@@ -1296,9 +1296,18 @@ ptr_ast_expr module::parse_expr0() {
         ret->m_column = id->m_column;
         ret->m_prefix = std::move(prefix);
         return ret;
-    } else if (id->m_id == "new" || id->m_id == "shared") {
-        auto ret = parse_malloc(id->m_id == "new" ? ast_malloc::MEM_NEW
-                                                  : ast_malloc::MEM_SHARED);
+    } else if (id->m_id == "new" || id->m_id == "shared" ||
+               id->m_id == "stack") {
+        ast_malloc::MEM memtype;
+        if (id->m_id == "new") {
+            memtype = ast_malloc::MEM_NEW;
+        } else if (id->m_id == "shared") {
+            memtype = ast_malloc::MEM_SHARED;
+        } else {
+            memtype = ast_malloc::MEM_STACK;
+        }
+
+        auto ret = parse_malloc(memtype);
         if (!ret)
             return nullptr;
 
@@ -1319,6 +1328,7 @@ ptr_ast_expr module::parse_expr0() {
     return nullptr;
 }
 
+// $DOTID <$TYPES>? $APPLY
 ptr_ast_malloc module::parse_malloc(ast_malloc::MEM memtype) {
     SPACEPLUS();
 
@@ -1326,6 +1336,11 @@ ptr_ast_malloc module::parse_malloc(ast_malloc::MEM memtype) {
 
     ret->m_id = parse_dotid();
     if (!ret->m_id)
+        return nullptr;
+
+    parse_spaces();
+
+    if (!parse_arg_types(ret->m_types))
         return nullptr;
 
     parse_spaces();

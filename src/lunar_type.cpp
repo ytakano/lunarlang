@@ -1355,6 +1355,12 @@ std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
     return ret;
 }
 
+std::unique_ptr<typeenv> make(const parser &ps) {
+    auto ret = std::make_unique<typeenv>();
+    // TODO:
+    return ret;
+}
+
 type_infer::type_infer(defun &fun, classenv &cenv, funcenv &fenv)
     : m_defun(fun), m_classenv(cenv), m_funcenv(fenv), m_de_bruijn_idx(0) {
     // initialize a storage for variable names
