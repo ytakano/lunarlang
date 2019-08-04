@@ -160,9 +160,19 @@ static shared_kind make_kind(unsigned int numtargs) {
     }
 }
 
-shared_type type_const::make(const type_id &id, unsigned int numtargs,
-                             CTYPE ctype) {
-    auto ret = std::shared_ptr<type_const>(new type_const(CTYPE_PRIMTIVE));
+uint16_t kind::num_args(const ast_kind *ptr) {
+    uint16_t n = 0; // the number of arguments
+    for (auto k = ptr; k->m_asttype != ast::AST_KSTAR;
+         k = ((ast_kfun *)k)->m_right.get()) {
+        assert(k->m_asttype == ast::AST_KFUN);
+        assert(((ast_kfun *)k)->m_right->m_asttype == ast::AST_KSTAR);
+        n++;
+    }
+    return n;
+}
+
+shared_type type_const::make(const type_id &id, unsigned int numtargs) {
+    auto ret = std::shared_ptr<type_const>(new type_const());
 
     ret->m_id = id;
     ret->m_kind = make_kind(numtargs);
@@ -202,7 +212,7 @@ static inline shared_type mk_tuple(unsigned int num) {
 static inline shared_type mk_func(unsigned int num) {
     type_id id;
     id.m_id = "func";
-    return type_const::make(id, num, type_const::CTYPE_FUNC);
+    return type_const::make(id, num);
 }
 
 // make natural number type
@@ -211,7 +221,7 @@ static inline shared_type mk_func(unsigned int num) {
 static inline shared_type mk_nat(const std::string &num) {
     type_id id;
     id.m_id = num;
-    return type_const::make(id, 0, type_const::CTYPE_PRIMTIVE);
+    return type_const::make(id, 0);
 }
 
 #define APP_TYPES(RET, TS)                                                     \
@@ -799,14 +809,8 @@ bool classenv::add_class(const module *ptr_mod, const ast_class *ptr) {
 
     // get the number of arguments of the class
     if (ptr->m_tvar->m_kind) {
-        int n = 0; // the number of arguments
-        for (auto k = ptr->m_tvar->m_kind.get(); k->m_asttype != ast::AST_KSTAR;
-             k = ((ast_kfun *)k)->m_right.get()) {
-            assert(k->m_asttype == ast::AST_KFUN);
-            assert(((ast_kfun *)k)->m_right->m_asttype == ast::AST_KSTAR);
-            n++;
-        }
-        auto v = type_var::make(ptr->m_tvar->m_id->m_id, n);
+        auto nargs = kind::num_args(ptr->m_tvar->m_kind.get());
+        auto v = type_var::make(ptr->m_tvar->m_id->m_id, nargs);
         cls->m_tvar_constraint.push_back(v);
     }
 
@@ -1355,9 +1359,99 @@ std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
     return ret;
 }
 
-std::unique_ptr<typeenv> make(const parser &ps) {
+std::shared_ptr<typeenv::typeinfo>
+typeenv::make_typeinfo(const module *ptr_mod, const ast_userdef *ptr_ast) {
+    auto ret = std::make_shared<typeinfo>();
+
+    ret->m_ast = ptr_ast;
+    ret->m_module = ptr_mod;
+
+    type_id id;
+    id.m_id = ptr_ast->m_id->m_id;
+    id.m_path = ptr_mod->get_filename();
+
+    unsigned int tn = ptr_ast->m_tvars ? ptr_ast->m_tvars->m_args.size() : 0;
+    ret->m_type.m_type = type_const::make(id, tn);
+
+    std::unordered_set<std::string> tvars;
+    // type arguments
+    if (ptr_ast->m_tvars) {
+        for (auto &arg : ptr_ast->m_tvars->m_args) {
+            // check kind
+            auto nargs = arg->m_kind ? kind::num_args(arg->m_kind.get()) : 0;
+            if (nargs != 0) {
+                // kind must be *
+                TYPEERR("kind must be *", ptr_mod, arg->m_kind);
+                return nullptr;
+            }
+
+            // must not use same type variable name
+            if (HASKEY(tvars, arg->m_id->m_id)) {
+                TYPEERR("same argument name is used", ptr_mod, arg);
+                return nullptr;
+            }
+            tvars.insert(arg->m_id->m_id);
+
+            auto ta = type_var::make(arg->m_id->m_id, make_kind(0));
+            ret->m_args.push_back(ta);
+
+            // apply the argument
+            ret->m_type.m_type = type_app::make(ret->m_type.m_type, ta);
+        }
+    }
+
+    // predicates
+    if (ptr_ast->m_preds) {
+        for (auto &p : ptr_ast->m_preds->m_preds) {
+            // make predicate
+            auto pd = pred::make(ptr_mod, p.get());
+            if (!pd)
+                return nullptr;
+
+            // the argument must be a type variable whose kind is *
+            if (pd->m_arg->m_subtype != type::TYPE_VAR) {
+                TYPEERR("the predicate must be a type variable whose "
+                        "kind is *",
+                        ptr_mod, p);
+                return nullptr;
+            }
+
+            // the predicate's argument must be
+            // in the type variable arguments
+            if (!HASKEY(tvars, ((type_var *)pd->m_arg.get())->get_id())) {
+                TYPEERR("undefined type variable is used", ptr_mod, p->m_arg);
+                return nullptr;
+            }
+
+            ret->m_type.m_preds.push_back(std::move(pd));
+        }
+    }
+
+    // members
+    for (auto &mem : ptr_ast->m_members->m_vars) {
+        // TODO:
+
+        // only a type variable, which is defined as an argument,
+        // is permitted
+    }
+
+    return ret;
+}
+
+std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
     auto ret = std::make_unique<typeenv>();
-    // TODO:
+    for (auto &m : ps.get_modules()) {
+        for (auto &s : m.second->get_struct()) {
+            auto info = make_typeinfo(m.second.get(), s.second.get());
+
+            type_id id;
+            id.m_id = s.second->m_id->m_id;
+            id.m_path = m.second->get_filename();
+            ret->m_types[id] = info;
+        }
+
+        // TODO: union
+    }
     return ret;
 }
 

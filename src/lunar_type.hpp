@@ -52,6 +52,7 @@ template <> struct std::hash<lunar::type_id> {
 namespace lunar {
 
 struct ast;
+struct ast_kind;
 struct ast_type;
 struct ast_class;
 struct ast_instance;
@@ -61,6 +62,7 @@ struct ast_interface;
 struct ast_expr;
 struct ast_expr_id;
 struct ast_binexpr;
+struct ast_userdef;
 class module;
 class parser;
 class pred;
@@ -77,6 +79,8 @@ class kind {
   public:
     kind() {}
     virtual ~kind(){};
+
+    static uint16_t num_args(const ast_kind *ptr);
 
     virtual void print() = 0;
     virtual std::string to_str() = 0;
@@ -160,15 +164,8 @@ class type_const : public type {
     virtual void print();
     virtual std::string to_str();
 
-    enum CTYPE {
-        CTYPE_PRIMTIVE, // primitive type
-        CTYPE_STRUCT,   // struct type
-        CTYPE_UNION,    // union type
-        CTYPE_FUNC,     // function type
-    };
-
     bool operator==(const type_const &lhs) const {
-        return m_ctype == lhs.m_ctype && m_id == lhs.m_id &&
+        return m_id == lhs.m_id &&
                cmp_kind(m_kind.get(), lhs.m_kind.get()) == 0;
     }
 
@@ -179,14 +176,12 @@ class type_const : public type {
 
     // id: type name
     // numtargs: the number of type arguments
-    static shared_type make(const type_id &id, unsigned int numtargs,
-                            CTYPE ctype = CTYPE_PRIMTIVE);
+    static shared_type make(const type_id &id, unsigned int numtargs);
 
   protected:
-    type_const(CTYPE ctype) : m_ctype(ctype) { m_subtype = TYPE_CONST; }
+    type_const() { m_subtype = TYPE_CONST; }
     type_id m_id; // identifier of type (e.g. num, bool)
     shared_kind m_kind;
-    CTYPE m_ctype;
 };
 
 typedef std::shared_ptr<type_const> shared_type_const;
@@ -583,11 +578,18 @@ class typeenv {
 
   private:
     struct typeinfo {
-        ptr_qual_type m_type;
-        ast_type *m_ast;
+        qual_type m_type;
+        std::vector<shared_type> m_args;
+        std::vector<shared_type> m_members;
+        std::unordered_map<std::string, shared_type> m_id2mem;
+        const ast_type *m_ast;
+        const module *m_module;
     };
 
-    std::unordered_map<type_id, typeinfo> m_types;
+    static std::shared_ptr<typeinfo> make_typeinfo(const module *ptr_mod,
+                                                   const ast_userdef *ptr_ast);
+
+    std::unordered_map<type_id, std::shared_ptr<typeinfo>> m_types;
 };
 
 class type_infer {

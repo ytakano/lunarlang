@@ -656,11 +656,11 @@ struct ast_members : public ast {
 
 typedef std::unique_ptr<ast_members> ptr_ast_members;
 
-struct ast_struct : public ast_type {
-    ast_struct() { m_type = TYPE_STRUCT; }
-    virtual ~ast_struct() {}
+struct ast_userdef : public ast_type {
+    ast_userdef() {}
+    virtual ~ast_userdef() {}
 
-    virtual void print() const;
+    virtual void print() const = 0;
     virtual const ast_id *get_ast_id() { return m_id.get(); }
 
     ptr_ast_id m_id;
@@ -669,19 +669,20 @@ struct ast_struct : public ast_type {
     ptr_ast_members m_members;
 };
 
+struct ast_struct : public ast_userdef {
+    ast_struct() { m_type = TYPE_STRUCT; }
+    virtual ~ast_struct() {}
+
+    virtual void print() const;
+};
+
 typedef std::unique_ptr<ast_struct> ptr_ast_struct;
 
-struct ast_union : public ast_type {
+struct ast_union : public ast_userdef {
     ast_union() { m_type = TYPE_UNION; }
     virtual ~ast_union() {}
 
     virtual void print() const;
-    virtual const ast_id *get_ast_id() { return m_id.get(); }
-
-    ptr_ast_id m_id;
-    ptr_ast_tvars m_tvars; // type arguments
-    ptr_ast_preds m_preds; // requirements
-    ptr_ast_members m_members;
 };
 
 typedef std::unique_ptr<ast_union> ptr_ast_union;
@@ -776,6 +777,10 @@ class module {
 
     const std::unordered_map<std::string, ptr_ast_defun> &get_funcs() const {
         return m_id2defun;
+    }
+
+    const std::unordered_map<std::string, ptr_ast_struct> &get_struct() const {
+        return m_id2struct;
     }
 
   private:
