@@ -361,38 +361,43 @@ std::unique_ptr<defun> defun::make(const module *ptr_mod, const qual *parent,
         }
     }
 
-    // type of function
-    auto ft = mk_func(ast->m_args->m_args.size() + 1);
+    shared_type ft;
+    if (ast->m_args) {
+        // type of function
+        ft = mk_func(ast->m_args->m_args.size() + 1);
 
-    // types of arguments
-    std::unordered_set<std::string> ids;
-    star ks;
-    for (auto &arg : ast->m_args->m_args) {
-        if (HASKEY(ids, arg->m_id->m_id)) {
-            TYPEERR("same argument name is used", ptr_mod, arg->m_id);
-            return nullptr;
-        }
-
-        ids.insert(arg->m_id->m_id);
-
-        shared_type t;
-        if (arg->m_type) {
-            t = type::make(ptr_mod, arg->m_type.get());
-            if (!t)
-                return nullptr;
-
-            if (cmp_kind(t->get_kind().get(), &ks) != 0) {
-                TYPEERR("not normal type", ptr_mod, arg->m_type);
+        // types of arguments
+        std::unordered_set<std::string> ids;
+        star ks;
+        for (auto &arg : ast->m_args->m_args) {
+            if (HASKEY(ids, arg->m_id->m_id)) {
+                TYPEERR("same argument name is used", ptr_mod, arg->m_id);
                 return nullptr;
             }
-        } else {
-            t = type_var::make(gensym(), 0);
-        }
 
-        ret->m_args.push_back(
-            std::pair<std::string, shared_type>(arg->m_id->m_id, t));
-        ret->m_assump[arg->m_id->m_id] = t;
-        ft = type_app::make(ft, t);
+            ids.insert(arg->m_id->m_id);
+
+            shared_type t;
+            if (arg->m_type) {
+                t = type::make(ptr_mod, arg->m_type.get());
+                if (!t)
+                    return nullptr;
+
+                if (cmp_kind(t->get_kind().get(), &ks) != 0) {
+                    TYPEERR("not normal type", ptr_mod, arg->m_type);
+                    return nullptr;
+                }
+            } else {
+                t = type_var::make(gensym(), 0);
+            }
+
+            ret->m_args.push_back(
+                std::pair<std::string, shared_type>(arg->m_id->m_id, t));
+            ret->m_assump[arg->m_id->m_id] = t;
+            ft = type_app::make(ft, t);
+        }
+    } else {
+        ft = mk_func(1);
     }
 
     // type of return value
@@ -1359,6 +1364,29 @@ std::unique_ptr<funcenv> funcenv::make(const parser &ps) {
     return ret;
 }
 
+bool typeenv::check_tvar(type *ptr,
+                         const std::unordered_set<std::string> &tvars) {
+    switch (ptr->m_subtype) {
+    case type::TYPE_APP: {
+        auto app = (type_app *)ptr;
+        return check_tvar(app->m_left.get(), tvars) &&
+               check_tvar(app->m_right.get(), tvars);
+    }
+    case type::TYPE_CONST:
+        return true;
+    case type::TYPE_VAR: {
+        auto tv = (type_var *)ptr;
+        if (!HASKEY(tvars, tv->get_id()))
+            return false;
+
+        if (!tv->get_kind()->m_is_star)
+            return false;
+
+        return true;
+    }
+    }
+}
+
 std::shared_ptr<typeenv::typeinfo>
 typeenv::make_typeinfo(const module *ptr_mod, const ast_userdef *ptr_ast) {
     auto ret = std::make_shared<typeinfo>();
@@ -1429,10 +1457,23 @@ typeenv::make_typeinfo(const module *ptr_mod, const ast_userdef *ptr_ast) {
 
     // members
     for (auto &mem : ptr_ast->m_members->m_vars) {
-        // TODO:
+        // create type
+        shared_type tp;
+        if (mem->m_type) {
+            tp = type::make(ptr_mod, mem->m_type.get());
+            if (!tp)
+                return nullptr;
+        } else {
+            tp = gen_built_in.make("void");
+            assert(tp);
+        }
 
         // only a type variable, which is defined as an argument,
         // is permitted
+        if (!check_tvar(tp.get(), tvars))
+            return nullptr;
+
+        ret->m_members.insert(memv(mem->m_id->m_id, tp));
     }
 
     return ret;
@@ -1443,6 +1484,7 @@ std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
     for (auto &m : ps.get_modules()) {
         for (auto &s : m.second->get_struct()) {
             auto info = make_typeinfo(m.second.get(), s.second.get());
+            info->m_is_struct = true;
 
             type_id id;
             id.m_id = s.second->m_id->m_id;
@@ -1862,6 +1904,41 @@ void funcenv::print() {
         std::cout << "}";
     }
 
+    std::cout << "]";
+}
+
+void typeenv::print() {
+    int n = 0;
+    std::cout << "[";
+    for (auto &tp : m_types) {
+        if (n > 0)
+            std::cout << ",";
+
+        std::cout << "{\"id\":";
+        tp.first.print();
+
+        std::cout << ",\"type\":";
+        tp.second->m_type.m_type->print();
+
+        std::cout << ",\"predicates\":";
+        tp.second->m_type.print_preds();
+
+        std::cout << ",\"members\":[";
+
+        int m = 0;
+        for (auto &mem : tp.second->m_members.get<seq>()) {
+            if (m > 0)
+                std::cout << ",";
+            std::cout << "{\"id\":\"" << mem.m_id << "\",\"type\":";
+            mem.m_type->print();
+            std::cout << "}";
+            m++;
+        }
+
+        std::cout << "]}";
+
+        n++;
+    }
     std::cout << "]";
 }
 

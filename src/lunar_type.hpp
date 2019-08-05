@@ -15,6 +15,11 @@
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
 
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index/random_access_index.hpp>
+#include <boost/multi_index_container.hpp>
+
 namespace lunar {
 
 struct type_id {
@@ -147,7 +152,7 @@ class type {
     static std::shared_ptr<type> make(const module *ptr_mod,
                                       const ast_type *ptr);
 
-    virtual shared_kind get_kind() = 0;
+    virtual shared_kind get_kind() const = 0;
 };
 
 typedef std::shared_ptr<type> shared_type;
@@ -171,7 +176,7 @@ class type_const : public type {
 
     bool operator!=(const type_const &lhs) const { return !(*this == lhs); }
 
-    virtual shared_kind get_kind() { return m_kind; }
+    virtual shared_kind get_kind() const { return m_kind; }
     const type_id &get_id() { return m_id; }
 
     // id: type name
@@ -208,7 +213,7 @@ class type_var : public type {
         return ret > 0 ? true : false;
     }
 
-    virtual shared_kind get_kind() { return m_kind; }
+    virtual shared_kind get_kind() const { return m_kind; }
     const std::string &get_id() const { return m_id; }
     void set_id(const std::string &s) { m_id = s; }
 
@@ -270,7 +275,7 @@ class type_app : public type {
     //   right: *
     // then output
     //   * -> *
-    virtual shared_kind get_kind() {
+    virtual shared_kind get_kind() const {
         auto k = m_left->get_kind();
         assert(!k->m_is_star);
 
@@ -566,26 +571,49 @@ class funcenv {
     std::unordered_map<type_id, ptr_defun> m_defuns;
 };
 
+namespace mi = boost::multi_index;
+
 class typeenv {
   public:
     typeenv() {}
     virtual ~typeenv() {}
+
+    void print();
 
     static std::unique_ptr<typeenv> make(const parser &ps);
 
     friend class type_infer;
     friend bool typing(classenv &cenv, funcenv &fenv);
 
+    struct memv {
+        std::string m_id;
+        shared_type m_type;
+
+        memv(const std::string &id, shared_type t) : m_id(id), m_type(t) {}
+    };
+
   private:
+    struct order {};
+    struct seq {};
+
+    typedef mi::multi_index_container<
+        memv, mi::indexed_by<
+                  mi::hashed_unique<mi::tag<order>,
+                                    mi::member<memv, std::string, &memv::m_id>>,
+                  mi::random_access<mi::tag<seq>>>>
+        dict_mem;
+
     struct typeinfo {
         qual_type m_type;
         std::vector<shared_type> m_args;
-        std::vector<shared_type> m_members;
-        std::unordered_map<std::string, shared_type> m_id2mem;
+        dict_mem m_members;
+        bool m_is_struct;
         const ast_type *m_ast;
         const module *m_module;
     };
 
+    static bool check_tvar(type *ptr,
+                           const std::unordered_set<std::string> &tvars);
     static std::shared_ptr<typeinfo> make_typeinfo(const module *ptr_mod,
                                                    const ast_userdef *ptr_ast);
 

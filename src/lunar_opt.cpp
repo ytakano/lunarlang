@@ -40,7 +40,7 @@ void opt::print_help(char *argv[]) {
               << "    -l,--llvm:\tprint LLVM IR\n"
               << "    -a,--ast:\tprint AST\n"
               << "    -h,--help:\tshow this help\n"
-              << "    -e,--env:\tshow class and function environment"
+              << "    -e,--env:\tshow class, function, and type environment"
               << std::endl;
 }
 

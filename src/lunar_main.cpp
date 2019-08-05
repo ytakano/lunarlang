@@ -199,11 +199,17 @@ int main(int argc, char *argv[]) {
     if (!fenv)
         return 1;
 
+    auto tenv = lunar::typeenv::make(parser);
+    if (!tenv)
+        return 1;
+
     if (opt.m_is_env) {
         std::cout << "{\"classes\":";
         cenv->print();
         std::cout << ",\"functions\":";
         fenv->print();
+        std::cout << ",\"types\":";
+        tenv->print();
         std::cout << "}" << std::endl;
         return 0;
     }
