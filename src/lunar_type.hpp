@@ -593,12 +593,12 @@ class typeenv {
     };
 
   private:
-    struct order {};
+    struct hashmap {};
     struct seq {};
 
     typedef mi::multi_index_container<
         memv, mi::indexed_by<
-                  mi::hashed_unique<mi::tag<order>,
+                  mi::hashed_unique<mi::tag<hashmap>,
                                     mi::member<memv, std::string, &memv::m_id>>,
                   mi::random_access<mi::tag<seq>>>>
         dict_mem;

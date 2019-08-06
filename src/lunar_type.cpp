@@ -1470,8 +1470,15 @@ typeenv::make_typeinfo(const module *ptr_mod, const ast_userdef *ptr_ast) {
 
         // only a type variable, which is defined as an argument,
         // is permitted
-        if (!check_tvar(tp.get(), tvars))
+        if (!check_tvar(tp.get(), tvars)) {
+            TYPEERR("undefined type variable is used", ptr_mod, mem->m_type);
             return nullptr;
+        }
+
+        if (HASKEY(ret->m_members.get<hashmap>(), mem->m_id->m_id)) {
+            TYPEERR("multiply defined member", ptr_mod, mem);
+            return nullptr;
+        }
 
         ret->m_members.insert(memv(mem->m_id->m_id, tp));
     }
@@ -1482,18 +1489,40 @@ typeenv::make_typeinfo(const module *ptr_mod, const ast_userdef *ptr_ast) {
 std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
     auto ret = std::make_unique<typeenv>();
     for (auto &m : ps.get_modules()) {
+        type_id id;
+        id.m_path = m.second->get_filename();
+
+        // struct
         for (auto &s : m.second->get_struct()) {
             auto info = make_typeinfo(m.second.get(), s.second.get());
+            if (!info)
+                return nullptr;
+
             info->m_is_struct = true;
 
-            type_id id;
             id.m_id = s.second->m_id->m_id;
-            id.m_path = m.second->get_filename();
             ret->m_types[id] = info;
         }
 
-        // TODO: union
+        // union
+        for (auto &u : m.second->get_union()) {
+            auto info = make_typeinfo(m.second.get(), u.second.get());
+            if (!info)
+                return nullptr;
+
+            info->m_is_struct = false;
+
+            for (auto &var : u.second->m_members->m_vars) {
+                id.m_id = var->m_id->m_id;
+                ret->m_types[id] = info;
+            }
+        }
     }
+
+    // TODO: check recursive definition
+
+    // TODO: de Bruijn
+
     return ret;
 }
 
@@ -1917,7 +1946,9 @@ void typeenv::print() {
         std::cout << "{\"id\":";
         tp.first.print();
 
-        std::cout << ",\"type\":";
+        std::cout << ",\"container\":"
+                  << (tp.second->m_is_struct ? "\"struct\"" : "\"union\"")
+                  << ",\"type\":";
         tp.second->m_type.m_type->print();
 
         std::cout << ",\"predicates\":";

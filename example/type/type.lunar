@@ -14,20 +14,20 @@ func mkt0() {
 struct t1 {
     x : u32
     y : bool
-    w : either<u32, bool>
+    w : Either<u32, bool>
 }
 
 func mkt1() {
     let a = t1(10, true, left(20)) // 
 }
 
-union either<`a, `b> {
+union Either<`a, `b> {
     left : `a
     right : `b
 }
 
 
-union maybe<`a> {
+union Maybe<`a> {
     just : `a
     nothing
 }

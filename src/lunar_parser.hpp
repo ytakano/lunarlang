@@ -783,6 +783,10 @@ class module {
         return m_id2struct;
     }
 
+    const std::unordered_map<std::string, ptr_ast_union> &get_union() const {
+        return m_id2union;
+    }
+
   private:
     parsec m_parsec;
     const std::string m_filename;

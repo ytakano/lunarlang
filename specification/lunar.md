@@ -22,6 +22,7 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 | 12       | << >>
 | 11       | < > <= >=
 | 10       | == !=
+| 3        | :=
 
 ## Reserved Words
 
@@ -282,14 +283,14 @@ bool | u64 | s64 | u32 | s32 | u16 | s16 | u8 | s8 | fp64 | fp32 | void
 
 ## References and Data Creation
 
-### Constrained Reference
+### Reference
 
 Data on stack is created as follows.
 
 ```
 func expr() {
-    let v = u32(10)    // CRef<u32>
-    let w = bool(true) // CRef<bool>
+    let v = u32(10)    // Ref<u32>
+    let w = bool(true) // Ref<bool>
 }
 ```
 
@@ -297,8 +298,8 @@ or
 
 ```
 func expr() {
-    let v = stack u32(10)    // CRef<u32>
-    let w = stack bool(true) // CRef<bool>
+    let v = stack u32(10)    // Ref<u32>
+    let w = stack bool(true) // Ref<bool>
 }
 ```
 
@@ -309,7 +310,7 @@ struct foo {
 }
 
 func expr() {
-    let v = foo(10, true) // CRef<10>
+    let v = foo(10, true) // Ref<10>
 }
 ```
 
@@ -322,7 +323,7 @@ struct foo {
 }
 
 func expr() {
-    let v = stack foo(10, true) // CRef<10>
+    let v = stack foo(10, true) // Ref<10>
 }
 ```
 
@@ -335,7 +336,7 @@ struct foo<`t> {
 }
 
 func expr() {
-    let v = foo(20, false) // CRef<foo<s64>>
+    let v = foo(20, false) // Ref<foo<s64>>
 }
 ```
 
@@ -346,7 +347,7 @@ struct foo<`t> {
 }
 
 func expr() {
-    let v = stack foo<u32>(20, false) // CRef<foo<u32>>
+    let v = stack foo<u32>(20, false) // Ref<foo<u32>>
 }
 ```
 
@@ -357,8 +358,8 @@ union foo {
 }
 
 func expr() {
-    let v = a       // a of CRef<foo>
-    let w = b(true) // b of CRef<foo>
+    let v = a       // a of Ref<foo>
+    let w = b(true) // b of Ref<foo>
 }
 ```
 
@@ -374,7 +375,7 @@ union bar {
 }
 
 func expr() {
-    let v = L2(10, true) // L2 of CRef<bar>
+    let v = L2(10, true) // L2 of Ref<bar>
 }
 ```
 
@@ -390,7 +391,7 @@ union bar {
 }
 
 func expr() {
-    let v = d(b(false)) // CRef<bar>
+    let v = d(b(false)) // Ref<bar>
 }
 ```
 
@@ -424,17 +425,11 @@ func expr() {
 
 ```
 struct foo {
-    a : LinRef<u32>  // Lin<u32> or null
-}
-```
-
-```
-struct foo {
     a : u32
 }
 
 struct bar {
-    b : LinRef<foo>
+    b : Lin<foo>
 }
 
 func expr() {
@@ -444,14 +439,18 @@ func expr() {
 ```
 
 Linear type contained by struct or union cannot be moved.
+
 ```
 struct foo {
     a : Lin<u32>
+    b : Maybe<Lin<bool>>
 }
 
 func expr() {
-    let v = new foo(new u32(10))
-    let w = v.a // error
+    let v = new foo(new u32(20), Just(new bool(true)))
+    f(v.a) // error, could not move
+    v.a := new u32(40) // assign
+    v.b := Nothing     // assign
 }
 ```
 
@@ -465,21 +464,6 @@ func expr() {
 }
 ```
 
-```
-struct foo {
-    a : SharedRef<u32> // Shared<u32> or Null
-}
-```
-
 ## Pattern Match
 
-TODO:
-```
-struct foo {
-    a : LinRef<u32> // Lin<u32> or Null
-}
-
-func expr() {
-    let x = new foo(new u32(10)) // Lin<foo>
-}
-```
+TODO
