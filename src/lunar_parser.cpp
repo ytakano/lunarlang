@@ -179,6 +179,7 @@ parser::parser() {
     m_op2pri[">="] = 11;
     m_op2pri["=="] = 10;
     m_op2pri["!="] = 10;
+    m_op2pri[":="] = 3;
 }
 
 void module_tree::add(ptr_ast_import ptr, size_t n) {
