@@ -617,6 +617,10 @@ class typeenv {
     static std::shared_ptr<typeinfo> make_typeinfo(const module *ptr_mod,
                                                    const ast_userdef *ptr_ast);
 
+    // return true if info is not recursively defined
+    bool check_recursive(const typeinfo &info,
+                         std::unordered_set<type_id> &used);
+
     std::unordered_map<type_id, std::shared_ptr<typeinfo>> m_types;
 };
 

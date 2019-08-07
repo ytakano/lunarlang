@@ -1451,7 +1451,7 @@ bool ir::check_recursive(ir_struct *p, std::unordered_set<std::string> &used) {
         if (q->m_irtype == ir_type::IRTYPE_USER) {
             auto u = (ir_usertype *)q.get();
             if (HASKEY(used, u->m_name)) {
-                SEMANTICERR(*this, q.get(), "%s is recusively defined",
+                SEMANTICERR(*this, q.get(), "%s is recursively defined",
                             u->m_name.c_str());
                 return false;
             }

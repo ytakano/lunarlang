@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <stdint.h>
 
-#define HASKEY(CONTAINER, KEY) !(CONTAINER.find(KEY) == CONTAINER.end())
+#define HASKEY(CONTAINER, KEY) !((CONTAINER).find(KEY) == (CONTAINER).end())
 #define PRINTERR(M, ...)                                                       \
     fprintf(stderr, "ERROR (%s:%d): " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 

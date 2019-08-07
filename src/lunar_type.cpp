@@ -492,6 +492,18 @@ shared_type substitution::apply(shared_type type) {
     return nullptr; // never reach here
 }
 
+static type *head_of_type(type *ptr) {
+    switch (ptr->m_subtype) {
+    case type::TYPE_CONST:
+    case type::TYPE_VAR:
+        return ptr;
+    case type::TYPE_APP: {
+        auto p = (type_app *)ptr;
+        return head_of_type(p->m_left.get());
+    }
+    }
+}
+
 // [T0 -> t :: *]
 // (T0 :: * -> *, T1 :: *)
 // (T0 :: * -> *, t :: *)
@@ -1486,6 +1498,56 @@ typeenv::make_typeinfo(const module *ptr_mod, const ast_userdef *ptr_ast) {
     return ret;
 }
 
+const ast_member *get_member_ast(const ast_type *ptr, int n) {
+    switch (ptr->m_type) {
+    case ast_type::TYPE_STRUCT:
+    case ast_type::TYPE_UNION: {
+        auto p = (ast_userdef *)ptr;
+        return p->m_members->m_vars[n].get();
+    }
+    default:
+        assert(false);
+    }
+}
+
+bool typeenv::check_recursive(const typeinfo &info,
+                              std::unordered_set<type_id> &used) {
+    int n = 0;
+    std::unordered_set<type_id> checked;
+    for (auto &mem : info.m_members.get<seq>()) {
+        auto p = head_of_type(mem.m_type.get());
+        if (p->m_subtype == type::TYPE_CONST) {
+            auto cp = (type_const *)p;
+            auto id = cp->get_id();
+
+            if (HASKEY(checked, id))
+                continue;
+
+            if (HASKEY(used, id)) {
+                auto memast = get_member_ast(info.m_ast, n);
+                TYPEERR("recursively defined", info.m_module, memast->m_type);
+                return false;
+            }
+
+            auto it = m_types.find(id);
+            if (it != m_types.end()) {
+                used.insert(id);
+                if (!check_recursive(*it->second, used)) {
+                    auto memast = get_member_ast(info.m_ast, n);
+                    TYPEERR("instantiated by", info.m_module, memast->m_type);
+                    return false;
+                }
+                used.erase(id);
+            }
+
+            checked.insert(id);
+        }
+        n++;
+    }
+
+    return true;
+}
+
 std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
     auto ret = std::make_unique<typeenv>();
     for (auto &m : ps.get_modules()) {
@@ -1519,7 +1581,22 @@ std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
         }
     }
 
-    // TODO: check recursive definition
+    // check recursive definition
+    std::unordered_set<type_id> checked;
+    for (auto &t : ret->m_types) {
+        auto ua = (ast_userdef *)t.second->m_ast;
+        type_id id;
+        id.m_id = ua->m_id->m_id;
+        id.m_path = t.second->m_module->get_filename();
+        if (!HASKEY(checked, id)) {
+            std::unordered_set<type_id> used;
+            used.insert(id);
+            if (!ret->check_recursive(*t.second, used)) {
+                TYPEERR("instantiated by", t.second->m_module, ua->m_id);
+                return nullptr;
+            }
+        }
+    }
 
     // TODO: de Bruijn
 

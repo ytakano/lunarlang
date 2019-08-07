@@ -3,11 +3,12 @@
 union t0 {
     a: bool
     b: u32
+    c: t1
 }
 
 func mkt0() {
-    let a = a(false) // CRef<a@t0>
-    let b = b(10)    // CRef<b@t0>
+    let a = a(false) // Ref<t0>
+    let b = b(10)    // Ref<t0>
     let c = new t0(true, 10)
 }
 
@@ -15,6 +16,7 @@ struct t1 {
     x : u32
     y : bool
     w : Either<u32, bool>
+    z : t0
 }
 
 func mkt1() {
@@ -22,13 +24,13 @@ func mkt1() {
 }
 
 union Either<`a, `b> {
-    left : `a
-    right : `b
+    Left : `a
+    Right : `b
 }
 
 
 union Maybe<`a> {
-    just : `a
-    nothing
+    Just : `a
+    Nothing
 }
 
