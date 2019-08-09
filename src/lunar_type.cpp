@@ -1596,7 +1596,16 @@ std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
     }
 
     // de Bruijn
+    std::unordered_set<const ast_type *> unions;
     for (auto &t : ret->m_types) {
+        if (!t.second->m_is_struct) {
+            if (HASKEY(unions, t.second->m_ast)) {
+                continue;
+            } else {
+                unions.insert(t.second->m_ast);
+            }
+        }
+
         substitution sbst;
         // arguments
         for (auto &arg : t.second->m_args) {
