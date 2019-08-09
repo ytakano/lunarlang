@@ -587,7 +587,7 @@ class typeenv {
 
     struct memv {
         std::string m_id;
-        shared_type m_type;
+        mutable shared_type m_type;
 
         memv(const std::string &id, shared_type t) : m_id(id), m_type(t) {}
     };
@@ -621,7 +621,11 @@ class typeenv {
     bool check_recursive(const typeinfo &info,
                          std::unordered_set<type_id> &used);
 
+    // return true if ptr was checked whether it is not defined recursively
+    bool is_rec_checked(const type_id &id, shared_type ptr);
+
     std::unordered_map<type_id, std::shared_ptr<typeinfo>> m_types;
+    std::unordered_multimap<type_id, shared_type> m_rec_checked;
 };
 
 class type_infer {

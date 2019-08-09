@@ -1510,11 +1510,25 @@ const ast_member *get_member_ast(const ast_type *ptr, int n) {
     }
 }
 
+bool typeenv::is_rec_checked(const type_id &id, shared_type ptr) {
+    if (HASKEY(m_rec_checked, id))
+        return false;
+
+    auto r = m_rec_checked.equal_range(id);
+    for (auto it = r.first; it != r.second; ++it) {
+        if (match(it->second, ptr) != nullptr)
+            return true;
+    }
+
+    return false;
+}
+
 bool typeenv::check_recursive(const typeinfo &info,
                               std::unordered_set<type_id> &used) {
     int n = 0;
     std::unordered_set<type_id> checked;
     for (auto &mem : info.m_members.get<seq>()) {
+        // TODO: apply
         auto p = head_of_type(mem.m_type.get());
         if (p->m_subtype == type::TYPE_CONST) {
             auto cp = (type_const *)p;
@@ -1581,7 +1595,32 @@ std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
         }
     }
 
+    // de Bruijn
+    for (auto &t : ret->m_types) {
+        substitution sbst;
+        // arguments
+        for (auto &arg : t.second->m_args) {
+            assert(arg->m_subtype == type::TYPE_VAR);
+            auto a = (type_var *)arg.get();
+            auto a2 = type_var::make(gensym(), 0);
+            sbst.m_subst[*a] = a2;
+            arg = a2;
+        }
+
+        // member variables
+        for (auto &m : t.second->m_members.get<seq>()) {
+            m.m_type = sbst.apply(m.m_type);
+        }
+
+        // type
+        t.second->m_type.m_type = sbst.apply(t.second->m_type.m_type);
+        for (auto &t2 : t.second->m_type.m_preds) {
+            t2->m_arg = sbst.apply(t2->m_arg);
+        }
+    }
+
     // check recursive definition
+    // TODO: apply
     std::unordered_set<type_id> checked;
     for (auto &t : ret->m_types) {
         auto ua = (ast_userdef *)t.second->m_ast;
@@ -1597,8 +1636,6 @@ std::unique_ptr<typeenv> typeenv::make(const parser &ps) {
             }
         }
     }
-
-    // TODO: de Bruijn
 
     return ret;
 }

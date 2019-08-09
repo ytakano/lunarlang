@@ -3,7 +3,6 @@
 union t0 {
     a: bool
     b: u32
-    c: t1
 }
 
 func mkt0() {
@@ -16,7 +15,6 @@ struct t1 {
     x : u32
     y : bool
     w : Either<u32, bool>
-    z : t0
 }
 
 func mkt1() {
