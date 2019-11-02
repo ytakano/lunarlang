@@ -28,7 +28,7 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 ```
 $RESERVED := class | type | if | let | instance | require | func |
              match | module | import | return | as | here |
-             infix | $INFIX
+             infix | un | lin | $INFIX
 ```
 
 ## Identifier
@@ -45,13 +45,13 @@ $SEP := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
 $ID must not be reserved words.
 
 ```
-$DOTID = $ID | $ID . $DOTID
+$CSID = $ID | $ID : $CSID
 ```
 
 ## Import
 
 ```
-$IMPORT := import $DOTID $HEREAS?
+$IMPORT := import $CSID $HEREAS?
 $HEREAS := here | $AS
 $AS := as $ID
 ```
@@ -108,7 +108,7 @@ A predicate asserts <$TYPE> is a member of the class named by $ID.
 ```
 $PREDS := require $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
-$PRED := $DOTID <$TYPE>
+$PRED := $CSID <$TYPE>
 ```
 
 Example:
@@ -129,7 +129,7 @@ $STAR := *
 
 ### Type Variable
 
-The leading character of a type variable must be ` (backslash).
+The leading character of a type variable must be ` (backquote).
 ```
 $TVAR := `$ID
 $TVARKIND := `$ID | `$ID :: $KIND
@@ -137,19 +137,25 @@ $TVARKINDS := $TVARKIND | $TVARKIND , $TVARKINDS
 $TVARS := <$TVARKINDS>
 ```
 
+### Qualifier
+
+```
+$QUALIFIER := un | lin
+```
+
 ### Type
 
 ```
-$TYPE := $IDTVAR <$TYPES>? | func ( $TYPES? ) $TYPESPEC | ( $TYPES? ) | [ $TYPE $ARRNUM? ]
-$ARRNUM := * $DECIMAL | * $DECIMAL $ARRNUM
-$IDTVAR := $DOTID | $TVAR
-$TYPES := $TYPE | $TYPE , $TYPES
+$QTYPE := $QUALIFIER? $TYPE
+$TYPE := $IDTVAR <$QTYPES>? | func ( $QTYPES? ) $TYPESPEC | ( $QTYPES? ) | [ $QTYPE ]
+$IDTVAR := $CSID | $TVAR
+$QTYPES := $QTYPE | $QTYPE , $QTYPES
 ```
 
 ### Type Specifier
 
 ```
-$TYPESPEC := : $TYPE
+$TYPESPEC := : $QTYPE
 ```
 
 ### Struct and Union
@@ -169,11 +175,10 @@ $SUMTYPE := $ID | $ID $TYPESPEC
 ## Function Definition
 
 ```
-$DEFUN := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
+$DEFUN := func $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
 $DEFUNS := $DEFUN | $DEFUNS $SEP $DEFUN
 $ARGS := $ARG | $ARG , $ARGS
 $ARG := $ID $TYPESPEC?
-$RETTYPE := : $TYPE
 ```
 
 ```
