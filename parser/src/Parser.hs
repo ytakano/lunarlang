@@ -6,6 +6,7 @@ module Parser (
 
 import qualified AST
 import           Control.Applicative
+import           Data.Functor
 import           Data.Maybe
 import           Text.Parsec                            ((<?>))
 import qualified Text.Parsec                            as P
@@ -37,7 +38,7 @@ parseChar = P.digit <|> parseNonum
 parseNonum :: P.Parsec String () Char
 parseNonum = P.letter <|> P.noneOf ['\0'..'\127']
 
-parseIsChar c = P.try (P.char c >> return True) <|> return False
+parseIsChar c = P.try (P.char c $> True) <|> return False
 
 -- $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
 parseDefun = do
@@ -249,7 +250,7 @@ parseArg = do
     return $ AST.Arg id t
 
 -- ')' | $ARG ')' | $ARG (, $ARGS)* ')'
-parseArgs = P.try (P.char ')' >> return []) <|> firstArg
+parseArgs = P.try (P.char ')' $> []) <|> firstArg
     where
         firstArg = do
             h <- parseArg
@@ -279,14 +280,14 @@ parseLiteral = do
 -- TODO
 -- $EXPR1 := $CSID | $IF | $TUPLE | $LITERAL
 parseExpr1 = do
-    id <- P.try (parseID >>= \x -> return $ Just x) <|> return Nothing
+    id <- P.try (Just <$> parseID) <|> return Nothing
     case id of
         Just "if" -> parseIf
         Just id'  -> return $ AST.ExprCSID [id']
         Nothing   -> expr1'
     where
         expr1' = do
-            c <- P.try (P.oneOf "(" >>= \x -> return $ Just x) <|> return Nothing
+            c <- P.try (Just <$> P.oneOf "(") <|> return Nothing
             case c of
                 Just '(' -> parseTuple
                 Nothing  -> parseLiteral
@@ -329,7 +330,7 @@ parseExpr2 e = do
 
 -- $EXPRS'? )
 parseApply fun =
-    P.try (P.char ')' >> return (AST.ExprApply fun [])) <|> firstExpr
+    P.try (P.char ')' $> AST.ExprApply fun []) <|> firstExpr
     where
         firstExpr = do
             e <- parseExpr
@@ -395,7 +396,7 @@ parseExprs = parseExprs' []
     where
         parseExprs' exprs = do
             e <- parseExpr
-            eol <- P.try (parseEOL >> return True) <|> return False
+            eol <- P.try (parseEOL $> True) <|> return False
             if eol then do
                 paren <- parseIsChar '}'
                 if paren then
