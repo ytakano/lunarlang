@@ -15,7 +15,7 @@ data Arg = Arg String (Maybe QType) deriving (Show)
 
 -- qualifier
 data Qual =
-    Un |                -- unrestricted type
+    Shared |                -- shared type
     Lin deriving (Show) -- linear type
 
 -- qualified type
@@ -29,6 +29,6 @@ data LType =
     TupleType [QType]
     deriving (Show)
 
-data Pred = Pred [String] LType deriving (Show)
+data Pred = Pred [String] QType deriving (Show)
 
 data Expr = Expr deriving (Show)

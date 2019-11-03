@@ -28,7 +28,7 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 ```
 $RESERVED := class | type | if | let | instance | require | func |
              match | module | import | return | as | here |
-             infix | un | lin | $INFIX
+             infix | shared | lin | $INFIX
 ```
 
 ## Identifier
@@ -108,7 +108,7 @@ A predicate asserts <$TYPE> is a member of the class named by $ID.
 ```
 $PREDS := require $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
-$PRED := $CSID <$TYPE>
+$PRED := $CSID <$QTYPE>
 ```
 
 Example:

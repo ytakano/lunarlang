@@ -1,4 +1,8 @@
-func binop(a : t<u32>, b) {
+func pred(a, b) require eq<a>, eq<b> {
+    cmp(a, b)
+}
+
+func binop(a : t<u32>, b) : u64 {
     1 + 2 - 3 + 4 * 5 / 6 + 7
 }
 

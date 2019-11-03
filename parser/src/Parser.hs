@@ -13,6 +13,7 @@ import qualified Text.Parsec         as P
 parse = P.parse parseTopID
 
 parseTopID = do
+    parseSpaces
     id <- P.try (P.string "class") <|> P.string "func"
     parseTop id
 
@@ -33,6 +34,8 @@ parseChar = P.digit <|> parseNonum
 parseNonum :: P.Parsec String () Char
 parseNonum = P.letter <|> P.noneOf ['\0'..'\127']
 
+parseIsChar c = P.try (P.char c >> return True) <|> return False
+
 -- $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
 parseDefun = do
     parseSpacesPlus
@@ -40,9 +43,28 @@ parseDefun = do
     parseSpaces
     P.char '('
     parseSpaces
+
+    -- parse arguments
     args <- parseArgs
-    -- TODO: parse return value type
-    return $ AST.Defun (AST.Fun id args Nothing [] [])
+
+    -- parse return value type
+    parseSpaces
+    c <- parseIsChar ':'
+    parseSpaces
+    ret <- if c then do
+        t <- parseQType
+        parseSpaces
+        return $ Just t
+    else
+        return Nothing
+
+    -- parse predicates
+    preds <- parsePreds
+    parseSpaces
+
+    -- TODO: parse expressions
+
+    return $ AST.Defun (AST.Fun id args ret preds [])
 
 parseComment = do
     P.string "//"
@@ -59,11 +81,46 @@ parseSpaces = do
         parseComment
         parseSpaces) <|> return Nothing
 
+-- $PREDS := require $PREDS_
+-- $PREDS_ := $PRED | $PRED, $PRED
+parsePreds = do
+    c <- P.try (do
+        P.string "require"
+        parseSpacesPlus
+        return True) <|> return False
+    if c then do
+        p <- parsePred
+        parseSpaces
+        preds_ [p]
+    else
+        return []
+    where
+        preds_ pds = do
+            r <- parseIsChar ','
+            if r then do
+                parseSpaces
+                p' <- parsePred
+                parseSpaces
+                preds_ $ p':pds
+            else
+                return $ reverse pds
+
+-- $PRED := $CSID <$QTYPE>
+parsePred = do
+    id <- parseCSID
+    parseSpaces
+    P.char '<'
+    parseSpaces
+    t <- parseQType
+    parseSpaces
+    P.char '>'
+    return $ AST.Pred id t
+
 -- $QTYPE := $QUALIFIER? $TYPE
 parseQType = do
     id <- parseID
-    let q = if id == "un" then AST.Un else AST.Lin
-    t <- if id /= "un" && id /= "lin" then do
+    let q = if id == "shared" then AST.Shared else AST.Lin
+    t <- if id /= "shared" && id /= "lin" then do
         parseSpaces
         parseTID id
     else do
@@ -79,7 +136,7 @@ parseQTypes = do
     where
         qts qtypes = do
             _ <- parseSpaces
-            c <- P.try (P.char ',' >> return True) <|> return False
+            c <- parseIsChar ','
             if c then do
                 _ <- parseSpaces
                 t <- parseQType
@@ -111,26 +168,32 @@ parseTArgs = do
 -- $TVAR
 parseTVar = do
     id <- parseID
-    c <- P.try (P.char '<' >> return True) <|> return False
+    c <- parseIsChar '<'
     targs <- if c then parseTArgs else return []
     return $ AST.TVar ('`':id) targs
 
 -- (: ID)* <$QTYPES>?
 parseTID id = do
-    ids <- parseCSID []
+    ids <- parseCSID2 []
     let csid = id:ids
-    c <- P.try (P.char '<' >> return True) <|> return False
+    c <- parseIsChar '<'
     targs <- if c then parseTArgs else return []
     return $ AST.IDType csid targs
 
+-- $CSID = $ID | $ID : $CSID
+parseCSID = do
+    h <- parseID
+    ids <- parseCSID2 [h]
+    return ids
+
 -- (: $ID)*
-parseCSID ids = do
+parseCSID2 ids = do
     parseSpaces
-    c <- P.try (P.char ':' >> return True) <|> return False
+    c <- parseIsChar ':'
     if c then do
         parseSpaces
         id <- parseID
-        parseCSID $ id:ids
+        parseCSID2 $ id:ids
     else
         return $ reverse ids
 
@@ -154,7 +217,7 @@ parseArrayType = do
 parseArg = do
     id <- parseID
     parseSpaces
-    c <- P.try (P.char ':' >> return True) <|> return False
+    c <- parseIsChar ':'
     t <- if c then do
         parseSpaces
         qt <- parseQType
@@ -171,7 +234,7 @@ parseArgs = P.try (P.char ')' >> return []) <|> firstArg
             parseSpaces
             tailArgs [h]
         tailArgs args = do
-            c <- P.try (P.char ',' >> return True) <|> return False
+            c <- parseIsChar ','
             if c then do
                 parseSpaces
                 h <- parseArg
