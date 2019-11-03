@@ -65,14 +65,12 @@ parseDefun = do
     preds <- parsePreds
     parseSpaces
 
-    -- TODO: parse expressions
+    -- parse expressions
     P.char '{'
     parseSpaces
-    e <- parseExpr
-    parseSpaces
-    P.char '}'
+    exprs <- parseExprs
 
-    return $ AST.Defun (AST.Fun id args ret preds [e])
+    return $ AST.Defun (AST.Fun id args ret preds exprs)
 
 parseComment = do
     P.string "//"
@@ -80,14 +78,26 @@ parseComment = do
     return ' '
 
 parseSpacesPlus = do
-    c <- P.try (P.satisfy (`elem` " \t\r\n")) <|> parseComment
+    c <- P.try (P.oneOf " \t\r\n") <|> parseComment
     parseSpaces
 
 parseSpaces = do
-    P.many $ P.satisfy (`elem` " \t\r\n")
+    P.many $ P.oneOf " \t\r\n"
     P.try (do
         parseComment
         parseSpaces) <|> return Nothing
+
+parseSpaces2 = do
+    P.many $ P.oneOf " \t\r\n;"
+    P.try (do
+        parseComment
+        parseSpaces2) <|> return Nothing
+
+parseEOL = do
+    P.many $ P.oneOf " \t"
+    P.try parseComment <|> return ' '
+    P.many1 $ P.oneOf "\r\n;"
+    parseSpaces2
 
 -- $PREDS  := require $PREDS_
 -- $PREDS_ := $PRED | $PRED, $PRED
@@ -276,7 +286,7 @@ parseExpr1 = do
         Nothing   -> expr1'
     where
         expr1' = do
-            c <- P.try (P.satisfy (`elem` "(") >>= \x -> return $ Just x) <|> return Nothing
+            c <- P.try (P.oneOf "(" >>= \x -> return $ Just x) <|> return Nothing
             case c of
                 Just '(' -> parseTuple
                 Nothing  -> parseLiteral
@@ -300,16 +310,16 @@ parseTuple = do
 -- $EXPR0 := $EXPR1 $EXPR2
 parseExpr0 = do
     e <- parseExpr1
-    parseSpaces
     e' <- parseExpr2 e
-    parseSpaces
     return $ fromMaybe e e'
 
 -- TODO
 -- $EXPR2 := ∅ | $APPLY $EXPR2
 parseExpr2 e = do
-    c <- P.try (P.satisfy (`elem` "(") >>= \x -> return $ Just x) <|> return Nothing
-    parseSpaces
+    c <- P.try (do
+        parseSpaces
+        r <- P.oneOf "("
+        return $ Just r) <|> return Nothing
     case c of
         Just '(' -> do
             args <- parseApply e
@@ -343,6 +353,10 @@ lexer = T.makeTokenParser (haskellDef { T.reservedOpNames = ["*", "/", "+", "-"]
 parseExpr = E.buildExpressionParser table term <?> "expression"
     where
         term = do
+            P.try (do
+                parseComment
+                parseSpaces
+                return True) <|> return False
             c <- parseIsChar '('
             if c then do
                 parseSpaces
@@ -350,15 +364,44 @@ parseExpr = E.buildExpressionParser table term <?> "expression"
                 parseSpaces
                 P.char ')'
                 return e
-            else
-                parseExpr0 <?> "simple expression"
+            else do
+                e <- parseExpr0
+                P.try (do
+                    parseSpaces
+                    P.lookAhead $ P.oneOf "+-*/%<>!="
+                    return e) <|> return e <?> "simple expression"
         reservedOp  = T.reservedOp lexer
         binary name fun assoc = E.Infix (do{ reservedOp name; return fun }) assoc
         prefix name fun = E.Prefix (do{ reservedOp name; return fun })
-        table = [[prefix "-" opNegate],
+        table = [[prefix "-" (opPrefix "-")],
                  [binary "*" (opBin "*") E.AssocLeft,
-                  binary "/" (opBin "/") E.AssocLeft ],
+                  binary "/" (opBin "/") E.AssocLeft,
+                  binary "%" (opBin "%") E.AssocLeft],
                  [binary "+" (opBin "+") E.AssocLeft,
-                  binary "-" (opBin "-") E.AssocLeft ]]
-        opNegate = AST.ExprPrefix "-"
+                  binary "-" (opBin "-") E.AssocLeft],
+                 [binary "<<" (opBin "<<") E.AssocLeft,
+                  binary ">>" (opBin ">>") E.AssocLeft],
+                 [binary "<" (opBin "<") E.AssocLeft,
+                  binary ">" (opBin ">") E.AssocLeft,
+                  binary "<=" (opBin "<=") E.AssocLeft,
+                  binary ">=" (opBin ">=") E.AssocLeft],
+                 [binary "==" (opBin "==") E.AssocLeft,
+                  binary "!=" (opBin "!=") E.AssocLeft]]
+        opPrefix = AST.ExprPrefix
         opBin = AST.ExprBin
+
+-- $EXPRS := $EXPR $SEP? } | $EXPR $SEP $EXPRS
+parseExprs = parseExprs' []
+    where
+        parseExprs' exprs = do
+            e <- parseExpr
+            eol <- P.try (parseEOL >> return True) <|> return False
+            if eol then do
+                paren <- parseIsChar '}'
+                if paren then
+                    return $ reverse (e:exprs)
+                else
+                    parseExprs' $ e:exprs
+            else do
+                P.char '}'
+                return $ reverse (e:exprs)

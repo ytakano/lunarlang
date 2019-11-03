@@ -191,7 +191,7 @@ func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
 $EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | ( $EXPR ) | $EXPR0
 $EXPR0   := $EXPR1 $EXPR2
 $EXPR1   := $CSID | $IF | $LET | $TUPLE | $DICT |
-            { $EXPRS } | [ $EXPRS_? ] | $LITERAL
+            { $EXPRS } | [ $EXPRS'? ] | $LITERAL
 $EXPR2   := ∅ | [ $EXPR ] $EXPR2 | $APPLY $EXPR2
 $EXPRS   := $EXPR | $EXPR $SEP $EXPR
 $EXPRS'  := $EXPR | $EXPR , $EXPR

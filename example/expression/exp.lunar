@@ -1,5 +1,12 @@
 func pred(a, b) require eq<a>, eq<b> {
-    cmp ( a , b ) * 10 + 3
+    a + b * -  10 + // 40
+    // 50
+
+    5 *
+
+    cmp (a, b)
+
+    10 * 20
 }
 
 func binop(a : t<u32>, b) : u64 {
