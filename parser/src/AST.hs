@@ -7,11 +7,13 @@ data TOP =
     Import
     deriving (Show)
 
+data Position = Pos Int Int deriving (Show)
+
 -- function definition
-data Fun = Fun String [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
+data Fun = Fun Position String [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
 
 -- argument
-data Arg = Arg String (Maybe QType) deriving (Show)
+data Arg = Arg Position String (Maybe QType) deriving (Show)
 
 -- qualifier
 data Qual =
@@ -19,27 +21,27 @@ data Qual =
     Uniq deriving (Show) -- linear type
 
 -- qualified type
-data QType = QType (Maybe Qual) LType deriving (Show)
+data QType = QType Position (Maybe Qual) LType deriving (Show)
 
 -- type of Lunar language
 data LType =
-    IDType [String] [QType] |
-    TVar String [QType] |
-    ArrayType QType |
-    TupleType [QType]
+    IDType Position [String] [QType] |
+    TVar Position String [QType] |
+    ArrayType Position QType |
+    TupleType Position [QType]
     deriving (Show)
 
 -- predicate
 data Pred = Pred [String] QType deriving (Show)
 
 data Expr =
-    ExprIf Expr Expr Expr |
+    ExprIf Position Expr Expr Expr |
     ExprPrefix String Expr |
     ExprBin String Expr Expr |
     ExprApply Expr [Expr] |
-    ExprTuple [Expr] |
-    ExprCSID [String] |
-    ExprLiteral Literal
+    ExprTuple Position [Expr] |
+    ExprCSID Position [String] |
+    ExprLiteral Position Literal
     -- TODO: let, dict, array, index
     deriving (Show)
 

@@ -14,6 +14,9 @@ import qualified Text.Parsec.Expr                       as E
 import qualified Text.Parsec.Token                      as T
 import           Text.ParserCombinators.Parsec.Language (haskellDef)
 
+
+getPos pos = AST.Pos (P.sourceLine pos) (P.sourceColumn pos)
+
 parse = P.parse parseTopID
 
 parseTopID = do
@@ -43,6 +46,8 @@ parseIsChar c = P.try (P.char c $> True) <|> return False
 -- $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
 parseDefun = do
     parseSpacesPlus
+    pos <- P.getPosition
+
     id <- parseID
     parseSpaces
     P.char '('
@@ -71,7 +76,7 @@ parseDefun = do
     parseSpaces
     exprs <- parseExprs
 
-    return $ AST.Defun (AST.Fun id args ret preds exprs)
+    return $ AST.Defun (AST.Fun (getPos pos) id args ret preds exprs)
 
 parseComment = do
     P.string "//"
@@ -137,20 +142,22 @@ parsePred = do
 
 -- $QTYPE := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
 parseQType = do
+    pos <- P.getPosition
     c <- parseIsChar '`'
     if c then do
-        t <- parseTVar
-        return $ AST.QType Nothing t
+        t <- parseTVar pos
+        return $ AST.QType (getPos pos) Nothing t
     else do
+        pos' <- P.getPosition
         id <- parseID
         let q = if id == "shared" then AST.Shared else AST.Uniq
         t <- if id /= "shared" && id /= "uniq" then do
             parseSpaces
-            parseTID id
+            parseTID pos' id
         else do
             parseSpacesPlus
             parseType
-        return $ AST.QType (Just q) t
+        return $ AST.QType (getPos pos') (Just q) t
 
 -- $QTYPES := $QTYPE | $QTYPE , $QTYPES
 parseQTypes = do
@@ -170,15 +177,16 @@ parseQTypes = do
 
 -- $TYPE := $CSID <$QTYPES>? | func ( $QTYPES? ) $TYPESPEC | ( $QTYPES? ) | [ $QTYPE ]
 parseType = do
+    pos <- P.getPosition
     c <- P.try (P.char '(') <|> P.char '[' <|> parseNonum
     case c of
-        '(' -> parseTupleType
-        '[' -> parseArrayType
+        '(' -> parseTupleType pos
+        '[' -> parseArrayType pos
         _   -> do
             t <- P.try parseID <|> return ""
             let id = c:t
             -- TODO: parse function type
-            parseTID id
+            parseTID pos id
 
 -- $QTYPES>
 parseTArgs = do
@@ -189,19 +197,19 @@ parseTArgs = do
     return t
 
 -- $TVAR
-parseTVar = do
+parseTVar pos = do
     id <- parseID
     c <- parseIsChar '<'
     targs <- if c then parseTArgs else return []
-    return $ AST.TVar ('`':id) targs
+    return $ AST.TVar (getPos pos) ('`':id) targs
 
 -- (: ID)* <$QTYPES>?
-parseTID id = do
+parseTID pos id = do
     ids <- parseCSID2 []
     let csid = id:ids
     c <- parseIsChar '<'
     targs <- if c then parseTArgs else return []
-    return $ AST.IDType csid targs
+    return $ AST.IDType (getPos pos) csid targs
 
 -- $CSID := $ID | $ID : $CSID
 parseCSID = do
@@ -221,23 +229,24 @@ parseCSID2 ids = do
         return $ reverse ids
 
 -- ( $QTYPES? )
-parseTupleType = do
+parseTupleType pos = do
     parseSpaces
     t <- parseQTypes
     parseSpaces
     P.char ')'
-    return $ AST.TupleType t
+    return $ AST.TupleType (getPos pos) t
 
 -- [ $QTYPE ]
-parseArrayType = do
+parseArrayType pos = do
     parseSpaces
     t <- parseQType
     P.char ']'
-    return $ AST.ArrayType t
+    return $ AST.ArrayType (getPos pos) t
 
 -- $TYPESPEC := : $QTYPE
 -- $ARG      := $ID $TYPESPEC?
 parseArg = do
+    pos <- P.getPosition
     id <- parseID
     parseSpaces
     c <- parseIsChar ':'
@@ -247,7 +256,7 @@ parseArg = do
         return $ Just qt
     else
         return Nothing
-    return $ AST.Arg id t
+    return $ AST.Arg (getPos pos) id t
 
 -- ')' | $ARG ')' | $ARG (, $ARGS)* ')'
 parseArgs = P.try (P.char ')' $> []) <|> firstArg
@@ -274,39 +283,43 @@ parseDecimal = do
     return $ AST.LitInt (read (h:t))
 
 parseLiteral = do
+    pos <- P.getPosition
     d <- parseDecimal
-    return $ AST.ExprLiteral d
+    return $ AST.ExprLiteral (getPos pos) d
 
 -- TODO
 -- $EXPR1 := $CSID | $IF | $TUPLE | $LITERAL
 parseExpr1 = do
+    pos <- P.getPosition
     id <- P.try (Just <$> parseID) <|> return Nothing
     case id of
-        Just "if" -> parseIf
-        Just id'  -> return $ AST.ExprCSID [id']
+        Just "if" -> parseIf pos
+        -- TODO: parse CSID
+        Just id'  -> return $ AST.ExprCSID (getPos pos) [id']
         Nothing   -> expr1'
     where
         expr1' = do
+            pos' <- P.getPosition
             c <- P.try (Just <$> P.oneOf "(") <|> return Nothing
             case c of
-                Just '(' -> parseTuple
+                Just '(' -> parseTuple pos'
                 Nothing  -> parseLiteral
 
 -- $IF   := if $EXPR { $EXPRS } $ELSE?
 -- $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
-parseIf = do
+parseIf pos = do
     parseSpacesPlus
     -- TODO
     e1 <- parseExpr
     e2 <- parseExpr
     e3 <- parseExpr
-    return $ AST.ExprIf e1 e2 e3
+    return $ AST.ExprIf (getPos pos) e1 e2 e3
 
-parseTuple = do
+parseTuple pos = do
     parseSpaces
     -- TODO
     e <- parseExpr
-    return $ AST.ExprTuple [e]
+    return $ AST.ExprTuple (getPos pos) [e]
 
 -- $EXPR0 := $EXPR1 $EXPR2
 parseExpr0 = do
