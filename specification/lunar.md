@@ -27,19 +27,19 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 
 ```
 $RESERVED := class | type | if | let | instance | require | func |
-             match | module | import | return | as | here |
-             infix | shared | lin | $INFIX
+             match | module | import | return | as | here | dict |
+             infix | shared | uniq | $INFIX
 ```
 
 ## Identifier
 
 ```
-$ID := [^0-9$WHITESPACE][^$WHITESPACE]+
-$WHITESPACE := space | tab | \r | \n | \r\n
-$NEWLINE := \r | \n | ;
+$ID          := [^0-9$WHITESPACE][^$WHITESPACE]+
+$WHITESPACE  := space | tab | \r | \n | \r\n
+$NEWLINE     := \r | \n | ;
 $WHITESPACE2 := space | tab
 $WHITESPACE3 := space | tab | \r | \n | \r\n | ;
-$SEP := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
+$SEP         := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
 ```
 
 $ID must not be reserved words.
@@ -61,11 +61,11 @@ $AS := as $ID
 ### Class Declaration
 
 ```
-$CLASSDECL := class $ID < $TVARKIND > $PREDS? { $INTERFACES $WHITESPACE3* }
+$CLASSDECL  := class $ID < $TVARKIND > $PREDS? { $INTERFACES $WHITESPACE3* }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
-$INTERFACE := $INTNAMES :: func ( $TYPES? ) $TYPESPEC
-$INTNAMES := $INTNAME | $INTNAME , $INTNAMES
-$INTNAME := $ID | infix $INFIX
+$INTERFACE  := $INTNAMES :: func ( $TYPES? ) $TYPESPEC
+$INTNAMES   := $INTNAME | $INTNAME , $INTNAMES
+$INTNAME    := $ID | infix $INFIX
 ```
 
 Example:
@@ -106,9 +106,9 @@ instance ord<either<`a>> require ord<`a> {
 
 A predicate asserts <$TYPE> is a member of the class named by $ID.
 ```
-$PREDS := require $PREDS_
+$PREDS  := require $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
-$PRED := $CSID <$QTYPE>
+$PRED   := $CSID <$QTYPE>
 ```
 
 Example:
@@ -131,24 +131,24 @@ $STAR := *
 
 The leading character of a type variable must be ` (backquote).
 ```
-$TVAR := `$ID
-$TVARKIND := `$ID | `$ID :: $KIND
+$TVAR      := `$ID
+$TVARKIND  := `$ID | `$ID :: $KIND
 $TVARKINDS := $TVARKIND | $TVARKIND , $TVARKINDS
-$TVARS := <$TVARKINDS>
+$TVARS     := <$TVARKINDS>
 ```
 
 ### Qualifier
 
 ```
-$QUALIFIER := un | lin
+$QUALIFIER := shared | uniq
 ```
 
 ### Type
 
 ```
-$QTYPE := $QUALIFIER? $TYPE
-$TYPE := $IDTVAR <$QTYPES>? | func ( $QTYPES? ) $TYPESPEC | ( $QTYPES? ) | [ $QTYPE ]
-$IDTVAR := $CSID | $TVAR
+$QTYPE  := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
+$TYPE   := $CSID <$QTYPES>? | func ( $QTYPES? ) $TYPESPEC |
+           ( $QTYPES? ) | [ $QTYPE ]
 $QTYPES := $QTYPE | $QTYPE , $QTYPES
 ```
 
@@ -161,24 +161,24 @@ $TYPESPEC := : $QTYPE
 ### Struct and Union
 
 ```
-$STRUCT := struct $ID $TVARS? $PREDS? { $PROD }
-$PROD := $PRODTYPE | $PRODTYPE $SEP $PROD
+$STRUCT   := struct $ID $TVARS? $PREDS? { $PROD }
+$PROD     := $PRODTYPE | $PRODTYPE $SEP $PROD
 $PRODTYPE := $ID $TYPESPEC
 ```
 
 ```
-$UNION := struct $ID $TVARS? $PREDS? { $SUM }
-$SUM := $SUMTYPE | $SUMTYPE $SEP $SUM
+$UNION   := struct $ID $TVARS? $PREDS? { $SUM }
+$SUM     := $SUMTYPE | $SUMTYPE $SEP $SUM
 $SUMTYPE := $ID | $ID $TYPESPEC
 ```
 
 ## Function Definition
 
 ```
-$DEFUN := func $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
+$DEFUN  := func $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
 $DEFUNS := $DEFUN | $DEFUNS $SEP $DEFUN
-$ARGS := $ARG | $ARG , $ARGS
-$ARG := $ID $TYPESPEC?
+$ARGS   := $ARG | $ARG , $ARGS
+$ARG    := $ID $TYPESPEC?
 ```
 
 ```
@@ -188,9 +188,35 @@ func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
 ## Expression
 
 ```
+$EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | ( $EXPR ) | $EXPR0
+$EXPR0   := $EXPR1 $EXPR2
+$EXPR1   := $CSID | $IF | $LET | $TUPLE | $DICT |
+            { $EXPRS } | [ $EXPRS_? ] | $LITERAL
+$EXPR2   := ∅ | [ $EXPR ] $EXPR2 | $APPLY $EXPR2
+$EXPRS   := $EXPR | $EXPR $SEP $EXPR
+$EXPRS'  := $EXPR | $EXPR , $EXPR
+$LITERAL := $STR | $DECIMAL | $FLOAT
+$PREFIX  := - | *
+```
+
+tiny version
+```
+$EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | ( $EXPR ) | $EXPR0
+$EXPR0   := $EXPR1 $EXPR2
+$EXPR1   := $CSID | $IF | $TUPLE | $LITERAL
+$EXPR2   := ∅ | $APPLY $EXPR2
+$EXPRS   := $EXPR | $EXPR $SEP $EXPR
+$EXPRS'  := $EXPR | $EXPR , $EXPR
+$LITERAL := $DECIMAL
+$PREFIX  := - | *
+```
+
+## Expression (Old)
+
+```
 $EXPR := $EXPR0 $EXPR' | $EXPR0 $EXPR' $INFIX+ $EXPR
 $EXPR0 := $PREFIX? $EXPR0'
-$EXPR0' := $ID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
+$EXPR0' := $CSID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
            { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
 $EXPR' := ∅ | [ $EXPR ] $EXPR' | $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
@@ -202,7 +228,7 @@ $PREFIX := - | *
 ### Apply
 
 ```
-$APPLY := ( $EXPRS_? )
+$APPLY := ( $EXPRS'? )
 ```
 
 TODO: named arguments, optional
@@ -210,32 +236,39 @@ TODO: named arguments, optional
 ### If
 
 ```
-$IF := if $EXPR { $EXPRS } $ELSE?
+$IF   := if $EXPR { $EXPRS } $ELSE?
 $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
 ```
 
 ### Let
 
 ```
-$LET := let $DEFVARS $IN?
-$DEFVAR := $ID $TYPESPEC? = $EXPR
+$LET     := let $DEFVARS $IN?
+$DEFVAR  := $ID $TYPESPEC? = $EXPR
 $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
-$IN := in $EXPR
+$IN      := in $EXPR
+```
+
+### Tuple
+
+```
+$TUPLE := ( $EXPR, ) | ( $EXPRS'? )
 ```
 
 ### Dict
 
 ```
-$DICT := $DICTELM | $DICTELM , $DICT
-$DICTELM := $EXPR : $EXPR
+$DICT     := dict { $DICTELMS? }
+$DICTELMS := $DICTELM | $DICTELM , $DICTELMS
+$DICTELM  := $EXPR : $EXPR
 ```
 
 ## String Literal
 
 ```
-$STR := " $CHAR* "
+$STR    := " $CHAR* "
 $ESCAPE := \a | \b | \f | \r | \n | \t | \v | \\ | \? | \' | \" | \0 | \UXXXXXXXX | \uXXXX
-$CHAR := $ESCAPE | characters not in $ESCAPE
+$CHAR   := $ESCAPE | characters not in $ESCAPE
 ```
 
 ## Decimal Number Literal
@@ -247,8 +280,8 @@ $DECIMAL := [1-9][0-9]* | 0
 ## Floating Point Number Literal
 
 ```
-$FLOAT := $DECIMAL.[0-9]* $EXP? f?
-$EXP := e $PLUSMINUS [0-9]+
+$FLOAT     := $DECIMAL.[0-9]* $EXP? f?
+$EXP       := e $PLUSMINUS [0-9]+
 $PLUSMINUS := + | -
 ```
 
