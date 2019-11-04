@@ -18,7 +18,7 @@ data Arg = Arg Position String (Maybe QType) deriving (Show)
 -- qualifier
 data Qual =
     Shared |             -- shared type
-    Uniq deriving (Show) -- linear type
+    Uniq deriving (Show) -- unique type
 
 -- qualified type
 data QType = QType Position (Maybe Qual) LType deriving (Show)
@@ -28,11 +28,13 @@ data LType =
     IDType Position [String] [QType] |
     TVar Position String [QType] |
     ArrayType Position QType |
-    TupleType Position [QType]
+    TupleType Position [QType] |
+    FuncType Position [QType] QType |
+    VoidType
     deriving (Show)
 
 -- predicate
-data Pred = Pred [String] QType deriving (Show)
+data Pred = Pred Position [String] QType deriving (Show)
 
 data Expr =
     ExprIf Position Expr Expr Expr |

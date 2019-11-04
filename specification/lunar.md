@@ -26,9 +26,12 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 ## Reserved Words
 
 ```
-$RESERVED := class | type | if | let | instance | require | func |
-             match | module | import | return | as | here | dict |
-             infix | shared | uniq | $INFIX
+$RESERVED := true | false | void |
+             class | instance | data | memory |
+             if | elif | else |
+             let | in | func | require |
+             match | import | as | here |
+             prefix | infix | shared | uniq
 ```
 
 ## Identifier
@@ -71,8 +74,8 @@ $INTNAME    := $ID | infix $INFIX
 Example:
 ```
 class ord<`a> require eq<`a> {
-    funcA, funcB :: func(`a) : `a
-    infix <, infix > :: func(`a, `a) : bool
+    funcA, funcB :: func(`a) -> `a
+    infix <, infix > :: func(`a, `a) -> bool
 }
 ```
 This class definition define a class "ord" taking
@@ -146,10 +149,11 @@ $QUALIFIER := shared | uniq
 ### Type
 
 ```
-$QTYPE  := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
-$TYPE   := $CSID <$QTYPES>? | func ( $QTYPES? ) $TYPESPEC |
+$QTYPE   := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
+$TYPE    := $CSID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
            ( $QTYPES? ) | [ $QTYPE ]
-$QTYPES := $QTYPE | $QTYPE , $QTYPES
+$RETTYPE := -> $QTYPE
+$QTYPES  := $QTYPE | $QTYPE , $QTYPES
 ```
 
 ### Type Specifier
@@ -175,14 +179,14 @@ $SUMTYPE := $ID | $ID $TYPESPEC
 ## Function Definition
 
 ```
-$DEFUN  := func $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
+$DEFUN  := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
 $DEFUNS := $DEFUN | $DEFUNS $SEP $DEFUN
 $ARGS   := $ARG | $ARG , $ARGS
 $ARG    := $ID $TYPESPEC?
 ```
 
 ```
-func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
+func myfun (x : `a, y : `b) -> `a require num<`a>, bool<`b> { x }
 ```
 
 ## Expression
@@ -190,7 +194,7 @@ func myfun (x : `a, y : `b) : `a require num<`a>, bool<`b> { x }
 ```
 $EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | ( $EXPR ) | $EXPR0
 $EXPR0   := $EXPR1 $EXPR2
-$EXPR1   := $CSID | $IF | $LET | $TUPLE | $DICT |
+$EXPR1   := $CSID | $IF | $LET | $TUPLE |
             { $EXPRS } | [ $EXPRS'? ] | $LITERAL
 $EXPR2   := ∅ | [ $EXPR ] $EXPR2 | $APPLY $EXPR2
 $EXPRS   := $EXPR | $EXPR $SEP $EXPR
@@ -243,24 +247,15 @@ $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
 ### Let
 
 ```
-$LET     := let $DEFVARS $IN?
+$LET     := let $DEFVARS
 $DEFVAR  := $ID $TYPESPEC? = $EXPR
 $DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
-$IN      := in $EXPR
 ```
 
 ### Tuple
 
 ```
 $TUPLE := ( $EXPR, ) | ( $EXPRS'? )
-```
-
-### Dict
-
-```
-$DICT     := dict { $DICTELMS? }
-$DICTELMS := $DICTELM | $DICTELM , $DICTELMS
-$DICTELM  := $EXPR : $EXPR
 ```
 
 ## String Literal

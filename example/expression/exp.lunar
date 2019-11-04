@@ -1,12 +1,23 @@
-func pred(a, b) require eq<a>, eq<b> {
-    a + b * -  10 + // 40
+func pred( a : c:d
+    ,
+    b :
+    func (  `a
+        , `c  < `d, `e > ) -> `b) -> u32 require eq<a>, eq<b> {
+    7 + 3 * -  10 + // 40
     // 50
 
-    5 *
+    5 * 9;
 
-    cmp (a, b)
+    1000 + 30
+    ;;;
 
-    10 * 20
+
+    ;;
+    ;
+
+    ;;
+
+    40+500000
 }
 
 func binop(a : t<u32>, b) : u64 {

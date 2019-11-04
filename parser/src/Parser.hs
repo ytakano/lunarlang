@@ -6,32 +6,21 @@ module Parser (
 
 import qualified AST
 import           Control.Applicative
+import           Data.Char
 import           Data.Functor
 import           Data.Maybe
-import           Text.Parsec                            ((<?>))
-import qualified Text.Parsec                            as P
-import qualified Text.Parsec.Expr                       as E
-import qualified Text.Parsec.Token                      as T
-import           Text.ParserCombinators.Parsec.Language (haskellDef)
+import           Text.Parsec          ((<?>))
+import qualified Text.Parsec          as P
+import qualified Text.Parsec.Expr     as E
+import           Text.Parsec.Language as L
+import qualified Text.Parsec.Token    as T
 
 
-getPos pos = AST.Pos (P.sourceLine pos) (P.sourceColumn pos)
+getPos = getPos' <$> P.getPosition
+    where
+        getPos' pos = AST.Pos (P.sourceLine pos) (P.sourceColumn pos)
 
-parse = P.parse parseTopID
-
-parseTopID = do
-    parseSpaces
-    id <- P.try (P.string "class") <|> P.string "func"
-    parseTop id
-
-parseTop "class" = return AST.Class
-parseTop "func"  = parseDefun
-parseTop _       = fail "invalid identifier"
-
-parseID = do
-    h <- parseNonum
-    t <- P.many parseChar
-    return (h:t)
+parse = P.parse statement
 
 -- letter | digit | multibyte character
 parseChar :: P.Parsec String () Char
@@ -41,381 +30,243 @@ parseChar = P.digit <|> parseNonum
 parseNonum :: P.Parsec String () Char
 parseNonum = P.letter <|> P.noneOf ['\0'..'\127']
 
-parseIsChar c = P.try (P.char c $> True) <|> return False
+expr = E.buildExpressionParser table term <?> "expression"
 
--- $ID ( $ARGS? ) $TYPESPEC? $PREDS? { $EXPRS }
-parseDefun = do
-    parseSpacesPlus
-    pos <- P.getPosition
-
-    id <- parseID
-    parseSpaces
-    P.char '('
-    parseSpaces
-
-    -- parse arguments
-    args <- parseArgs
-
-    -- parse return value type
-    parseSpaces
-    c <- parseIsChar ':'
-    parseSpaces
-    ret <- if c then do
-        t <- parseQType
-        parseSpaces
-        return $ Just t
-    else
-        return Nothing
-
-    -- parse predicates
-    preds <- parsePreds
-    parseSpaces
-
-    -- parse expressions
-    P.char '{'
-    parseSpaces
-    exprs <- parseExprs
-
-    return $ AST.Defun (AST.Fun (getPos pos) id args ret preds exprs)
-
-parseComment = do
-    P.string "//"
-    P.many $ P.satisfy (`notElem` "\r\n")
-    return ' '
-
-parseSpacesPlus = do
-    c <- P.try (P.oneOf " \t\r\n") <|> parseComment
-    parseSpaces
-
-parseSpaces = do
-    P.many $ P.oneOf " \t\r\n"
-    P.try (do
-        parseComment
-        parseSpaces) <|> return Nothing
-
-parseSpaces2 = do
-    P.many $ P.oneOf " \t\r\n;"
-    P.try (do
-        parseComment
-        parseSpaces2) <|> return Nothing
-
-parseEOL = do
-    P.many $ P.oneOf " \t"
-    P.try parseComment <|> return ' '
-    P.many1 $ P.oneOf "\r\n;"
-    parseSpaces2
-
--- $PREDS  := require $PREDS_
--- $PREDS_ := $PRED | $PRED, $PRED
-parsePreds = do
-    c <- P.try (do
-        P.string "require"
-        parseSpacesPlus
-        return True) <|> return False
-    if c then do
-        p <- parsePred
-        parseSpaces
-        preds_ [p]
-    else
-        return []
+table = [[prefix "-" (opPrefix "-")],
+         [binary "*" (opBin "*") E.AssocLeft,
+          binary "/" (opBin "/") E.AssocLeft,
+          binary "%" (opBin "%") E.AssocLeft],
+         [binary "+" (opBin "+") E.AssocLeft,
+          binary "-" (opBin "-") E.AssocLeft],
+         [binary "<<" (opBin "<<") E.AssocLeft,
+          binary ">>" (opBin ">>") E.AssocLeft],
+         [binary "<" (opBin "<") E.AssocLeft,
+          binary ">" (opBin ">") E.AssocLeft,
+          binary "<=" (opBin "<=") E.AssocLeft,
+          binary ">=" (opBin ">=") E.AssocLeft],
+         [binary "==" (opBin "==") E.AssocLeft,
+          binary "!=" (opBin "!=") E.AssocLeft]]
     where
-        preds_ pds = do
-            r <- parseIsChar ','
-            if r then do
-                parseSpaces
-                p' <- parsePred
-                parseSpaces
-                preds_ $ p':pds
-            else
-                return $ reverse pds
-
--- $PRED := $CSID <$QTYPE>
-parsePred = do
-    id <- parseCSID
-    parseSpaces
-    P.char '<'
-    parseSpaces
-    t <- parseQType
-    parseSpaces
-    P.char '>'
-    return $ AST.Pred id t
-
--- $QTYPE := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
-parseQType = do
-    pos <- P.getPosition
-    c <- parseIsChar '`'
-    if c then do
-        t <- parseTVar pos
-        return $ AST.QType (getPos pos) Nothing t
-    else do
-        pos' <- P.getPosition
-        id <- parseID
-        let q = if id == "shared" then AST.Shared else AST.Uniq
-        t <- if id /= "shared" && id /= "uniq" then do
-            parseSpaces
-            parseTID pos' id
-        else do
-            parseSpacesPlus
-            parseType
-        return $ AST.QType (getPos pos') (Just q) t
-
--- $QTYPES := $QTYPE | $QTYPE , $QTYPES
-parseQTypes = do
-    h <- parseQType
-    t <- qts []
-    return $ h:t
-    where
-        qts qtypes = do
-            _ <- parseSpaces
-            c <- parseIsChar ','
-            if c then do
-                _ <- parseSpaces
-                t <- parseQType
-                qts $ t:qtypes
-            else
-                return $ reverse qtypes
-
--- $TYPE := $CSID <$QTYPES>? | func ( $QTYPES? ) $TYPESPEC | ( $QTYPES? ) | [ $QTYPE ]
-parseType = do
-    pos <- P.getPosition
-    c <- P.try (P.char '(') <|> P.char '[' <|> parseNonum
-    case c of
-        '(' -> parseTupleType pos
-        '[' -> parseArrayType pos
-        _   -> do
-            t <- P.try parseID <|> return ""
-            let id = c:t
-            -- TODO: parse function type
-            parseTID pos id
-
--- $QTYPES>
-parseTArgs = do
-    parseSpaces
-    t <- parseQTypes
-    parseSpaces
-    P.char '>'
-    return t
-
--- $TVAR
-parseTVar pos = do
-    id <- parseID
-    c <- parseIsChar '<'
-    targs <- if c then parseTArgs else return []
-    return $ AST.TVar (getPos pos) ('`':id) targs
-
--- (: ID)* <$QTYPES>?
-parseTID pos id = do
-    ids <- parseCSID2 []
-    let csid = id:ids
-    c <- parseIsChar '<'
-    targs <- if c then parseTArgs else return []
-    return $ AST.IDType (getPos pos) csid targs
-
--- $CSID := $ID | $ID : $CSID
-parseCSID = do
-    h <- parseID
-    ids <- parseCSID2 [h]
-    return ids
-
--- (: $ID)*
-parseCSID2 ids = do
-    parseSpaces
-    c <- parseIsChar ':'
-    if c then do
-        parseSpaces
-        id <- parseID
-        parseCSID2 $ id:ids
-    else
-        return $ reverse ids
-
--- ( $QTYPES? )
-parseTupleType pos = do
-    parseSpaces
-    t <- parseQTypes
-    parseSpaces
-    P.char ')'
-    return $ AST.TupleType (getPos pos) t
-
--- [ $QTYPE ]
-parseArrayType pos = do
-    parseSpaces
-    t <- parseQType
-    P.char ']'
-    return $ AST.ArrayType (getPos pos) t
-
--- $TYPESPEC := : $QTYPE
--- $ARG      := $ID $TYPESPEC?
-parseArg = do
-    pos <- P.getPosition
-    id <- parseID
-    parseSpaces
-    c <- parseIsChar ':'
-    t <- if c then do
-        parseSpaces
-        qt <- parseQType
-        return $ Just qt
-    else
-        return Nothing
-    return $ AST.Arg (getPos pos) id t
-
--- ')' | $ARG ')' | $ARG (, $ARGS)* ')'
-parseArgs = P.try (P.char ')' $> []) <|> firstArg
-    where
-        firstArg = do
-            h <- parseArg
-            parseSpaces
-            tailArgs [h]
-        tailArgs args = do
-            c <- parseIsChar ','
-            if c then do
-                parseSpaces
-                h <- parseArg
-                parseSpaces
-                tailArgs $ h:args
-            else do
-                P.char ')'
-                return $ reverse args
-
--- $DECIMAL := [1-9][0-9]* | 0
-parseDecimal = do
-    h <- P.oneOf ['1'..'9']
-    t <- P.many P.digit
-    return $ AST.LitInt (read (h:t))
-
-parseLiteral = do
-    pos <- P.getPosition
-    d <- parseDecimal
-    return $ AST.ExprLiteral (getPos pos) d
-
--- TODO
--- $EXPR1 := $CSID | $IF | $TUPLE | $LITERAL
-parseExpr1 = do
-    pos <- P.getPosition
-    id <- P.try (Just <$> parseID) <|> return Nothing
-    case id of
-        Just "if" -> parseIf pos
-        -- TODO: parse CSID
-        Just id'  -> return $ AST.ExprCSID (getPos pos) [id']
-        Nothing   -> expr1'
-    where
-        expr1' = do
-            pos' <- P.getPosition
-            c <- P.try (Just <$> P.oneOf "(") <|> return Nothing
-            case c of
-                Just '(' -> parseTuple pos'
-                Nothing  -> parseLiteral
-
--- $IF   := if $EXPR { $EXPRS } $ELSE?
--- $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
-parseIf pos = do
-    parseSpacesPlus
-    -- TODO
-    e1 <- parseExpr
-    e2 <- parseExpr
-    e3 <- parseExpr
-    return $ AST.ExprIf (getPos pos) e1 e2 e3
-
-parseTuple pos = do
-    parseSpaces
-    -- TODO
-    e <- parseExpr
-    return $ AST.ExprTuple (getPos pos) [e]
-
--- $EXPR0 := $EXPR1 $EXPR2
-parseExpr0 = do
-    e <- parseExpr1
-    e' <- parseExpr2 e
-    return $ fromMaybe e e'
-
--- TODO
--- $EXPR2 := ∅ | $APPLY $EXPR2
-parseExpr2 e = do
-    c <- P.try (do
-        parseSpaces
-        r <- P.oneOf "("
-        return $ Just r) <|> return Nothing
-    case c of
-        Just '(' -> do
-            args <- parseApply e
-            -- TODO: recursive
-            return $ Just args
-        Nothing  -> return Nothing
-
--- $EXPRS'? )
-parseApply fun =
-    P.try (P.char ')' $> AST.ExprApply fun []) <|> firstExpr
-    where
-        firstExpr = do
-            e <- parseExpr
-            parseSpaces
-            tailExprs [e]
-        tailExprs exprs = do
-            c <- parseIsChar ')'
-            if c then
-                return $ AST.ExprApply fun (reverse exprs)
-            else do
-                P.char ','
-                parseSpaces
-                e <- parseExpr
-                parseSpaces
-                tailExprs $ e:exprs
-
-
-lexer :: T.TokenParser ()
-lexer = T.makeTokenParser (haskellDef { T.reservedOpNames = ["*", "/", "+", "-"] })
-
-parseExpr = E.buildExpressionParser table term <?> "expression"
-    where
-        term = do
-            P.try (do
-                parseComment
-                parseSpaces
-                return True) <|> return False
-            c <- parseIsChar '('
-            if c then do
-                parseSpaces
-                e <- parseExpr
-                parseSpaces
-                P.char ')'
-                return e
-            else do
-                e <- parseExpr0
-                P.try (do
-                    parseSpaces
-                    P.lookAhead $ P.oneOf "+-*/%<>!="
-                    return e) <|> return e <?> "simple expression"
-        reservedOp  = T.reservedOp lexer
-        binary name fun assoc = E.Infix (do{ reservedOp name; return fun }) assoc
-        prefix name fun = E.Prefix (do{ reservedOp name; return fun })
-        table = [[prefix "-" (opPrefix "-")],
-                 [binary "*" (opBin "*") E.AssocLeft,
-                  binary "/" (opBin "/") E.AssocLeft,
-                  binary "%" (opBin "%") E.AssocLeft],
-                 [binary "+" (opBin "+") E.AssocLeft,
-                  binary "-" (opBin "-") E.AssocLeft],
-                 [binary "<<" (opBin "<<") E.AssocLeft,
-                  binary ">>" (opBin ">>") E.AssocLeft],
-                 [binary "<" (opBin "<") E.AssocLeft,
-                  binary ">" (opBin ">") E.AssocLeft,
-                  binary "<=" (opBin "<=") E.AssocLeft,
-                  binary ">=" (opBin ">=") E.AssocLeft],
-                 [binary "==" (opBin "==") E.AssocLeft,
-                  binary "!=" (opBin "!=") E.AssocLeft]]
         opPrefix = AST.ExprPrefix
         opBin = AST.ExprBin
+        binary name fun assoc = E.Infix (do{ reservedOp name; pure fun }) assoc
+        prefix name fun = E.Prefix (do{ reservedOp name; pure fun })
 
--- $EXPRS := $EXPR $SEP? } | $EXPR $SEP $EXPRS
-parseExprs = parseExprs' []
+-- TODO
+term = parens expr <|> literal <?> "term"
+
+whiteSpacesNotEOL =
+    P.many $ P.satisfy isSpace'
     where
-        parseExprs' exprs = do
-            e <- parseExpr
-            eol <- P.try (parseEOL $> True) <|> return False
-            if eol then do
-                paren <- parseIsChar '}'
-                if paren then
-                    return $ reverse (e:exprs)
-                else
-                    parseExprs' $ e:exprs
-            else do
-                P.char '}'
-                return $ reverse (e:exprs)
+        isSpace' c = isSpace c && c /= '\r' && c /= '\n'
+
+lineComment = (P.string "//" >> P.many (P.satisfy (`notElem` "\r\n"))) <|> pure ""
+
+eol = P.oneOf ";\r\n"
+
+whiteSpaceWTSC = do
+    whiteSpace
+    P.lookAhead (P.satisfy ((/=) ';') $> ())
+        <|> (P.many1 (P.char ';') >> whiteSpaceWTSC)
+
+exprs = do
+    whiteSpace
+    e <- expr
+    P.try (whiteSpaceWTSC >> P.lookAhead (P.char '}') $> [e]) <|> exprs' [e]
+    where
+        exprs' es = do
+            whiteSpacesNotEOL
+            lineComment
+            eol
+            whiteSpaceWTSC
+            e <- expr
+            P.try (whiteSpaceWTSC >> P.lookAhead (P.char '}') $> reverse (e:es))
+                <|> exprs' (e:es)
+
+lexer      = T.makeTokenParser def
+reservedOp = T.reservedOp lexer
+natural    = T.natural lexer
+parens     = T.parens lexer
+braces     = T.braces lexer
+angles     = T.angles lexer
+brackets   = T.brackets lexer
+identifier = T.identifier lexer
+reserved   = T.reserved lexer
+whiteSpace = T.whiteSpace lexer
+commaSep   = T.commaSep lexer
+commaSep1  = T.commaSep1 lexer
+
+def = L.emptyDef{T.commentLine = "//",
+                 T.identStart = parseNonum,
+                 T.identLetter = parseChar,
+                 T.opStart = P.oneOf "*/%+-<>=!",
+                 T.opLetter = P.oneOf "*/%+-<>=!",
+                 T.reservedOpNames = ["+",  "-",  "/", "*", "%",
+                                      "<<", ">>", "<", ">", "<=",
+                                      ">=", "==", "!="],
+                 T.reservedNames = ["true", "false", "void",
+                                    "class", "instance", "data", "memory",
+                                    "if", "elif", "else",
+                                    "let", "in", "func", "require",
+                                    "match", "import", "as", "here",
+                                    "prefix", "infix", "shared", "uniq"]}
+
+statement = do
+    pos <- getPos
+    (reserved "func" >> defun pos)
+        <|> reserved "class" $> AST.Class
+        <|> reserved "instance" $> AST.Inst
+
+{-
+    $DEFUN  := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
+-}
+defun pos = do
+    whiteSpace
+    id <- identifier
+    whiteSpace
+    args <- parens $ commaSep arg
+    whiteSpace
+    ret <- (Just <$> retType) <|> pure Nothing
+    whiteSpace
+    preds <- (reserved "require" >> whiteSpace >> commaSep1 predicate)
+        <|> pure []
+    e <- braces exprs
+    pure $ AST.Defun $ AST.Fun pos id args ret preds e
+
+{-
+    $ARG      := $ID $TYPESPEC?
+    $TYPESPEC := : $QTYPE
+-}
+arg = do
+    pos <- getPos
+    id <- identifier
+    whiteSpace
+    qt <- (P.char ':' >> whiteSpace >> Just <$> qtype)
+        <|> pure Nothing
+    pure $ AST.Arg pos id qt
+
+{-
+    $QTYPE   := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
+    $TYPE    := $CSID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
+                ( $QTYPES? ) | [ $QTYPE ]
+-}
+qtype = do
+    pos <- getPos
+    AST.QType pos Nothing <$> typeTvar <|> qtype' pos
+
+qtype' pos = do
+    qual <- P.try (
+        (reserved "shared" >> whiteSpace $> Just AST.Shared)
+        <|> (reserved "uniq" >> whiteSpace $> Just AST.Uniq)
+        <|> pure Nothing)
+    t <- typeTuple <|> typeArray <|> typeFuncID
+    pure $ AST.QType pos Nothing t
+
+{-
+    ( $QTYPES? )
+-}
+typeTuple = do
+    pos <- getPos
+    qt <- parens $ commaSep qtype <* whiteSpace
+    pure $ AST.TupleType pos qt
+
+{-
+    [ $QTYPES ]
+-}
+typeArray = do
+    pos <- getPos
+    qt <- brackets $ qtype <* whiteSpace
+    pure $ AST.ArrayType pos qt
+
+{-
+    $CSID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE
+-}
+typeFuncID = do
+    pos <- getPos
+    id <- P.try (reserved "func" $> "func") <|> identifier
+    case id of
+        "func" -> typeFunc pos
+        _      -> typeID pos id
+
+{-
+    $CSID <$QTYPES>?
+-}
+typeID pos id = do
+    id' <- csid2 [id]
+    pure $ AST.IDType pos id' []
+
+{-
+    ( $QTYPES? ) $RETTYPE
+-}
+typeFunc pos = do
+    whiteSpace
+    args <- parens $ commaSep qtype <* whiteSpace
+    whiteSpace
+    ret <- retType
+    pure $ AST.FuncType pos args ret
+
+{-
+    $RETTYPE := -> $QTYPE
+-}
+retType = do
+    P.string "->"
+    whiteSpace
+    qtype
+
+{-
+    $TVAR <$QTYPES>?
+-}
+typeTvar = do
+    pos <- getPos
+    id <- tvar
+    whiteSpace
+    args <- typeArgs
+    pure $ AST.TVar pos id args
+
+{-
+    <$QTYPES>?
+-}
+typeArgs = angles (commaSep1 qtype <* whiteSpace) <|> pure []
+
+{-
+    $CSID := $ID | $ID : $CSID
+-}
+csid = do
+    h <- identifier
+    ids <- csid2 [h]
+    return ids
+
+{-
+    (: $ID)*
+-}
+csid2 ids = whiteSpace >> csid2' <|> pure (reverse ids)
+    where
+        csid2' = do
+            P.char ':'
+            whiteSpace
+            id <- identifier
+            csid2 $ id:ids
+
+{-
+    $TVAR := `$ID
+-}
+tvar = do
+    P.char '`'
+    id <- identifier
+    pure $ '`':id
+
+{-
+    $PRED := $CSID <$QTYPE>
+-}
+predicate = do
+    pos <- getPos
+    id <- csid
+    whiteSpace
+    qt <- angles qtype
+    pure $ AST.Pred pos id qt
+
+-- TODO
+literal = do
+    pos <- getPos
+    num <- natural
+    pure $ AST.ExprLiteral pos (AST.LitInt num)
