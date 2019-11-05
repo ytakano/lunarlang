@@ -60,7 +60,7 @@ whiteSpacesNotEOL =
     where
         isSpace' c = isSpace c && c /= '\r' && c /= '\n'
 
-lineComment = (P.string "//" >> P.many (P.satisfy (`notElem` "\r\n"))) <|> pure ""
+lineComment = (P.try (P.string "//") >> P.many (P.satisfy (`notElem` "\r\n"))) <|> pure ""
 
 eol = P.oneOf ";\r\n"
 
@@ -83,18 +83,19 @@ exprs = do
             P.try (whiteSpaceWTSC >> P.lookAhead (P.char '}') $> reverse (e:es))
                 <|> exprs' (e:es)
 
-lexer      = T.makeTokenParser def
-reservedOp = T.reservedOp lexer
-natural    = T.natural lexer
-parens     = T.parens lexer
-braces     = T.braces lexer
-angles     = T.angles lexer
-brackets   = T.brackets lexer
-identifier = T.identifier lexer
-reserved   = T.reserved lexer
-whiteSpace = T.whiteSpace lexer
-commaSep   = T.commaSep lexer
-commaSep1  = T.commaSep1 lexer
+lexer         = T.makeTokenParser def
+reservedOp    = T.reservedOp lexer
+natural       = T.natural lexer
+parens        = T.parens lexer
+braces        = T.braces lexer
+angles        = T.angles lexer
+brackets      = T.brackets lexer
+identifier    = T.identifier lexer
+reserved      = T.reserved lexer
+whiteSpace    = T.whiteSpace lexer
+commaSep      = T.commaSep lexer
+commaSep1     = T.commaSep1 lexer
+stringLiteral = T.stringLiteral lexer
 
 def = L.emptyDef{T.commentLine = "//",
                  T.identStart = parseNonum,
@@ -268,5 +269,8 @@ predicate = do
 -- TODO
 literal = do
     pos <- getPos
-    num <- natural
-    pure $ AST.ExprLiteral pos (AST.LitInt num)
+    lit pos <$> (AST.LitStr <$> stringLiteral)
+        <|> lit pos <$> (AST.LitInt <$> natural)
+        <?> "literal"
+    where
+        lit = AST.ExprLiteral

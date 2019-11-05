@@ -488,4 +488,10 @@ func expr() {
 
 ## Pattern Match
 
-TODO
+
+### Pattern
+
+```
+$PATTERN   := $ID | _ | $CSID { $PATTERNS } | ( $PATTERNS )
+$PATTERNS1 := $PATTERN | $PATTERN , $PATTERNS
+```
