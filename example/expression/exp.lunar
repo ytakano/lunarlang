@@ -7,8 +7,9 @@ func pred( a : c:d
     // 50
 
     5 * 9
-    20
-
+    "あいうえお"
+    1.8e+2
+    '\n'
 }
 
 func binop(a : t<u32>, b) : u64 {

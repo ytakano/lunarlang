@@ -9,12 +9,12 @@ import           Control.Applicative
 import           Data.Char
 import           Data.Functor
 import           Data.Maybe
+import           Debug.Trace
 import           Text.Parsec          ((<?>))
 import qualified Text.Parsec          as P
 import qualified Text.Parsec.Expr     as E
 import           Text.Parsec.Language as L
 import qualified Text.Parsec.Token    as T
-
 
 getPos = getPos' <$> P.getPosition
     where
@@ -55,29 +55,17 @@ table = [[prefix "-" (opPrefix "-")],
 -- TODO
 term = parens expr <|> literal <?> "term"
 
-whiteSpacesNotEOL =
-    P.many $ P.satisfy isSpace'
-    where
-        isSpace' c = isSpace c && c /= '\r' && c /= '\n'
-
-lineComment = (P.try (P.string "//") >> P.many (P.satisfy (`notElem` "\r\n"))) <|> pure ""
-
-eol = P.oneOf ";\r\n"
-
 whiteSpaceWTSC = do
     whiteSpace
     P.lookAhead (P.satisfy ((/=) ';') $> ())
         <|> (P.many1 (P.char ';') >> whiteSpaceWTSC)
 
 exprs = do
-    whiteSpace
+    whiteSpaceWTSC
     e <- expr
     P.try (whiteSpaceWTSC >> P.lookAhead (P.char '}') $> [e]) <|> exprs' [e]
     where
         exprs' es = do
-            whiteSpacesNotEOL
-            lineComment
-            eol
             whiteSpaceWTSC
             e <- expr
             P.try (whiteSpaceWTSC >> P.lookAhead (P.char '}') $> reverse (e:es))
@@ -86,6 +74,7 @@ exprs = do
 lexer         = T.makeTokenParser def
 reservedOp    = T.reservedOp lexer
 natural       = T.natural lexer
+float         = T.float lexer
 parens        = T.parens lexer
 braces        = T.braces lexer
 angles        = T.angles lexer
@@ -96,6 +85,7 @@ whiteSpace    = T.whiteSpace lexer
 commaSep      = T.commaSep lexer
 commaSep1     = T.commaSep1 lexer
 stringLiteral = T.stringLiteral lexer
+charLiteral   = T.charLiteral lexer
 
 def = L.emptyDef{T.commentLine = "//",
                  T.identStart = parseNonum,
@@ -266,11 +256,12 @@ predicate = do
     qt <- angles qtype
     pure $ AST.Pred pos id qt
 
--- TODO
 literal = do
     pos <- getPos
-    lit pos <$> (AST.LitStr <$> stringLiteral)
-        <|> lit pos <$> (AST.LitInt <$> natural)
+    lit pos . AST.LitStr <$> stringLiteral
+        <|> lit pos . AST.LitChar <$> charLiteral
+        <|> P.try (lit pos . AST.LitFloat <$> float)
+        <|> lit pos . AST.LitInt <$> natural
         <?> "literal"
     where
         lit = AST.ExprLiteral

@@ -49,6 +49,7 @@ data Expr =
 
 data Literal =
     LitStr String |
+    LitChar Char |
     LitInt Integer |
     LitFloat Double
     deriving (Show)

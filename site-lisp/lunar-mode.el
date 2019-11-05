@@ -2,9 +2,10 @@
 
 (setq lunar-highlights
       '(("//.*" . font-lock-comment-face)
+	("'.*'" . font-lock-string-face)
 	("`\\<\\w+\\>" . font-lock-variable-name-face)
-	("\\<\\(bool\\|u64\\|s64\\|u32\\|s32\\|u16\\|s16\\|u8\\|s8\\)\\>" . font-lock-type-face)
-	("\\<\\(import\\|as\\|class\\|require\\|func\\|infix\\|instance\\|let\\|in\\|if\\|elif\\|else\\|match\\|struct\\|union\\|new\\|shared\\|stack\\|here\\)\\>" . font-lock-keyword-face)
+	("\\<\\(bool\\|void\\|u64\\|s64\\|u32\\|s32\\|u16\\|s16\\|u8\\|s8\\)\\>" . font-lock-type-face)
+	("\\<\\(import\\|here\\|as\\|class\\|require\\|func\\|infix\\|prefix\\|instance\\|let\\|if\\|elif\\|else\\|match\\|struct\\|union\\|new\\|shared\\)\\>" . font-lock-keyword-face)
         ("\\<\\(true\\|false\\)\\>" . font-lock-constant-face)))
 
 (define-derived-mode lunar-mode prog-mode "lunar"

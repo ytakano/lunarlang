@@ -26,12 +26,14 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 
 ## Reserved Words
 
+```
 $RESERVED := true | false | void |
-             class | instance | data | memory |
-             if | elif | else |
-             let | in | func | require |
+             class | instance | if | elif | else |
+             let | func | require |
              match | import | as | here |
-             prefix | infix | shared | uniq
+             prefix | infix | shared | uniq |
+             struct | union
+```
 
 ## Identifier
 
@@ -198,19 +200,7 @@ $EXPR1   := $CSID | $IF | $LET | $TUPLE |
 $EXPR2   := ∅ | [ $EXPR ] $EXPR2 | $APPLY $EXPR2
 $EXPRS   := $EXPR | $EXPR $SEP $EXPR
 $EXPRS'  := $EXPR | $EXPR , $EXPR
-$LITERAL := $STR | $DECIMAL | $FLOAT
-$PREFIX  := - | *
-```
-
-tiny version
-```
-$EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | ( $EXPR ) | $EXPR0
-$EXPR0   := $EXPR1 $EXPR2
-$EXPR1   := $CSID | $IF | $TUPLE | $LITERAL
-$EXPR2   := ∅ | $APPLY $EXPR2
-$EXPRS   := $EXPR | $EXPR $SEP $EXPR
-$EXPRS'  := $EXPR | $EXPR , $EXPR
-$LITERAL := $DECIMAL
+$LITERAL := $STR | $CHAR | $FLOAT | $NATURAL
 $PREFIX  := - | *
 ```
 
@@ -260,24 +250,29 @@ $TUPLE := ( $EXPR, ) | ( $EXPRS'? )
 ## String Literal
 
 ```
-$STR    := " $CHAR* "
-$ESCAPE := \a | \b | \f | \r | \n | \t | \v | \\ | \? | \' | \" | \0 | \UXXXXXXXX | \uXXXX
-$CHAR   := $ESCAPE | characters not in $ESCAPE
+$STR
+```
+same as Haskell
+
+## Character Literal
+
+```
+$CHAR
 ```
 
-## Decimal Number Literal
+## Natural Number Literal
 
 ```
-$DECIMAL := [1-9][0-9]* | 0
+$NATURAL
 ```
+same as Haskell
 
 ## Floating Point Number Literal
 
 ```
-$FLOAT     := $DECIMAL.[0-9]* $EXP? f?
-$EXP       := e $PLUSMINUS [0-9]+
-$PLUSMINUS := + | -
+$FLOAT
 ```
+same as Haskell
 
 ## Module Loading
 
