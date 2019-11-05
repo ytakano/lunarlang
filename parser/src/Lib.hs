@@ -4,6 +4,7 @@ module Lib
 
 import qualified Parser
 import qualified System.IO as IO
+import qualified Text.Pretty.Simple as PP
 
 parseFile [] = putStrLn "no input file"
 parseFile (file:_) = do
@@ -12,4 +13,5 @@ parseFile (file:_) = do
     let result = Parser.parse file contents
     putStrLn file
     putStrLn contents
-    print result
+    putStrLn "AST:"
+    PP.pPrint result
