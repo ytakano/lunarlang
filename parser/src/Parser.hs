@@ -230,10 +230,10 @@ csid = do
 {-
     (: $ID)*
 -}
-csid2 ids = whiteSpace >> csid2' <|> pure (reverse ids)
+csid2 ids =
+    P.try (whiteSpace >> P.char ':') >> csid2' <|> pure (reverse ids)
     where
         csid2' = do
-            P.char ':'
             whiteSpace
             id <- identifier
             csid2 $ id:ids
@@ -255,7 +255,9 @@ predicate = do
     whiteSpace
     qt <- angles qtype
     pure $ AST.Pred pos id qt
-
+{-
+    $LITERAL := $STR | $CHAR | $FLOAT | $NATURAL
+-}
 literal = do
     pos <- getPos
     lit pos . AST.LitStr <$> stringLiteral
@@ -265,3 +267,37 @@ literal = do
         <?> "literal"
     where
         lit = AST.ExprLiteral
+
+{-
+    $PATTERN := _ | ( $PATTERNS ) | $ID | $CSID { $PATTERNS }
+-}
+pattern' = do
+    pos <- getPos
+    P.char '_' $> AST.PatIgnore pos
+        <|> patternTuple pos
+        <|> patternIDData pos
+
+{-
+    ( $PATTERNS )
+-}
+patternTuple pos =
+    AST.PatTuple pos <$> parens (commaSep1 pattern' <* whiteSpace)
+
+{-
+    $ID | $CSID { $PATTERNS }
+-}
+patternIDData pos = do
+    id <- identifier
+    isC <- P.lookAhead (whiteSpace >> P.char ':' $> True) <|> pure False
+    if isC then
+        csid2 [id] >>= patternData pos
+    else
+        pure $ AST.PatID pos id
+
+{-
+    { $PATTERNS }
+-}
+patternData pos ids = do
+    whiteSpace
+    ps <- braces $ commaSep1 pattern' <* whiteSpace
+    pure $ AST.PatData pos ids ps

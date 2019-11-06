@@ -53,3 +53,10 @@ data Literal =
     LitInt Integer |
     LitFloat Double
     deriving (Show)
+
+data Pattern =
+    PatID Position String |
+    PatIgnore Position |
+    PatData Position [String] [Pattern] |
+    PatTuple Position [Pattern]
+    deriving (Show)

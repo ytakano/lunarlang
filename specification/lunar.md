@@ -487,6 +487,6 @@ func expr() {
 ### Pattern
 
 ```
-$PATTERN   := $ID | _ | $CSID { $PATTERNS } | ( $PATTERNS )
+$PATTERN   := _ | ( $PATTERNS ) | $ID | $CSID { $PATTERNS }
 $PATTERNS1 := $PATTERN | $PATTERN , $PATTERNS
 ```
