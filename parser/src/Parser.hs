@@ -125,20 +125,20 @@ defun pos = do
     pure $ AST.Defun $ AST.Fun pos id args ret preds e
 
 {-
-    $ARG      := $ID $TYPESPEC?
+    $ARG      := $PATTERN $TYPESPEC?
     $TYPESPEC := : $QTYPE
 -}
 arg = do
     pos <- getPos
-    id <- identifier
+    pat <- pattern'
     whiteSpace
     qt <- (P.char ':' >> whiteSpace >> Just <$> qtype)
         <|> pure Nothing
-    pure $ AST.Arg pos id qt
+    pure $ AST.Arg pos pat qt
 
 {-
     $QTYPE   := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
-    $TYPE    := $CSID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
+    $TYPE    := $DOTID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
                 ( $QTYPES? ) | [ $QTYPE ]
 -}
 qtype = do
@@ -170,7 +170,7 @@ typeArray = do
     pure $ AST.ArrayType pos qt
 
 {-
-    $CSID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE
+    $DOTID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE
 -}
 typeFuncID = do
     pos <- getPos
@@ -180,10 +180,10 @@ typeFuncID = do
         _      -> typeID pos id
 
 {-
-    $CSID <$QTYPES>?
+    $DOTID <$QTYPES>?
 -}
 typeID pos id = do
-    id' <- csid2 [id]
+    id' <- dotid2 [id]
     pure $ AST.IDType pos id' []
 
 {-
@@ -220,23 +220,23 @@ typeTvar = do
 typeArgs = angles (commaSep1 qtype <* whiteSpace) <|> pure []
 
 {-
-    $CSID := $ID | $ID : $CSID
+    $DOTID := $ID | $ID : $DOTID
 -}
-csid = do
+dotid = do
     h <- identifier
-    ids <- csid2 [h]
+    ids <- dotid2 [h]
     return ids
 
 {-
-    (: $ID)*
+    (. $ID)*
 -}
-csid2 ids =
-    P.try (whiteSpace >> P.char ':') >> csid2' <|> pure (reverse ids)
+dotid2 ids =
+    (P.try (whiteSpace >> P.char '.') >> dotid2') <|> pure (reverse ids)
     where
-        csid2' = do
+        dotid2' = do
             whiteSpace
             id <- identifier
-            csid2 $ id:ids
+            dotid2 $ id:ids
 
 {-
     $TVAR := `$ID
@@ -247,11 +247,11 @@ tvar = do
     pure $ '`':id
 
 {-
-    $PRED := $CSID <$QTYPE>
+    $PRED := $DOTID <$QTYPE>
 -}
 predicate = do
     pos <- getPos
-    id <- csid
+    id <- dotid
     whiteSpace
     qt <- angles qtype
     pure $ AST.Pred pos id qt
@@ -269,35 +269,31 @@ literal = do
         lit = AST.ExprLiteral
 
 {-
-    $PATTERN := _ | ( $PATTERNS ) | $ID | $CSID { $PATTERNS }
+    $PATTERN := _ | ( $PATTERNS1 ) | $DOTID $PATTERNS2?
+    $PATTERNS1 := $PATTERN | $PATTERN , $PATTERNS
 -}
 pattern' = do
     pos <- getPos
     P.char '_' $> AST.PatIgnore pos
         <|> patternTuple pos
-        <|> patternIDData pos
+        <|> patternDOTID pos
 
 {-
-    ( $PATTERNS )
+    ( $PATTERNS1 )
 -}
 patternTuple pos =
     AST.PatTuple pos <$> parens (commaSep1 pattern' <* whiteSpace)
 
 {-
-    $ID | $CSID { $PATTERNS }
+    $ID | $DOTID $PATTERNS2?
 -}
-patternIDData pos = do
-    id <- identifier
-    isC <- P.lookAhead (whiteSpace >> P.char ':' $> True) <|> pure False
-    if isC then
-        csid2 [id] >>= patternData pos
-    else
-        pure $ AST.PatID pos id
+patternDOTID pos = AST.PatDOTID pos <$> dotid <*> patterns2
 
 {-
-    { $PATTERNS }
+    $PATTERNS2 := ( $PATTERNS1 )
 -}
-patternData pos ids = do
-    whiteSpace
-    ps <- braces $ commaSep1 pattern' <* whiteSpace
-    pure $ AST.PatData pos ids ps
+patterns2 =
+    (P.try (whiteSpace >> P.lookAhead (P.char '(')) >> patterns')
+        <|> pure Nothing
+    where
+        patterns' = Just <$> parens (commaSep1 pattern' <* whiteSpace)

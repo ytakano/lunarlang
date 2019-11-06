@@ -8,7 +8,7 @@ $TOP2 := $CLASSDECL | $INST | $DEFUN | $IMPORT
 ## Infix Operator
 
 ```
-$INFIX := $INFIXCHAR+
+$INFIX     := $INFIXCHAR+
 $INFIXCHAR := + | - | < | > | / | % | : | & |
               * | ^ | @ | = | ! | ? | ~ | .
 ```
@@ -49,13 +49,13 @@ $SEP         := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
 $ID must not be reserved words.
 
 ```
-$CSID = $ID | $ID : $CSID
+$DOTID = $ID | $ID . $DOTID
 ```
 
 ## Import
 
 ```
-$IMPORT := import $CSID $HEREAS?
+$IMPORT := import $DOTID $HEREAS?
 $HEREAS := here | $AS
 $AS := as $ID
 ```
@@ -73,12 +73,14 @@ $INTNAME    := $ID | infix $INFIX
 ```
 
 Example:
+
 ```
 class ord<`a> require eq<`a> {
     funcA, funcB :: func(`a) -> `a
     infix <, infix > :: func(`a, `a) -> bool
 }
 ```
+
 This class definition define a class "ord" taking
 a type variable "\`a" which is a member of the class "eq".
 
@@ -109,16 +111,19 @@ instance ord<either<`a>> require ord<`a> {
 ### Predicate
 
 A predicate asserts <$TYPE> is a member of the class named by $ID.
+
 ```
 $PREDS  := require $PREDS_
 $PREDS_ := $PRED | $PRED, $PRED
-$PRED   := $CSID <$QTYPE>
+$PRED   := $DOTID <$QTYPE>
 ```
 
 Example:
+
 ```
 require ord<`a>, eq<`b>
 ```
+
 This predicate assert \`a and \`b are members of ord and eq classes,
 respectively.
 
@@ -134,6 +139,7 @@ $STAR := *
 ### Type Variable
 
 The leading character of a type variable must be ` (backquote).
+
 ```
 $TVAR      := `$ID
 $TVARKIND  := `$ID | `$ID :: $KIND
@@ -151,7 +157,7 @@ $QUALIFIER := shared | uniq
 
 ```
 $QTYPE   := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
-$TYPE    := $CSID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
+$TYPE    := $DOTID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
            ( $QTYPES? ) | [ $QTYPE ]
 $RETTYPE := -> $QTYPE
 $QTYPES  := $QTYPE | $QTYPE , $QTYPES
@@ -183,7 +189,7 @@ $SUMTYPE := $ID | $ID $TYPESPEC
 $DEFUN  := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
 $DEFUNS := $DEFUN | $DEFUNS $SEP $DEFUN
 $ARGS   := $ARG | $ARG , $ARGS
-$ARG    := $ID $TYPESPEC?
+$ARG    := $PATTERN $TYPESPEC?
 ```
 
 ```
@@ -195,7 +201,7 @@ func myfun (x : `a, y : `b) -> `a require num<`a>, bool<`b> { x }
 ```
 $EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | ( $EXPR ) | $EXPR0
 $EXPR0   := $EXPR1 $EXPR2
-$EXPR1   := $CSID | $IF | $LET | $TUPLE |
+$EXPR1   := $DOTID | $IF | $LET | $TUPLE |
             { $EXPRS } | [ $EXPRS'? ] | $LITERAL
 $EXPR2   := ∅ | [ $EXPR ] $EXPR2 | $APPLY $EXPR2
 $EXPRS   := $EXPR | $EXPR $SEP $EXPR
@@ -209,7 +215,7 @@ $PREFIX  := - | *
 ```
 $EXPR := $EXPR0 $EXPR' | $EXPR0 $EXPR' $INFIX+ $EXPR
 $EXPR0 := $PREFIX? $EXPR0'
-$EXPR0' := $CSID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
+$EXPR0' := $DOTID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
            { $DICT } | { $EXPRS } | [ $EXPRS_? ] | $LITERAL
 $EXPR' := ∅ | [ $EXPR ] $EXPR' | $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
@@ -252,6 +258,7 @@ $TUPLE := ( $EXPR, ) | ( $EXPRS'? )
 ```
 $STR
 ```
+
 same as Haskell
 
 ## Character Literal
@@ -265,6 +272,7 @@ $CHAR
 ```
 $NATURAL
 ```
+
 same as Haskell
 
 ## Floating Point Number Literal
@@ -272,6 +280,7 @@ same as Haskell
 ```
 $FLOAT
 ```
+
 same as Haskell
 
 ## Module Loading
@@ -487,6 +496,7 @@ func expr() {
 ### Pattern
 
 ```
-$PATTERN   := _ | ( $PATTERNS ) | $ID | $CSID { $PATTERNS }
+$PATTERN   := _ | ( $PATTERNS1 ) | $DOTID $PATTERNS2?
 $PATTERNS1 := $PATTERN | $PATTERN , $PATTERNS
+$PATTERNS2 := ( $PATTERNS1 )
 ```

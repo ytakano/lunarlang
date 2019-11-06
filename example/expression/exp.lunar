@@ -1,6 +1,6 @@
-func pred( a : c:d
+func pred( tp.ee (a, b, c) : e.f
     ,
-    b :
+    g :
     func (  `a
         , `c  < `d, `e > ) -> `b) -> u32 require eq<a>, eq<b> {
     7 + 3 * -  10 + // 40

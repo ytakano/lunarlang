@@ -13,7 +13,7 @@ data Position = Pos Int Int deriving (Show)
 data Fun = Fun Position String [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
 
 -- argument
-data Arg = Arg Position String (Maybe QType) deriving (Show)
+data Arg = Arg Position Pattern (Maybe QType) deriving (Show)
 
 -- qualifier
 data Qual =
@@ -42,7 +42,7 @@ data Expr =
     ExprBin String Expr Expr |
     ExprApply Expr [Expr] |
     ExprTuple Position [Expr] |
-    ExprCSID Position [String] |
+    ExprDOTID Position [String] |
     ExprLiteral Position Literal
     -- TODO: let, dict, array, index
     deriving (Show)
@@ -55,8 +55,7 @@ data Literal =
     deriving (Show)
 
 data Pattern =
-    PatID Position String |
+    PatDOTID Position [String] (Maybe [Pattern]) |
     PatIgnore Position |
-    PatData Position [String] [Pattern] |
     PatTuple Position [Pattern]
     deriving (Show)
