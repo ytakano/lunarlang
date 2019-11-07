@@ -53,7 +53,11 @@ table = [[prefix "-" (opPrefix "-")],
         prefix name fun = E.Prefix (do{ reservedOp name; pure fun })
 
 -- TODO
-term = parens expr <|> literal <|> let' <|> if' <|> exprDotID <?> "term"
+term = parenTuple
+    <|> literal
+    <|> let'
+    <|> if'
+    <|> exprDotID <?> "term"
 
 whiteSpaceWTSC = do
     whiteSpace
@@ -364,3 +368,28 @@ elif pos = AST.Elif pos <$> expr <*> braces (exprs <* whiteSpace) <*> elifelse2
 else' pos = AST.Else pos <$> braces (exprs <* whiteSpace)
 
 exprDotID = AST.ExprDotID <$> getPos <*> dotid
+
+{-
+    ( $EXPR )
+    $TUPLE := ( $EXPR, ) | ( $EXPRS'? )
+-}
+parenTuple = do
+    pos <- getPos
+    P.char '('
+    whiteSpace
+    (P.char ')' $> AST.ExprTuple pos []) <|> parenTuple' pos
+
+parenTuple' pos = do
+    e <- expr
+    whiteSpace
+    P.char ')' $> e <|> tuple pos e
+
+tuple pos e = do
+    P.char ','
+    whiteSpace
+    (P.char ')' $> AST.ExprTuple pos [e]) <|> tuple' pos e
+
+tuple' pos e = do
+    es <- commaSep (expr <* whiteSpace)
+    P.char ')'
+    pure $ AST.ExprTuple pos (e:es)

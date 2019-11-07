@@ -178,9 +178,10 @@ $PRODTYPE := $ID $TYPESPEC
 ```
 
 ```
-$UNION   := struct $ID $TVARS? $PREDS? { $SUM }
-$SUM     := $SUMTYPE | $SUMTYPE $SEP $SUM
-$SUMTYPE := $ID ( $QTYPES )?
+$UNION    := struct $ID $TVARS? $PREDS? { $SUM }
+$SUM      := $SUMTYPE | $SUMTYPE $SEP $SUM
+$SUMTYPE  := $ID $SUMTYPES?
+$SUMTYPES := : $QTYPES
 ```
 
 ## Function Definition
@@ -199,9 +200,9 @@ func myfun (x : `a, y : `b) -> `a require num<`a>, bool<`b> { x }
 ## Expression
 
 ```
-$EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | ( $EXPR ) | $EXPR0
+$EXPR    := $PREFIX? $EXPR | $EXPR $INFIX $EXPR | $EXPR0
 $EXPR0   := $EXPR1 $EXPR2
-$EXPR1   := $DOTID | $IF | $LET | $TUPLE |
+$EXPR1   := $DOTID | $IF | $LET | ( $EXPR ) | $TUPLE |
             { $EXPRS } | [ $EXPRS'? ] | $LITERAL
 $EXPR2   := ∅ | [ $EXPR ] $EXPR2 | $APPLY $EXPR2
 $EXPRS   := $EXPR | $EXPR $SEP $EXPR
@@ -380,7 +381,7 @@ func expr() {
 ```
 union foo {
     a
-    b : true
+    b : bool
 }
 
 func expr() {
