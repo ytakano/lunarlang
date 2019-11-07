@@ -10,6 +10,8 @@ func pred( tp.ee (a, b, c) : e.f
     "あいうえお"
     1.8e+2
     '\n'
+    let a = 100
+    let b : bool = 200, c = 300.0
 }
 
 func binop(a : t<u32>, b) : u64 {

@@ -13,7 +13,7 @@ data Position = Pos Int Int deriving (Show)
 data Fun = Fun Position String [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
 
 -- argument
-data Arg = Arg Position Pattern (Maybe QType) deriving (Show)
+data Arg = Arg Position DBind (Maybe QType) deriving (Show)
 
 -- qualifier
 data Qual =
@@ -36,15 +36,18 @@ data LType =
 -- predicate
 data Pred = Pred Position [String] QType deriving (Show)
 
+data ElifElse = Elif Position ElifElse | Else position [Expr] deriving (Show)
+
 data Expr =
-    ExprIf Position Expr Expr Expr |
+    ExprIf Position Expr [Expr] ElifElse |
     ExprPrefix String Expr |
     ExprBin String Expr Expr |
     ExprApply Expr [Expr] |
     ExprTuple Position [Expr] |
     ExprDOTID Position [String] |
-    ExprLiteral Position Literal
-    -- TODO: let, dict, array, index
+    ExprLiteral Position Literal |
+    ExprLet Position [(DBind, Maybe QType, Expr)]
+    -- TODO: array, index
     deriving (Show)
 
 data Literal =
@@ -54,8 +57,8 @@ data Literal =
     LitFloat Double
     deriving (Show)
 
-data Pattern =
-    PatDOTID Position [String] (Maybe [Pattern]) |
-    PatIgnore Position |
-    PatTuple Position [Pattern]
+data DBind =
+    DBindDotID Position [String] (Maybe [DBind]) |
+    DBindIgnore Position |
+    DBindTuple Position [DBind]
     deriving (Show)

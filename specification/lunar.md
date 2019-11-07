@@ -180,7 +180,7 @@ $PRODTYPE := $ID $TYPESPEC
 ```
 $UNION   := struct $ID $TVARS? $PREDS? { $SUM }
 $SUM     := $SUMTYPE | $SUMTYPE $SEP $SUM
-$SUMTYPE := $ID | $ID $TYPESPEC
+$SUMTYPE := $ID ( $QTYPES )?
 ```
 
 ## Function Definition
@@ -242,9 +242,9 @@ $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
 ### Let
 
 ```
-$LET     := let $DEFVARS
-$DEFVAR  := $ID $TYPESPEC? = $EXPR
-$DEFVARS := $DEFVAR | $DEFVAR , $DEFVARS
+$LET   := let $BINDS
+$BIND  := $DBIND $TYPESPEC? = $EXPR
+$BINDS := $BIND | $BIND , $BINDS
 ```
 
 ### Tuple
@@ -490,13 +490,10 @@ func expr() {
 }
 ```
 
-## Pattern Match
-
-
-### Pattern
+## Destructuring-bind
 
 ```
-$PATTERN   := _ | ( $PATTERNS1 ) | $DOTID $PATTERNS2?
-$PATTERNS1 := $PATTERN | $PATTERN , $PATTERNS
-$PATTERNS2 := ( $PATTERNS1 )
+$DBIND   := _ | $DBINDSP | $DOTID $DBINDSP?
+$DBINDS  := $DBIND | $DBIND , $DBINDS
+$DBINDSP := ( $DBINDS )
 ```

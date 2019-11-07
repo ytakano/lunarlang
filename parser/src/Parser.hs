@@ -53,7 +53,7 @@ table = [[prefix "-" (opPrefix "-")],
         prefix name fun = E.Prefix (do{ reservedOp name; pure fun })
 
 -- TODO
-term = parens expr <|> literal <?> "term"
+term = parens expr <|> literal <|> let' <?> "term"
 
 whiteSpaceWTSC = do
     whiteSpace
@@ -130,7 +130,7 @@ defun pos = do
 -}
 arg = do
     pos <- getPos
-    pat <- pattern'
+    pat <- dbind
     whiteSpace
     qt <- (P.char ':' >> whiteSpace >> Just <$> qtype)
         <|> pure Nothing
@@ -269,31 +269,56 @@ literal = do
         lit = AST.ExprLiteral
 
 {-
-    $PATTERN := _ | ( $PATTERNS1 ) | $DOTID $PATTERNS2?
-    $PATTERNS1 := $PATTERN | $PATTERN , $PATTERNS
+    $DBIND   := _ | $DBINDSP | $DOTID $DBINDSP?
+    $DBINDS  := $DBIND | $DBIND , $DBINDS
+    $DBINDSP := ( $DBINDS )
 -}
-pattern' = do
+dbind = do
     pos <- getPos
-    P.char '_' $> AST.PatIgnore pos
-        <|> patternTuple pos
-        <|> patternDOTID pos
+    P.char '_' $> AST.DBindIgnore pos
+        <|> dbindsP pos
+        <|> dbinds pos
 
 {-
-    ( $PATTERNS1 )
+    ( $DBINDS )
 -}
-patternTuple pos =
-    AST.PatTuple pos <$> parens (commaSep1 pattern' <* whiteSpace)
+dbindsP pos =
+    AST.DBindTuple pos <$> parens (commaSep1 dbind <* whiteSpace)
 
 {-
-    $ID | $DOTID $PATTERNS2?
+    $DOTID $DBINDSP?
 -}
-patternDOTID pos = AST.PatDOTID pos <$> dotid <*> patterns2
+dbinds pos = AST.DBindDotID pos <$> dotid <*> dbinds2
 
 {-
-    $PATTERNS2 := ( $PATTERNS1 )
+    ( $DBINDS )
 -}
-patterns2 =
-    (P.try (whiteSpace >> P.lookAhead (P.char '(')) >> patterns')
+dbinds2 =
+    (P.try (whiteSpace >> P.lookAhead (P.char '(')) >> dbinds2')
         <|> pure Nothing
     where
-        patterns' = Just <$> parens (commaSep1 pattern' <* whiteSpace)
+        dbinds2' = Just <$> parens (commaSep1 dbind <* whiteSpace)
+
+{-
+    $DBIND $TYPESPEC? = $EXPR
+-}
+binding = do
+    pos <- getPos
+    b <- dbind
+    whiteSpace
+    qt <- (P.char ':' >> whiteSpace >> (Just <$> qtype) <* whiteSpace) <|> pure Nothing
+    P.char '='
+    whiteSpace
+    e <- expr
+    pure (b, qt, e)
+
+{-
+    $LET   := let $BINDS
+    $BIND  := $DBIND $TYPESPEC? = $EXPR
+    $BINDS := $BIND | $BIND , $BINDS
+-}
+let' = do
+    pos <- getPos
+    reserved "let"
+    whiteSpace
+    AST.ExprLet pos <$> commaSep1 binding
