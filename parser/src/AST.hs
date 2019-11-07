@@ -36,15 +36,16 @@ data LType =
 -- predicate
 data Pred = Pred Position [String] QType deriving (Show)
 
-data ElifElse = Elif Position ElifElse | Else position [Expr] deriving (Show)
+data ElifElse =
+    Elif Position Expr [Expr] ElifElse | Else Position [Expr] deriving (Show)
 
 data Expr =
-    ExprIf Position Expr [Expr] ElifElse |
+    ExprIf Position Expr [Expr] (Maybe ElifElse) |
     ExprPrefix String Expr |
     ExprBin String Expr Expr |
     ExprApply Expr [Expr] |
     ExprTuple Position [Expr] |
-    ExprDOTID Position [String] |
+    ExprDotID Position [String] |
     ExprLiteral Position Literal |
     ExprLet Position [(DBind, Maybe QType, Expr)]
     -- TODO: array, index

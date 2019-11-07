@@ -53,7 +53,7 @@ table = [[prefix "-" (opPrefix "-")],
         prefix name fun = E.Prefix (do{ reservedOp name; pure fun })
 
 -- TODO
-term = parens expr <|> literal <|> let' <?> "term"
+term = parens expr <|> literal <|> let' <|> if' <|> exprDotID <?> "term"
 
 whiteSpaceWTSC = do
     whiteSpace
@@ -225,7 +225,7 @@ typeArgs = angles (commaSep1 qtype <* whiteSpace) <|> pure []
 dotid = do
     h <- identifier
     ids <- dotid2 [h]
-    return ids
+    pure ids
 
 {-
     (. $ID)*
@@ -322,3 +322,45 @@ let' = do
     reserved "let"
     whiteSpace
     AST.ExprLet pos <$> commaSep1 binding
+
+{-
+    $IF := if $EXPR { $EXPRS } $ELSE?
+-}
+if' = do
+    pos <- getPos
+    reserved "if"
+    whiteSpace
+    cond <- expr
+    es <- braces (exprs <* whiteSpace)
+    r <- elifelse1
+    pure $ AST.ExprIf pos cond es r
+
+{-
+    $ELSE?
+-}
+elifelse1 = do
+    whiteSpace
+    pos <- getPos
+    (reserved "elif" >> Just <$> elif pos)
+        <|> (reserved "else" >> Just <$> else' pos)
+        <|> pure Nothing
+
+{-
+    $ELSE := elif $EXPR { $EXPRS } $ELSE | else { $EXPRS }
+-}
+elifelse2 = do
+    whiteSpace
+    pos <- getPos
+    (reserved "elif" >> elif pos) <|> (reserved "else" >> else' pos)
+
+{-
+    { $EXPRS } $ELSE
+-}
+elif pos = AST.Elif pos <$> expr <*> braces (exprs <* whiteSpace) <*> elifelse2
+
+{-
+    { $EXPRS }
+-}
+else' pos = AST.Else pos <$> braces (exprs <* whiteSpace)
+
+exprDotID = AST.ExprDotID <$> getPos <*> dotid

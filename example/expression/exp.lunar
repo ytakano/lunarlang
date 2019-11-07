@@ -12,6 +12,15 @@ func pred( tp.ee (a, b, c) : e.f
     '\n'
     let a = 100
     let b : bool = 200, c = 300.0
+
+    if a > b {
+        a
+    } elif a == b {
+        b
+    } else {
+        a + b
+    }
+
 }
 
 func binop(a : t<u32>, b) : u64 {
