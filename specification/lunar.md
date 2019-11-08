@@ -176,7 +176,8 @@ $PROD     := $PRODTYPE | $PRODTYPE $SEP $PROD
 $PRODTYPE := $ID $TYPESPEC
 ```
 
-Algebric data type.
+Algebraic data type.
+
 ```
 $data     := data $ID $TVARS? $PREDS? { $SUM }
 $SUM      := $SUMTYPE | $SUMTYPE $SEP $SUM

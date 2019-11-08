@@ -439,6 +439,9 @@ expr0 e = do
     whiteSpace
     apply' e <|> indexing e <|> pure e
 
+{-
+    $MATCH := match expr { $PATEXPR+ }
+-}
 match = do
     pos <- getPos
     reserved "match"
@@ -447,6 +450,9 @@ match = do
     whiteSpace
     AST.ExprMatch pos e <$> braces (P.many1 patexpr <* whiteSpace)
 
+{-
+    $PATEXPR := $PATTERN in $EXPR
+-}
 patexpr = do
     whiteSpace
     p <- pattern'
@@ -456,6 +462,9 @@ patexpr = do
     e <- expr
     pure (p, e)
 
+{-
+    $PATTERN := _ | $PATTERNP | $DOTID $PATTERNP? | $LITERAL
+-}
 pattern' = do
     pos <- getPos
     whiteSpace
@@ -464,6 +473,9 @@ pattern' = do
         <|> patternLit pos
         <|> patternID pos
 
+{-
+    $PATTERNP := ( $PATTERNS )
+-}
 patternP pos = AST.PatTuple pos <$> parens (commaSep pattern' <* whiteSpace)
 
 patternLit pos = AST.PatLiteral pos <$> literal'
