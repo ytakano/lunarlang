@@ -20,8 +20,14 @@ func pred( tp.ee (a, b, c) : e.f
     } else {
         (a + b)
     }
-    (1, 2)
+    (1, 2);
     (a,)
+    {
+        a
+        b (c, d, e) (f, g) [10]
+    }
+    ;
+    ;
 }
 
 func binop(a : t<u32>, b) : u64 {

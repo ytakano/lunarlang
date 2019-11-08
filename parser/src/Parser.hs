@@ -52,8 +52,18 @@ table = [[prefix "-" (opPrefix "-")],
         binary name fun assoc = E.Infix (do{ reservedOp name; pure fun }) assoc
         prefix name fun = E.Prefix (do{ reservedOp name; pure fun })
 
--- TODO
-term = parenTuple
+term = do
+    e <- term'
+    whiteSpace
+    apply' e <|> indexing e <|> pure e
+
+{-
+    $EXPR1   := $DOTID | $IF | $LET | ( $EXPR ) | $TUPLE |
+                { $EXPRS } | [ $EXPRS'? ] | $LITERAL
+-}
+term' = exprs2
+    <|> parenTuple
+    <|> array
     <|> literal
     <|> let'
     <|> if'
@@ -74,6 +84,12 @@ exprs = do
             e <- expr
             P.try (whiteSpaceWTSC >> P.lookAhead (P.char '}') $> reverse (e:es))
                 <|> exprs' (e:es)
+
+{-
+    { $EXPRS }
+-}
+exprs2 = do
+    AST.Exprs <$> getPos <*> braces (exprs <* whiteSpace)
 
 lexer         = T.makeTokenParser def
 reservedOp    = T.reservedOp lexer
@@ -100,7 +116,7 @@ def = L.emptyDef{T.commentLine = "//",
                                       "<<", ">>", "<", ">", "<=",
                                       ">=", "==", "!="],
                  T.reservedNames = ["true", "false", "void",
-                                    "class", "instance", "data", "memory",
+                                    "class", "instance", "struct", "data",
                                     "if", "elif", "else",
                                     "let", "in", "func", "require",
                                     "match", "import", "as", "here",
@@ -393,3 +409,31 @@ tuple' pos e = do
     es <- commaSep (expr <* whiteSpace)
     P.char ')'
     pure $ AST.ExprTuple pos (e:es)
+
+{-
+    [ $EXPRS'? ]
+-}
+array =
+    AST.ExprArray <$> getPos <*> brackets (commaSep expr <* whiteSpace)
+
+{-
+    $APPLY $EXPR2
+    $APPLY := ( $EXPRS'? )
+-}
+apply' e = do
+    e' <- AST.ExprApply e <$> parens (commaSep expr <* whiteSpace)
+    expr0 e'
+
+{-
+    [ $EXPR ] $EXPR2
+-}
+indexing e = do
+    e' <- AST.ExprIndex e <$> brackets (expr <* whiteSpace)
+    expr0 e'
+
+{-
+    $EXPR0 := $EXPR1 $EXPR2
+-}
+expr0 e = do
+    whiteSpace
+    apply' e <|> indexing e <|> pure e

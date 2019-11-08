@@ -44,11 +44,13 @@ data Expr =
     ExprPrefix String Expr |
     ExprBin String Expr Expr |
     ExprApply Expr [Expr] |
+    ExprArray Position [Expr] |
     ExprTuple Position [Expr] |
     ExprDotID Position [String] |
     ExprLiteral Position Literal |
-    ExprLet Position [(DBind, Maybe QType, Expr)]
-    -- TODO: array, index
+    ExprLet Position [(DBind, Maybe QType, Expr)] |
+    Exprs Position [Expr] |
+    ExprIndex Expr Expr
     deriving (Show)
 
 data Literal =

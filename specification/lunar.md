@@ -32,7 +32,7 @@ $RESERVED := true | false | void |
              let | func | require |
              match | import | as | here |
              prefix | infix | shared | uniq |
-             struct | union
+             struct | data
 ```
 
 ## Identifier
@@ -40,10 +40,8 @@ $RESERVED := true | false | void |
 ```
 $ID          := [^0-9$WHITESPACE][^$WHITESPACE]+
 $WHITESPACE  := space | tab | \r | \n | \r\n
-$NEWLINE     := \r | \n | ;
-$WHITESPACE2 := space | tab
-$WHITESPACE3 := space | tab | \r | \n | \r\n | ;
-$SEP         := $WHITESPACE2* $NEWLINE+ $WHITESPACE3*
+$SEP         := $SEP*
+$SEP'        := ; | $WHITESPACE
 ```
 
 $ID must not be reserved words.
@@ -169,16 +167,18 @@ $QTYPES  := $QTYPE | $QTYPE , $QTYPES
 $TYPESPEC := : $QTYPE
 ```
 
-### Struct and Union
+### Struct
 
+Product type.
 ```
 $STRUCT   := struct $ID $TVARS? $PREDS? { $PROD }
 $PROD     := $PRODTYPE | $PRODTYPE $SEP $PROD
 $PRODTYPE := $ID $TYPESPEC
 ```
 
+Algebric data type.
 ```
-$UNION    := struct $ID $TVARS? $PREDS? { $SUM }
+$data     := data $ID $TVARS? $PREDS? { $SUM }
 $SUM      := $SUMTYPE | $SUMTYPE $SEP $SUM
 $SUMTYPE  := $ID $SUMTYPES?
 $SUMTYPES := : $QTYPES
@@ -379,7 +379,7 @@ func expr() {
 ```
 
 ```
-union foo {
+data foo {
     a
     b : bool
 }
@@ -396,7 +396,7 @@ struct foo {
     b : bool
 }
 
-union bar {
+data bar {
     L1
     L2 : foo
 }
@@ -407,12 +407,12 @@ func expr() {
 ```
 
 ```
-union foo {
+data foo {
     a
     b : bool
 }
 
-union bar {
+data bar {
     c
     d : foo
 }
@@ -465,7 +465,7 @@ func expr() {
 }
 ```
 
-Linear type contained by struct or union cannot be moved.
+Linear type contained by struct or data cannot be moved.
 
 ```
 struct foo {
