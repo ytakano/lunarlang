@@ -30,7 +30,7 @@ $INFIXCHAR := + | - | < | > | / | % | : | & |
 $RESERVED := true | false | void |
              class | instance | if | elif | else |
              let | func | require |
-             match | import | as | here |
+             match | in | import | as | here |
              prefix | infix | shared | uniq |
              struct | data
 ```
@@ -497,4 +497,14 @@ func expr() {
 $DBIND   := _ | $DBINDSP | $DOTID $DBINDSP?
 $DBINDS  := $DBIND | $DBIND , $DBINDS
 $DBINDSP := ( $DBINDS )
+```
+
+## Pattern Match
+
+```
+$MATCH     := match expr { $PATEXPR+ }
+$PATEXPR   := $PATTERN in $EXPR
+$PATTERN   := _ | $PATTERNP | $DOTID $PATTERNP? | $LITERAL
+$PATTERNS  := $PATTERN | $PATTERN , $PATTERNS
+$PATTERNP := ( $PATTERNS )
 ```

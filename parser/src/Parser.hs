@@ -67,6 +67,7 @@ term' = exprs2
     <|> literal
     <|> let'
     <|> if'
+    <|> match
     <|> exprDotID <?> "term"
 
 whiteSpaceWTSC = do
@@ -278,15 +279,15 @@ predicate = do
 {-
     $LITERAL := $STR | $CHAR | $FLOAT | $NATURAL
 -}
-literal = do
-    pos <- getPos
-    lit pos . AST.LitStr <$> stringLiteral
-        <|> lit pos . AST.LitChar <$> charLiteral
-        <|> P.try (lit pos . AST.LitFloat <$> float)
-        <|> lit pos . AST.LitInt <$> natural
+literal = AST.ExprLiteral <$> getPos <*> literal'
+
+literal' =
+    AST.LitStr <$> stringLiteral
+        <|> AST.LitChar <$> charLiteral
+        <|> P.try (AST.LitFloat <$> float)
+        <|> AST.LitInt <$> natural
+        <|> AST.LitBool <$> ((reserved "true" $> True) <|> (reserved "false" $> False))
         <?> "literal"
-    where
-        lit = AST.ExprLiteral
 
 {-
     $DBIND   := _ | $DBINDSP | $DOTID $DBINDSP?
@@ -295,7 +296,7 @@ literal = do
 -}
 dbind = do
     pos <- getPos
-    P.char '_' $> AST.DBindIgnore pos
+    (P.char '_' $> AST.DBindIgnore pos)
         <|> dbindsP pos
         <|> dbinds pos
 
@@ -437,3 +438,38 @@ indexing e = do
 expr0 e = do
     whiteSpace
     apply' e <|> indexing e <|> pure e
+
+match = do
+    pos <- getPos
+    reserved "match"
+    whiteSpace
+    e <- expr
+    whiteSpace
+    AST.ExprMatch pos e <$> braces (P.many1 patexpr <* whiteSpace)
+
+patexpr = do
+    whiteSpace
+    p <- pattern'
+    whiteSpace
+    reserved "in"
+    whiteSpace
+    e <- expr
+    pure (p, e)
+
+pattern' = do
+    pos <- getPos
+    whiteSpace
+    (P.char '_' $> AST.PatIgnore pos)
+        <|> patternP pos
+        <|> patternLit pos
+        <|> patternID pos
+
+patternP pos = AST.PatTuple pos <$> parens (commaSep pattern' <* whiteSpace)
+
+patternLit pos = AST.PatLiteral pos <$> literal'
+
+patternID pos = AST.PatDotID pos <$> dotid <*> (patexpr <|> pure Nothing)
+    where
+        patexpr = do
+            P.try (whiteSpace >> P.lookAhead (P.char '('))
+            Just <$> parens (commaSep pattern' <* whiteSpace)

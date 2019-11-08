@@ -28,6 +28,11 @@ func pred( tp.ee (a, b, c) : e.f
     }
     ;
     ;
+    match a {
+        10 in d
+        bc (x, _, true, "string", 'c') in x
+        _ in c
+    }
 }
 
 func binop(a : t<u32>, b) : u64 {

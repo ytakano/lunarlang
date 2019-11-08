@@ -50,18 +50,27 @@ data Expr =
     ExprLiteral Position Literal |
     ExprLet Position [(DBind, Maybe QType, Expr)] |
     Exprs Position [Expr] |
-    ExprIndex Expr Expr
+    ExprIndex Expr Expr |
+    ExprMatch Position Expr [(Pattern, Expr)]
     deriving (Show)
 
 data Literal =
     LitStr String |
     LitChar Char |
     LitInt Integer |
-    LitFloat Double
+    LitFloat Double |
+    LitBool Bool
     deriving (Show)
 
 data DBind =
     DBindDotID Position [String] (Maybe [DBind]) |
-    DBindIgnore Position |
-    DBindTuple Position [DBind]
+    DBindTuple Position [DBind] |
+    DBindIgnore Position
+    deriving (Show)
+
+data Pattern =
+    PatDotID Position [String] (Maybe [Pattern]) |
+    PatTuple Position [Pattern] |
+    PatIgnore Position |
+    PatLiteral Position Literal
     deriving (Show)
