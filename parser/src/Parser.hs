@@ -494,6 +494,12 @@ patternID pos = AST.PatDotID pos <$> dotid <*> (patexpr <|> pure Nothing)
 typeArg =
     AST.TypeVar <$> getPos <*> tvar
 
+{-
+    $data     := data $ID $TVARS? $PREDS? { $SUM }
+    $SUM      := $SUMTYPE | $SUMTYPE $SEP $SUM
+    $SUMTYPE  := $ID $SUMTYPES?
+    $SUMTYPES := : $QTYPE | : ($QTYPES)
+-}
 dataDef pos = do
     whiteSpace
     id <- identifier
