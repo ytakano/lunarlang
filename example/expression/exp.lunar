@@ -1,3 +1,11 @@
+data foo <`a> require eq<`a> {
+    x : u32
+    y : (bool, bool)
+    z
+    w : `a<bool>
+    u : b<bool>
+}
+
 func pred( tp.ee (a, b, c) : e.f
     ,
     g :
@@ -15,8 +23,6 @@ func pred( tp.ee (a, b, c) : e.f
 
     if a > b {
         a
-    } elif a == b {
-        b
     } else {
         (a + b)
     }
@@ -35,16 +41,17 @@ func pred( tp.ee (a, b, c) : e.f
     }
 }
 
-func binop(a : t<u32>, b) : u64 {
-    1 + 2 - 3 + 4 * 5 / 6 + 7
-}
+//func binop(a : t<u32>, b) : u64 {
+//    1 + 2 - 3 + 4 * 5 / 6 + 7
+//}
 
 func plus(a, b) {
     a + b
 }
 
 func assign(a, b) {
-    let x = plus(a, b) in x + 3
+    let x = plus(a, b)
+    x + 3
 }
 
 func ifexpr(a, b) {
@@ -57,7 +64,7 @@ func ifexpr(a, b) {
     }
 }
 
-func typed(a : u32, b : u32, fun : func (u32, u32) : u32) : u32 {
+func typed(a : u32, b : u32, fun : func (u32, u32) -> u32) -> u32 {
     let x : u32 = fun(a, b)
     x
 }

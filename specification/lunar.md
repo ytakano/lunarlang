@@ -172,7 +172,7 @@ $TYPESPEC := : $QTYPE
 Product type.
 ```
 $STRUCT   := struct $ID $TVARS? $PREDS? { $PROD }
-$PROD     := $PRODTYPE | $PRODTYPE $SEP $PROD
+$PROD     := $PRODTYPE | $PRODTYPE ; $PROD
 $PRODTYPE := $ID $TYPESPEC
 ```
 
@@ -182,7 +182,7 @@ Algebraic data type.
 $data     := data $ID $TVARS? $PREDS? { $SUM }
 $SUM      := $SUMTYPE | $SUMTYPE $SEP $SUM
 $SUMTYPE  := $ID $SUMTYPES?
-$SUMTYPES := : $QTYPES
+$SUMTYPES := : $QTYPE | : ($QTYPES)
 ```
 
 ## Function Definition

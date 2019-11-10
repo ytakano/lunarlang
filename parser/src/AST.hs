@@ -4,6 +4,7 @@ data TOP =
     Class |
     Inst |
     Defun Fun |
+    Data DataDef |
     Import
     deriving (Show)
 
@@ -74,3 +75,12 @@ data Pattern =
     PatIgnore Position |
     PatLiteral Position Literal
     deriving (Show)
+
+data TypeVar =
+    TypeVar Position String deriving (Show)
+
+data DataDef =
+    DataDef Position String [TypeVar] [Pred] [SumMem] deriving (Show)
+
+data SumMem =
+    SumMem Position String [QType] deriving (Show)

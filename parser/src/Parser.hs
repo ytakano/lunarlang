@@ -20,7 +20,7 @@ getPos = getPos' <$> P.getPosition
     where
         getPos' pos = AST.Pos (P.sourceLine pos) (P.sourceColumn pos)
 
-parse = P.parse statement
+parse = P.parse $ P.many statement
 
 -- letter | digit | multibyte character
 parseChar :: P.Parsec String () Char
@@ -124,10 +124,13 @@ def = L.emptyDef{T.commentLine = "//",
                                     "prefix", "infix", "shared", "uniq"]}
 
 statement = do
+    whiteSpace
     pos <- getPos
     (reserved "func" >> defun pos)
+        <|> (reserved "data" >> dataDef pos)
         <|> reserved "class" $> AST.Class
         <|> reserved "instance" $> AST.Inst
+        <?> "func or data"
 
 {-
     $DEFUN  := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
@@ -183,7 +186,7 @@ typeTuple = do
     pure $ AST.TupleType pos qt
 
 {-
-    [ $QTYPES ]
+    [ $QTYPE ]
 -}
 typeArray = do
     pos <- getPos
@@ -205,7 +208,9 @@ typeFuncID = do
 -}
 typeID pos id = do
     id' <- dotid2 [id]
-    pure $ AST.IDType pos id' []
+    whiteSpace
+    ta <- angles (commaSep1 qtype <* whiteSpace) <|> pure []
+    pure $ AST.IDType pos id' ta
 
 {-
     ( $QTYPES? ) $RETTYPE
@@ -362,7 +367,7 @@ if' = do
 elifelse1 = do
     whiteSpace
     pos <- getPos
-    (reserved "elif" >> Just <$> elif pos)
+    (P.try (reserved "elif") >> Just <$> elif pos)
         <|> (reserved "else" >> Just <$> else' pos)
         <|> pure Nothing
 
@@ -372,7 +377,7 @@ elifelse1 = do
 elifelse2 = do
     whiteSpace
     pos <- getPos
-    (reserved "elif" >> elif pos) <|> (reserved "else" >> else' pos)
+    (P.try (reserved "elif") >> elif pos) <|> (reserved "else" >> else' pos) <?> "elif or else"
 
 {-
     { $EXPRS } $ELSE
@@ -485,3 +490,34 @@ patternID pos = AST.PatDotID pos <$> dotid <*> (patexpr <|> pure Nothing)
         patexpr = do
             P.try (whiteSpace >> P.lookAhead (P.char '('))
             Just <$> parens (commaSep pattern' <* whiteSpace)
+
+typeArg =
+    AST.TypeVar <$> getPos <*> tvar
+
+dataDef pos = do
+    whiteSpace
+    id <- identifier
+    whiteSpace
+    ta <- angles (commaSep1 typeArg <* whiteSpace) <|> pure []
+    whiteSpace
+    preds <- (reserved "require" >> whiteSpace >> commaSep1 predicate)
+        <|> pure []
+    whiteSpace
+    P.char '{'
+    mem <- dataMembers []
+    pure $ AST.Data (AST.DataDef pos id ta preds mem)
+
+dataMember = do
+    pos <- getPos
+    id <- identifier
+    whiteSpace
+    qt <- (P.char ':' >> (whiteSpace >> (parens (commaSep1 qtype <* whiteSpace) <|> (:[]) <$> qtype)))
+        <|> pure []
+    pure $ AST.SumMem pos id qt
+
+dataMembers mem = do
+    whiteSpace
+    (P.char '}' >> pure (reverse mem))
+        <|> (do
+            m <- dataMember
+            dataMembers (m:mem))
