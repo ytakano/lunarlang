@@ -1,15 +1,15 @@
 class foo<`a> {
-    func bar() : void
+    bar :: func(`a) -> `a
 }
 
 // monad
 class monad<`a :: * -> *> require foo<`a> {
-    func infix >>=(`a<`b>, func (`b) : `a<`c>) : `a<`c>
-    func return(`b) : `a<`b>
+    infix >>= :: func(`a<`b>, func (`b) -> `a<`c>) -> `a<`c>
+    return :: func(`b) -> `a<`b>
 }
 
-instance monad<mytype<`a>> {
-    func infix >>=(a, b) {
-        b(a.x)
-    }
-}
+// instance monad<mytype<`a>> {
+//     func infix >>=(a, b) {
+//         b(a.x)
+//     }
+// }

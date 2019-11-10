@@ -2,7 +2,7 @@ data foo <`a> require eq<`a> {
     x : u32
     y : (bool, bool)
     z
-    w : `a<bool>
+    w : `a<bool>;
     u : b<bool>
 }
 

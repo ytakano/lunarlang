@@ -20,7 +20,7 @@ getPos = getPos' <$> P.getPosition
     where
         getPos' pos = AST.Pos (P.sourceLine pos) (P.sourceColumn pos)
 
-parse = P.parse $ P.many statement
+parse = P.parse $ statements []
 
 -- letter | digit | multibyte character
 parseChar :: P.Parsec String () Char
@@ -107,6 +107,7 @@ commaSep      = T.commaSep lexer
 commaSep1     = T.commaSep1 lexer
 stringLiteral = T.stringLiteral lexer
 charLiteral   = T.charLiteral lexer
+operator      = T.operator lexer
 
 def = L.emptyDef{T.commentLine = "//",
                  T.identStart = parseNonum,
@@ -124,13 +125,18 @@ def = L.emptyDef{T.commentLine = "//",
                                     "prefix", "infix", "shared", "uniq"]}
 
 statement = do
-    whiteSpace
     pos <- getPos
     (reserved "func" >> defun pos)
         <|> (reserved "data" >> dataDef pos)
-        <|> reserved "class" $> AST.Class
+        <|> (reserved "class" >> classDef pos)
         <|> reserved "instance" $> AST.Inst
-        <?> "func or data"
+        <?> "func, data or class"
+
+statements t = do
+    whiteSpace
+    h <- statement
+    whiteSpace
+    P.eof $> reverse (h:t) <|> statements (h:t)
 
 {-
     $DEFUN  := func $ID ( $ARGS? ) $RETTYPE? $PREDS? { $EXPRS }
@@ -143,8 +149,7 @@ defun pos = do
     whiteSpace
     ret <- (Just <$> retType) <|> pure Nothing
     whiteSpace
-    preds <- (reserved "require" >> whiteSpace >> commaSep1 predicate)
-        <|> pure []
+    preds <- predicates
     e <- braces exprs
     pure $ AST.Defun $ AST.Fun pos id args ret preds e
 
@@ -281,6 +286,9 @@ predicate = do
     whiteSpace
     qt <- angles qtype
     pure $ AST.Pred pos id qt
+
+predicates = (reserved "require" >> whiteSpace >> commaSep1 predicate) <|> pure []
+
 {-
     $LITERAL := $STR | $CHAR | $FLOAT | $NATURAL
 -}
@@ -506,8 +514,7 @@ dataDef pos = do
     whiteSpace
     ta <- angles (commaSep1 typeArg <* whiteSpace) <|> pure []
     whiteSpace
-    preds <- (reserved "require" >> whiteSpace >> commaSep1 predicate)
-        <|> pure []
+    preds <- predicates
     whiteSpace
     P.char '{'
     mem <- dataMembers []
@@ -522,8 +529,83 @@ dataMember = do
     pure $ AST.SumMem pos id qt
 
 dataMembers mem = do
-    whiteSpace
-    (P.char '}' >> pure (reverse mem))
+    whiteSpaceWTSC
+    (P.char '}' $> reverse mem)
         <|> (do
             m <- dataMember
             dataMembers (m:mem))
+
+{-
+    $CLASSDECL := class $ID < $TVARKIND > $PREDS? { $INTERFACES }
+-}
+classDef pos = do
+    whiteSpace
+    id <- identifier
+    whiteSpace
+    tv <- angles (commaSep1 tvarKind <* whiteSpace)
+    whiteSpace
+    preds <- predicates
+    whiteSpace
+    is <- trace "before interfaces" interfaces
+    pure $ trace "end interfaces" (AST.ClassDef pos id tv preds is)
+
+{-
+    $TVAR      := `$ID
+    $TVARKIND  := `$ID | `$ID :: $KIND
+-}
+tvarKind = do
+    pos <- getPos
+    tv <- tvar
+    k <- (P.try (whiteSpace >> P.string "::") >> whiteSpace >> Just <$> kind) <|> pure Nothing
+    pure $ AST.TypeVarKind pos tv k
+
+{-
+    $KIND := $STAR | $STAR -> $KIND
+    $STAR := *
+-}
+kind = do
+    lhs <- P.char '*' $> AST.KStar
+    (P.try (whiteSpace >> P.string "->") >> whiteSpace >> (AST.KArroy lhs <$> kind))
+        <|> pure AST.KStar
+
+{-
+    $INTNAME := $ID | infix $INFIX | prefix $PREFIX
+-}
+intname = do
+    pos <- getPos
+    (reserved "infix" >> whiteSpace >> AST.IntInfix pos <$> operator)
+        <|> (reserved "prefix" >> whiteSpace >> AST.IntPrefix pos <$> operator)
+        <|> AST.IntFunc pos <$> identifier
+
+{-
+    func ( $QTYPES? ) $RETTYPE
+-}
+inttype = do
+    pos <- getPos
+    reserved "func"
+    whiteSpace
+    typeFunc pos
+
+{-
+    $INTERFACE  := $INTNAMES :: func ( $QTYPES? ) $RETTYPE
+-}
+interface = do
+    names <- commaSep1 intname
+    whiteSpace
+    P.string "::"
+    whiteSpace
+    t <- inttype
+    pure $ AST.Interface names t
+
+interfaces = do
+    P.char '{'
+    whiteSpaceWTSC
+    i <- interface
+    trace (show i) whiteSpaceWTSC
+    trace "here 3" (P.char '}' $> trace "here 3.1" [i]) <|> trace "here 4" (interfaces' [i])
+    where
+        interfaces' is = do
+            whiteSpaceWTSC
+            i <- interface
+            whiteSpaceWTSC
+            (P.char '}' $> reverse (i:is)) <|> interfaces' (i:is)

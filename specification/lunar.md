@@ -5,6 +5,13 @@ $TOP  := $TOP2 $TOP | ∅
 $TOP2 := $CLASSDECL | $INST | $DEFUN | $IMPORT
 ```
 
+## Prefix Poerator
+
+```
+$PREFIX := -
+```
+
+
 ## Infix Operator
 
 ```
@@ -63,11 +70,11 @@ $AS := as $ID
 ### Class Declaration
 
 ```
-$CLASSDECL  := class $ID < $TVARKIND > $PREDS? { $INTERFACES $WHITESPACE3* }
+$CLASSDECL  := class $ID < $TVARKIND > $PREDS? { $INTERFACES }
 $INTERFACES := $INTERFACE | $INTERFACE $SEP $INTERFACES
-$INTERFACE  := $INTNAMES :: func ( $TYPES? ) $TYPESPEC
+$INTERFACE  := $INTNAMES :: func ( $QTYPES? ) $RETTYPE
 $INTNAMES   := $INTNAME | $INTNAME , $INTNAMES
-$INTNAME    := $ID | infix $INFIX
+$INTNAME    := $ID | infix $INFIX | prefix $PREFIX
 ```
 
 Example:

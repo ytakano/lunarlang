@@ -1,7 +1,7 @@
 module AST where
 
 data TOP =
-    Class |
+    ClassDef Position String [TypeVarKind] [Pred] [Interface] |
     Inst |
     Defun Fun |
     Data DataDef |
@@ -76,11 +76,21 @@ data Pattern =
     PatLiteral Position Literal
     deriving (Show)
 
-data TypeVar =
-    TypeVar Position String deriving (Show)
+data TypeVar = TypeVar Position String deriving (Show)
+data DataDef = DataDef Position String [TypeVar] [Pred] [SumMem] deriving (Show)
+data SumMem  = SumMem Position String [QType] deriving (Show)
 
-data DataDef =
-    DataDef Position String [TypeVar] [Pred] [SumMem] deriving (Show)
+data Kind =
+    KStar |
+    KArroy Kind Kind
+    deriving (Show)
 
-data SumMem =
-    SumMem Position String [QType] deriving (Show)
+data TypeVarKind = TypeVarKind Position String (Maybe Kind) deriving (Show)
+
+data IntName =
+    IntFunc Position String |
+    IntInfix Position String |
+    IntPrefix Position String
+    deriving (Show)
+
+data Interface = Interface [IntName] LType deriving (Show)
