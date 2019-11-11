@@ -129,8 +129,9 @@ statement = do
     (reserved "func" >> defun pos)
         <|> (reserved "data" >> dataDef pos)
         <|> (reserved "class" >> classDef pos)
-        <|> reserved "instance" $> AST.Inst
-        <?> "func, data or class"
+        <|> (reserved "instance" >> instance' pos)
+        <|> (reserved "import" >> import' pos)
+        <?> "func, data, class or instance"
 
 statements t = do
     whiteSpace
@@ -546,8 +547,8 @@ classDef pos = do
     whiteSpace
     preds <- predicates
     whiteSpace
-    is <- trace "before interfaces" interfaces
-    pure $ trace "end interfaces" (AST.ClassDef pos id tv preds is)
+    is <- interfaces
+    pure $ AST.ClassDef pos id tv preds is
 
 {-
     $TVAR      := `$ID
@@ -601,11 +602,56 @@ interfaces = do
     P.char '{'
     whiteSpaceWTSC
     i <- interface
-    trace (show i) whiteSpaceWTSC
-    trace "here 3" (P.char '}' $> trace "here 3.1" [i]) <|> trace "here 4" (interfaces' [i])
+    whiteSpaceWTSC
+    (P.char '}' $> [i]) <|> interfaces' [i]
     where
         interfaces' is = do
             whiteSpaceWTSC
             i <- interface
             whiteSpaceWTSC
             (P.char '}' $> reverse (i:is)) <|> interfaces' (i:is)
+
+instance' pos = do
+    whiteSpace
+    p <- predicate
+    whiteSpace
+    ps <- predicates
+    whiteSpace
+    P.char '{'
+    fs <- instDefuns
+    pure $ AST.Instance pos p ps fs
+
+instDefuns = do
+    whiteSpace
+    f <- instDefun
+    instDefuns' [f]
+    where
+        instDefuns' fs = do
+            whiteSpace
+            (P.char '}' $> reverse fs) <|>
+                (do
+                    f <- instDefun
+                    instDefuns' (f:fs))
+
+instDefun = do
+    pos <- getPos
+    reserved "func"
+    whiteSpace
+    id <- (P.try (reserved "infix") >> whiteSpace >> operator)
+        <|> identifier
+    whiteSpace
+    args <- parens $ commaSep arg
+    whiteSpace
+    ret <- (Just <$> retType) <|> pure Nothing
+    whiteSpace
+    preds <- predicates
+    e <- braces exprs
+    pure $ AST.Fun pos id args ret preds e
+
+import' pos = do
+    whiteSpace
+    id <- dotid
+    h <- (P.try (whiteSpace >> reserved "here") $> AST.ImportHere)
+        <|> (P.try (whiteSpace >> reserved "as") >> whiteSpace >> AST.ImportAs <$> dotid)
+        <|> pure AST.ImportNS
+    pure $ AST.Import pos id h

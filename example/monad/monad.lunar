@@ -8,8 +8,8 @@ class monad<`a :: * -> *> require foo<`a> {
     return :: func(`b) -> `a<`b>
 }
 
-// instance monad<mytype<`a>> {
-//     func infix >>=(a, b) {
-//         b(a.x)
-//     }
-// }
+instance monad<mytype<`a>> {
+    func infix >>=(a, b) {
+        b(a.x)
+    }
+}

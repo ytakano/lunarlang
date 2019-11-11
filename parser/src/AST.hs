@@ -2,10 +2,10 @@ module AST where
 
 data TOP =
     ClassDef Position String [TypeVarKind] [Pred] [Interface] |
-    Inst |
+    Instance Position Pred [Pred] [Fun] |
     Defun Fun |
     Data DataDef |
-    Import
+    Import Position [String] HereAs
     deriving (Show)
 
 data Position = Pos Int Int deriving (Show)
@@ -94,3 +94,9 @@ data IntName =
     deriving (Show)
 
 data Interface = Interface [IntName] LType deriving (Show)
+
+data HereAs =
+    ImportNS |
+    ImportHere |
+    ImportAs [String]
+    deriving (Show)

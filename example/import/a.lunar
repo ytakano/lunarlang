@@ -2,10 +2,10 @@ import b
 import d here
 
 class buz<`a> {
-    h :: func(`a) : `a
+    h :: func(`a) -> `a
 }
 
-struct st2<`a> {
+data st2<`a> {
     v: `a
 }
 
