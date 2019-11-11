@@ -611,6 +611,9 @@ interfaces = do
             whiteSpaceWTSC
             (P.char '}' $> reverse (i:is)) <|> interfaces' (i:is)
 
+{-
+    $INST := instance $PRED $PREDS? { $DEFUNS }
+-}
 instance' pos = do
     whiteSpace
     p <- predicate
@@ -648,6 +651,11 @@ instDefun = do
     e <- braces exprs
     pure $ AST.Fun pos id args ret preds e
 
+{-
+    $IMPORT := import $DOTID $HEREAS?
+    $HEREAS := here | $AS
+    $AS := as $ID
+-}
 import' pos = do
     whiteSpace
     id <- dotid
