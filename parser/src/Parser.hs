@@ -665,6 +665,11 @@ import' pos = do
         <|> pure AST.ImportNS
     pure $ AST.Import pos id h
 
+{-
+    $STRUCT   := struct $ID $TVARS? $PREDS? { $PROD }
+    $PROD     := $PRODTYPE | $PRODTYPE $SEP $PROD
+    $PRODTYPE := $ID $TYPESPEC
+-}
 struct pos = do
     whiteSpace
     id <- identifier
