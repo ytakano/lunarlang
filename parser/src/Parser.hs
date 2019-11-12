@@ -131,6 +131,7 @@ statement = do
         <|> (reserved "class" >> classDef pos)
         <|> (reserved "instance" >> instance' pos)
         <|> (reserved "import" >> import' pos)
+        <|> (reserved "struct" >> struct pos)
         <?> "func, data, class or instance"
 
 statements t = do
@@ -513,13 +514,13 @@ dataDef pos = do
     whiteSpace
     id <- identifier
     whiteSpace
-    ta <- angles (commaSep1 typeArg <* whiteSpace) <|> pure []
+    ta <- angles (commaSep1 tvarKind <* whiteSpace) <|> pure []
     whiteSpace
     preds <- predicates
     whiteSpace
     P.char '{'
     mem <- dataMembers []
-    pure $ AST.Data (AST.DataDef pos id ta preds mem)
+    pure $ AST.Data pos id ta preds mem
 
 dataMember = do
     pos <- getPos
@@ -663,3 +664,35 @@ import' pos = do
         <|> (P.try (whiteSpace >> reserved "as") >> whiteSpace >> AST.ImportAs <$> dotid)
         <|> pure AST.ImportNS
     pure $ AST.Import pos id h
+
+struct pos = do
+    whiteSpace
+    id <- identifier
+    whiteSpace
+    tv <- angles (commaSep1 tvarKind <* whiteSpace) <|> pure []
+    whiteSpace
+    p <- predicates
+    whiteSpace
+    mem <- prodTypes
+    pure $ AST.Struct pos id tv p mem
+
+prodTypes = do
+    P.char '{'
+    whiteSpace
+    h <- prodMem
+    whiteSpace
+    (P.char '}' $> [h]) <|> prodTypes' [h]
+    where
+        prodTypes' t = do
+            h <- prodMem
+            whiteSpace
+            (P.char '}' $> reverse (h:t)) <|> prodTypes' (h:t)
+
+prodMem = do
+    pos <- getPos
+    id <- identifier
+    whiteSpace
+    P.char ':'
+    whiteSpace
+    t <- qtype
+    pure $ AST.ProdMem pos id t

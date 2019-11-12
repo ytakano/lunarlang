@@ -4,8 +4,9 @@ data TOP =
     ClassDef Position String [TypeVarKind] [Pred] [Interface] |
     Instance Position Pred [Pred] [Fun] |
     Defun Fun |
-    Data DataDef |
-    Import Position [String] HereAs
+    Data Position String [TypeVarKind] [Pred] [SumMem] |
+    Import Position [String] HereAs |
+    Struct Position String [TypeVarKind] [Pred] [ProdMem]
     deriving (Show)
 
 data Position = Pos Int Int deriving (Show)
@@ -77,7 +78,6 @@ data Pattern =
     deriving (Show)
 
 data TypeVar = TypeVar Position String deriving (Show)
-data DataDef = DataDef Position String [TypeVar] [Pred] [SumMem] deriving (Show)
 data SumMem  = SumMem Position String [QType] deriving (Show)
 
 data Kind =
@@ -100,3 +100,5 @@ data HereAs =
     ImportHere |
     ImportAs [String]
     deriving (Show)
+
+data ProdMem = ProdMem Position String QType deriving (Show)

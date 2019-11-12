@@ -179,7 +179,7 @@ $TYPESPEC := : $QTYPE
 Product type.
 ```
 $STRUCT   := struct $ID $TVARS? $PREDS? { $PROD }
-$PROD     := $PRODTYPE | $PRODTYPE ; $PROD
+$PROD     := $PRODTYPE | $PRODTYPE $SEP $PROD
 $PRODTYPE := $ID $TYPESPEC
 ```
 

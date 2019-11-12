@@ -1,6 +1,6 @@
 //import vec
 
-union t0 {
+data t0 {
     a: bool
     b: u32
 }
@@ -8,7 +8,7 @@ union t0 {
 func mkt0() {
     let a = a(false) // Ref<t0>
     let b = b(10)    // Ref<t0>
-    let c = new t0(true, 10)
+    let c = t0(true, 10)
 }
 
 struct t1 {
@@ -18,16 +18,15 @@ struct t1 {
 }
 
 func mkt1() {
-    let a = t1(10, true, left(20)) // 
+    let a = t1(10, true, left(20))
 }
 
-union Either<`a, `b> {
+data Either<`a, `b> {
     Left : `a
     Right : `b
 }
 
-union Maybe<`a> {
+data Maybe<`a> {
     Just : `a
     Nothing
 }
-
