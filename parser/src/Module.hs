@@ -100,7 +100,7 @@ extractFilesST = do
                 let LModule file path _ = mod
                 let src = mod2file id ""
                 let ret' = (file, im, map (</> src) path) : ret
-                S.put $ STExtFiles mod t ex ret'
+                S.put $ STExtFiles mod t ex' ret'
                 extractFilesST
         h:t -> do
             S.put $ STExtFiles mod t ex ret
