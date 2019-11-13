@@ -11,4 +11,6 @@ import qualified Text.Pretty.Simple as PP
 parseFile [] = putStrLn "no input file"
 parseFile (file:_) = do
     mod <- MOD.loadFiles [file] [] MAP.empty
+    fs <- MOD.extractFiles (MAP.elems mod)
     PP.pPrint mod
+    PP.pPrint fs

@@ -1,3 +1,6 @@
+import a
+import b.c
+
 data foo <`a> require eq<`a> {
     x : u32
     y : (bool, bool)
