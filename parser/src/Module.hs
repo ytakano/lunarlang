@@ -1,6 +1,8 @@
 module Module where
 
 import qualified AST
+import           Control.Applicative
+import           Control.Exception
 import qualified Control.Monad.State as S
 import qualified Data.HashMap        as MAP
 import qualified Data.HashSet        as SET
@@ -10,6 +12,7 @@ import qualified System.Directory    as DIR
 import           System.FilePath     ((<.>), (</>))
 import qualified System.FilePath     as FP
 import qualified System.IO           as IO
+import           System.IO.Error
 import qualified Text.Pretty.Simple  as PP
 
 data LModule =
@@ -24,7 +27,7 @@ data STExtFiles =
     LModule            -- Module
     [AST.TOP]          -- AST
     (SET.Set [String]) -- extracted modules
-    [[String]]         -- result
+    [(String, AST.Import, [String])] -- result
     deriving (Show)
 
 {-
@@ -83,26 +86,26 @@ extractFiles (h:t) = do
     let r = S.evalState extractFilesST (STExtFiles h ast SET.empty [])
     return r
 
-extractFilesST :: S.State STExtFiles [[String]]
+extractFilesST :: S.State STExtFiles [(String, AST.Import, [String])]
 extractFilesST = do
     s <- S.get
     let STExtFiles mod ast ex ret = s
     case ast of
-        AST.Import pos id _:t ->
+        AST.TOPImport im@(AST.Import pos id _):t ->
             if SET.member id ex then do
                 let LModule file _ _ = mod
                 fail $ errMsg file pos "multiply imported"
             else do
                 let ex' = SET.insert id ex
-                let LModule _ path _ = mod
+                let LModule file path _ = mod
                 let src = mod2file id ""
-                let ret' = map (</> src) path : ret
+                let ret' = (file, im, map (</> src) path) : ret
                 S.put $ STExtFiles mod t ex ret'
                 extractFilesST
         h:t -> do
             S.put $ STExtFiles mod t ex ret
             extractFilesST
-        _ -> pure ret
+        _ -> pure $ reverse ret
 
 errMsg file (AST.Pos line column) msg =
     "\"" ++ file ++ "\" (line " ++ show line ++ ", column " ++ show column ++ "):\n" ++ msg
@@ -111,3 +114,29 @@ mod2file [h] file =
     file </> h <.> "lunar"
 mod2file (h:t) file =
     mod2file t (file </> h)
+
+loadRecursive dict [] _ = pure dict
+loadRecursive _ ((file, AST.Import pos _ _, []):m) _ = do
+    let msg = errMsg file pos "could not find module"
+    putStrLn msg
+    fail "module load error"
+loadRecursive dict ((file, ast, h:t):m) dirs =
+    if MAP.member h dict then
+        loadRecursive dict m dirs
+    else do
+        handle <- catch (Just <$> IO.openFile h IO.ReadMode) notFound
+        loadHandle handle
+    where
+        notFound :: IOException -> IO (Maybe IO.Handle)
+        notFound e = pure Nothing
+        loadHandle Nothing = loadRecursive dict ((file, ast, t):m) dirs
+        loadHandle (Just handle) = do
+                contents <- IO.hGetContents handle
+                case Parser.parse h contents of
+                    Right ast -> do
+                        let d = FP.takeDirectory file
+                        let mod = LModule h (d:dirs) ast
+                        let dict' = MAP.insert h mod dict
+                        fs <- extractFiles [mod]
+                        loadRecursive dict' (fs ++ m) dirs
+                    Left  err -> print err >> fail "failed to parse"

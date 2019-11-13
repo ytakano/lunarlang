@@ -5,9 +5,11 @@ data TOP =
     Instance Position Pred [Pred] [Fun] |
     Defun Fun |
     Data Position String [TypeVarKind] [Pred] [SumMem] |
-    Import Position [String] HereAs |
+    TOPImport Import |
     Struct Position String [TypeVarKind] [Pred] [ProdMem]
     deriving (Show)
+
+data Import = Import Position [String] HereAs deriving (Show)
 
 data Position = Pos Int Int deriving (Show)
 

@@ -663,7 +663,7 @@ import' pos = do
     h <- (P.try (whiteSpace >> reserved "here") $> AST.ImportHere)
         <|> (P.try (whiteSpace >> reserved "as") >> whiteSpace >> AST.ImportAs <$> dotid)
         <|> pure AST.ImportNS
-    pure $ AST.Import pos id h
+    pure $ AST.TOPImport (AST.Import pos id h)
 
 {-
     $STRUCT   := struct $ID $TVARS? $PREDS? { $PROD }

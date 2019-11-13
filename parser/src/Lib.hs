@@ -10,7 +10,9 @@ import qualified Text.Pretty.Simple as PP
 
 parseFile [] = putStrLn "no input file"
 parseFile (file:_) = do
-    mod <- MOD.loadFiles [file] [] MAP.empty
+    let dirs = []
+    mod <- MOD.loadFiles [file] dirs MAP.empty
     fs <- MOD.extractFiles (MAP.elems mod)
-    PP.pPrint mod
+    mod' <- MOD.loadRecursive mod fs dirs
     PP.pPrint fs
+    PP.pPrint mod'
