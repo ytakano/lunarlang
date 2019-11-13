@@ -26,6 +26,7 @@ dependencies:
 - filepath
 - directory
 - hashmap
+- mtl
 
 library:
   source-dirs: src

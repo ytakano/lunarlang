@@ -1,28 +1,35 @@
 module Module where
 
 import qualified AST
---import qualified Control.Monad.State as S
-import qualified Data.HashMap     as M
+import qualified Control.Monad.State as S
+import qualified Data.HashMap        as MAP
+import qualified Data.HashSet        as SET
 import           Debug.Trace
 import qualified Parser
-import qualified System.Directory as DIR
-import           System.FilePath  ((</>))
-import qualified System.FilePath  as FP
-import qualified System.IO        as IO
+import qualified System.Directory    as DIR
+import           System.FilePath     ((</>))
+import qualified System.FilePath     as FP
+import qualified System.IO           as IO
 
 data LModule =
     LModule
     FP.FilePath              -- path to the source
     [FP.FilePath]            -- search path
     [AST.TOP]                -- AST
-    (M.Map [String] LModule) -- identifier to module
     deriving (Show)
 
 data LModules =
-    LModules (M.Map FP.FilePath LModule) -- path to module
+    LModules (MAP.Map FP.FilePath LModule) -- path to module
     [String]                  -- files to be loaded
     LModule                   -- module now loading
     [([String], FP.FilePath)] -- (ID, file) to be loaded
+    deriving (Show)
+
+data STExtFiles =
+    STExtFiles
+    LModule            -- Module
+    [AST.TOP]          -- AST
+    (SET.Set [String]) -- extracted filenames
     deriving (Show)
 
 {-
@@ -44,12 +51,11 @@ toABS file = do
         IO LModule
 -}
 load file dirs = do
-    file' <- toABS file >>= removeDotDot
-    let d = FP.takeDirectory file'
+    let d = FP.takeDirectory file
     handle <- IO.openFile file IO.ReadMode
     contents <- IO.hGetContents handle
     case Parser.parse file contents of
-        Right ast -> pure $ LModule file' (d:dirs) ast M.empty
+        Right ast -> pure $ LModule file (d:dirs) ast
         Left  err -> print err >> fail "failed to parse"
 
 {-
@@ -66,3 +72,21 @@ removeDotDot file = do
         rmd ["..", _] _    = Nothing
         rmd ("..":h:t) ret = rmd t ret
         rmd (h:t) ret      = rmd t (h:ret)
+
+loadFiles [] _ f2m = pure f2m
+loadFiles (h:t) dirs f2m = do
+    h' <- toABS h >>= removeDotDot
+    if MAP.member h' f2m then
+        loadFiles t dirs f2m
+    else do
+        m <- load h dirs
+        loadFiles t dirs (MAP.insert h m f2m)
+
+extractFiles (LModule _ dirs ast) =
+    dirs
+
+extractFilesFromAST _ [] mods files = files
+extractFilesFromAST dirs (AST.Import pos id _:t) mods files =
+    if SET.member id mods then files else files
+extractFilesFromAST dirs (_:t) mods files =
+    extractFilesFromAST dirs t mods files
