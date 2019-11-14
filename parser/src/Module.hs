@@ -20,7 +20,7 @@ data LModule =
     FP.FilePath               -- path to the source
     [FP.FilePath]             -- search path
     [AST.TOP]                 -- AST
---    [(AST.Import, FP.FilePath)] -- imported files
+    [(AST.Import, FP.FilePath)] -- imported files
     deriving (Show)
 
 data STExtFiles =
@@ -54,7 +54,7 @@ load file dirs = do
     handle <- IO.openFile file IO.ReadMode
     contents <- IO.hGetContents handle
     case Parser.parse file contents of
-        Right ast -> pure $ LModule file (d:dirs) ast
+        Right ast -> pure $ LModule file (d:dirs) ast []
         Left  err -> print err >> fail "failed to parse"
 
 {-
@@ -88,7 +88,7 @@ loadFiles files dirs = do
 
 extractFiles [] = pure []
 extractFiles (h:t) = do
-    let LModule _ path ast = h
+    let LModule _ path ast _ = h
     let r = S.evalState extractFilesST (STExtFiles h ast SET.empty [])
     PP.pPrint r
     return r
@@ -100,11 +100,11 @@ extractFilesST = do
     case ast of
         AST.TOPImport im@(AST.Import pos id _):t ->
             if SET.member id ex then do
-                let LModule file _ _ = mod
+                let LModule file _ _ _ = mod
                 fail $ errMsg file pos "multiply imported"
             else do
                 let ex' = SET.insert id ex
-                let LModule file path _ = mod
+                let LModule file path _ _ = mod
                 let src = mod2file id ""
                 let ret' = (file, im, map (</> src) path) : ret
                 S.put $ STExtFiles mod t ex' ret'
@@ -128,8 +128,9 @@ loadRecursive _ ((file, AST.Import pos _ _, []):m) _ = do
     putStrLn msg
     fail "module load error"
 loadRecursive dict ((file, ast, h:t):m) dirs =
-    if MAP.member h dict then
-        loadRecursive dict m dirs
+    if MAP.member h dict then do
+        dict' <- appendImportInfo dict file ast h
+        loadRecursive dict' m dirs
     else do
         handle <- catch (Just <$> IO.openFile h IO.ReadMode) notFound
         loadHandle handle
@@ -140,10 +141,20 @@ loadRecursive dict ((file, ast, h:t):m) dirs =
         loadHandle (Just handle) = do
                 contents <- IO.hGetContents handle
                 case Parser.parse h contents of
-                    Right ast -> do
+                    Right astTop -> do
                         let d = FP.takeDirectory file
-                        let mod = LModule h (d:dirs) ast
-                        let dict' = MAP.insert h mod dict
+                        let mod = LModule h (d:dirs) astTop []
+                        let dict1 = MAP.insert h mod dict
+                        dict2 <- appendImportInfo dict1 file ast h
                         fs <- extractFiles [mod]
-                        loadRecursive dict' (fs ++ m) dirs
+                        loadRecursive dict2 (fs ++ m) dirs
                     Left  err -> print err >> fail "failed to parse"
+
+appendImportInfo dict src ast file =
+    case MAP.lookup src dict of
+        Just mod -> do
+            let LModule s ds a ims = mod
+            let mod' = LModule s ds a ((ast, file):ims)
+            let dict' = MAP.insert src mod' dict
+            pure dict'
+        Nothing -> fail "internal error"
