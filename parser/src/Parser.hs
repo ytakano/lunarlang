@@ -153,7 +153,7 @@ defun pos = do
     whiteSpace
     preds <- predicates
     e <- braces exprs
-    pure $ AST.Defun $ AST.Fun pos id args ret preds e
+    pure $ AST.TOPDefun (AST.Defun pos id args ret preds e)
 
 {-
     $ARG      := $PATTERN $TYPESPEC?
@@ -520,7 +520,7 @@ dataDef pos = do
     whiteSpace
     P.char '{'
     mem <- dataMembers []
-    pure $ AST.Data pos id ta preds mem
+    pure $ AST.TOPData (AST.Data pos id ta preds mem)
 
 dataMember = do
     pos <- getPos
@@ -549,7 +549,7 @@ classDef pos = do
     preds <- predicates
     whiteSpace
     is <- interfaces
-    pure $ AST.ClassDef pos id tv preds is
+    pure $ AST.TOPClassDef (AST.ClassDef pos id tv preds is)
 
 {-
     $TVAR      := `$ID
@@ -623,7 +623,7 @@ instance' pos = do
     whiteSpace
     P.char '{'
     fs <- instDefuns
-    pure $ AST.Instance pos p ps fs
+    pure $ AST.TOPInstance (AST.Instance pos p ps fs)
 
 instDefuns = do
     whiteSpace
@@ -650,7 +650,7 @@ instDefun = do
     whiteSpace
     preds <- predicates
     e <- braces exprs
-    pure $ AST.Fun pos id args ret preds e
+    pure $ AST.Defun pos id args ret preds e
 
 {-
     $IMPORT := import $DOTID $HEREAS?
@@ -679,7 +679,7 @@ struct pos = do
     p <- predicates
     whiteSpace
     mem <- prodTypes
-    pure $ AST.Struct pos id tv p mem
+    pure $ AST.TOPStruct (AST.Struct pos id tv p mem)
 
 prodTypes = do
     P.char '{'

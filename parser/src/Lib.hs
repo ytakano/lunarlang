@@ -1,6 +1,6 @@
-module Lib
-    ( parseFile
-    ) where
+module Lib (
+    parseFile
+) where
 
 import qualified Data.HashMap       as MAP
 import qualified Module             as MOD

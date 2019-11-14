@@ -1,20 +1,22 @@
 module AST where
 
 data TOP =
-    ClassDef Position String [TypeVarKind] [Pred] [Interface] |
-    Instance Position Pred [Pred] [Fun] |
-    Defun Fun |
-    Data Position String [TypeVarKind] [Pred] [SumMem] |
+    TOPClassDef ClassDef |
+    TOPInstance Instance |
+    TOPDefun Defun |
+    TOPData Data |
     TOPImport Import |
-    Struct Position String [TypeVarKind] [Pred] [ProdMem]
+    TOPStruct Struct
     deriving (Show)
 
-data Import = Import Position [String] HereAs deriving (Show)
+data ClassDef = ClassDef Position String [TypeVarKind] [Pred] [Interface] deriving (Show)
+data Instance = Instance Position Pred [Pred] [Defun] deriving (Show)
+data Defun    = Defun Position String [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
+data Data     = Data Position String [TypeVarKind] [Pred] [SumMem] deriving (Show)
+data Import   = Import Position [String] HereAs deriving (Show)
+data Struct   = Struct Position String [TypeVarKind] [Pred] [ProdMem] deriving (Show)
 
 data Position = Pos Int Int deriving (Show)
-
--- function definition
-data Fun = Fun Position String [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
 
 -- argument
 data Arg = Arg Position DBind (Maybe QType) deriving (Show)

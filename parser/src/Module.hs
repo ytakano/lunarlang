@@ -1,4 +1,7 @@
-module Module where
+module Module (
+    LModule,
+    loadFiles
+) where
 
 import qualified AST
 import           Control.Applicative
@@ -7,6 +10,7 @@ import qualified Control.Monad.State as S
 import qualified Data.HashMap        as MAP
 import qualified Data.HashSet        as SET
 import           Debug.Trace
+import           Helper
 import qualified Parser
 import qualified System.Directory    as DIR
 import           System.FilePath     ((<.>), (</>))
@@ -17,9 +21,9 @@ import qualified Text.Pretty.Simple  as PP
 
 data LModule =
     LModule
-    FP.FilePath               -- path to the source
-    [FP.FilePath]             -- search path
-    [AST.TOP]                 -- AST
+    FP.FilePath                 -- path to the source
+    [FP.FilePath]               -- search path
+    [AST.TOP]                   -- AST
     [(AST.Import, FP.FilePath)] -- imported files
     deriving (Show)
 
@@ -72,6 +76,7 @@ removeDotDot file = do
         rmd ("..":h:t) ret = rmd t ret
         rmd (h:t) ret      = rmd t (h:ret)
 
+loadFiles :: [String] -> [String] -> IO (MAP.Map FP.FilePath LModule)
 loadFiles files dirs = do
     mod <- loadf files dirs MAP.empty
     fs <- extractFiles (MAP.elems mod)
@@ -113,9 +118,6 @@ extractFilesST = do
             S.put $ STExtFiles mod t ex ret
             extractFilesST
         _ -> pure $ reverse ret
-
-errMsg file (AST.Pos line column) msg =
-    "\"" ++ file ++ "\" (line " ++ show line ++ ", column " ++ show column ++ "):\n" ++ msg
 
 mod2file [h] file =
     file </> h <.> "lunar"
