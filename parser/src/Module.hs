@@ -17,9 +17,10 @@ import qualified Text.Pretty.Simple  as PP
 
 data LModule =
     LModule
-    FP.FilePath              -- path to the source
-    [FP.FilePath]            -- search path
-    [AST.TOP]                -- AST
+    FP.FilePath               -- path to the source
+    [FP.FilePath]             -- search path
+    [AST.TOP]                 -- AST
+--    [(AST.Import, FP.FilePath)] -- imported files
     deriving (Show)
 
 data STExtFiles =
@@ -71,19 +72,25 @@ removeDotDot file = do
         rmd ("..":h:t) ret = rmd t ret
         rmd (h:t) ret      = rmd t (h:ret)
 
-loadFiles [] _ f2m = pure f2m
-loadFiles (h:t) dirs f2m = do
-    h' <- toABS h >>= removeDotDot
-    if MAP.member h' f2m then
-        loadFiles t dirs f2m
-    else do
-        m <- load h' dirs
-        loadFiles t dirs (MAP.insert h' m f2m)
+loadFiles files dirs = do
+    mod <- loadf files dirs MAP.empty
+    fs <- extractFiles (MAP.elems mod)
+    loadRecursive mod fs dirs
+    where
+        loadf [] _ f2m = pure f2m
+        loadf (h:t) dirs f2m = do
+            h' <- toABS h >>= removeDotDot
+            if MAP.member h' f2m then
+                loadf t dirs f2m
+            else do
+                m <- load h' dirs
+                loadf t dirs (MAP.insert h' m f2m)
 
 extractFiles [] = pure []
 extractFiles (h:t) = do
     let LModule _ path ast = h
     let r = S.evalState extractFilesST (STExtFiles h ast SET.empty [])
+    PP.pPrint r
     return r
 
 extractFilesST :: S.State STExtFiles [(String, AST.Import, [String])]
