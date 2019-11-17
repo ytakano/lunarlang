@@ -145,6 +145,7 @@ statements t = do
 -}
 defun pos = do
     whiteSpace
+    posid <- getPos
     id <- identifier
     whiteSpace
     args <- parens $ commaSep arg
@@ -153,7 +154,7 @@ defun pos = do
     whiteSpace
     preds <- predicates
     e <- braces exprs
-    pure $ AST.TOPDefun (AST.Defun pos id args ret preds e)
+    pure $ AST.TOPDefun (AST.Defun pos (AST.IDPos posid id) args ret preds e)
 
 {-
     $ARG      := $PATTERN $TYPESPEC?
@@ -512,6 +513,7 @@ typeArg =
 -}
 dataDef pos = do
     whiteSpace
+    posid <- getPos
     id <- identifier
     whiteSpace
     ta <- angles (commaSep1 tvarKind <* whiteSpace) <|> pure []
@@ -520,7 +522,7 @@ dataDef pos = do
     whiteSpace
     P.char '{'
     mem <- dataMembers []
-    pure $ AST.TOPData (AST.Data pos id ta preds mem)
+    pure $ AST.TOPData (AST.Data pos (AST.IDPos posid id) ta preds mem)
 
 dataMember = do
     pos <- getPos
@@ -542,6 +544,7 @@ dataMembers mem = do
 -}
 classDef pos = do
     whiteSpace
+    posid <- getPos
     id <- identifier
     whiteSpace
     tv <- angles (commaSep1 tvarKind <* whiteSpace)
@@ -549,7 +552,7 @@ classDef pos = do
     preds <- predicates
     whiteSpace
     is <- interfaces
-    pure $ AST.TOPClassDef (AST.ClassDef pos id tv preds is)
+    pure $ AST.TOPClassDef (AST.ClassDef pos (AST.IDPos posid id) tv preds is)
 
 {-
     $TVAR      := `$ID
@@ -641,6 +644,7 @@ instDefun = do
     pos <- getPos
     reserved "func"
     whiteSpace
+    posid <- getPos
     id <- (P.try (reserved "infix") >> whiteSpace >> operator)
         <|> identifier
     whiteSpace
@@ -650,7 +654,7 @@ instDefun = do
     whiteSpace
     preds <- predicates
     e <- braces exprs
-    pure $ AST.Defun pos id args ret preds e
+    pure $ AST.Defun pos (AST.IDPos posid id) args ret preds e
 
 {-
     $IMPORT := import $DOTID $HEREAS?
@@ -672,6 +676,7 @@ import' pos = do
 -}
 struct pos = do
     whiteSpace
+    posid <- getPos
     id <- identifier
     whiteSpace
     tv <- angles (commaSep1 tvarKind <* whiteSpace) <|> pure []
@@ -679,7 +684,7 @@ struct pos = do
     p <- predicates
     whiteSpace
     mem <- prodTypes
-    pure $ AST.TOPStruct (AST.Struct pos id tv p mem)
+    pure $ AST.TOPStruct (AST.Struct pos (AST.IDPos posid id) tv p mem)
 
 prodTypes = do
     P.char '{'

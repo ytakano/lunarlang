@@ -9,12 +9,14 @@ data TOP =
     TOPStruct Struct
     deriving (Show)
 
-data ClassDef = ClassDef Position String [TypeVarKind] [Pred] [Interface] deriving (Show)
+data IDPos = IDPos Position String deriving (Show)
+
+data ClassDef = ClassDef Position IDPos [TypeVarKind] [Pred] [Interface] deriving (Show)
 data Instance = Instance Position Pred [Pred] [Defun] deriving (Show)
-data Defun    = Defun Position String [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
-data Data     = Data Position String [TypeVarKind] [Pred] [SumMem] deriving (Show)
+data Defun    = Defun Position IDPos [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
+data Data     = Data Position IDPos [TypeVarKind] [Pred] [SumMem] deriving (Show)
 data Import   = Import Position [String] HereAs deriving (Show)
-data Struct   = Struct Position String [TypeVarKind] [Pred] [ProdMem] deriving (Show)
+data Struct   = Struct Position IDPos [TypeVarKind] [Pred] [ProdMem] deriving (Show)
 
 data Position = Pos Int Int deriving (Show)
 

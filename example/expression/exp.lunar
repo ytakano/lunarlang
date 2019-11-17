@@ -6,7 +6,7 @@ data foo <`a> require eq<`a> {
     u : b<bool>
 }
 
-func pred( tp.ee (a, b, c) : e.f
+func test( tp.ee (a, b, c) : e.f
     ,
     g :
     func (  `a

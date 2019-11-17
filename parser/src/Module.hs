@@ -1,5 +1,5 @@
 module Module (
-    LModule,
+    LModule (..),
     loadFiles
 ) where
 
