@@ -5,15 +5,17 @@ data t0 {
     a: t1
     b: t2
     y: shared type2.d0
+    z: ((bool, u32))
 }
 
 data t1 {
-    c: s1
+    c: bool
 }
 
 data t2 {
     d: u64
     e: bool
+    f: (bool, u32, fp64)
 }
 
 func mkt0() {
@@ -23,9 +25,14 @@ func mkt0() {
 }
 
 struct s1 {
-    x : u32
-    y : bool
-    w : Either<u32, bool>
+    x : shared u32
+    y : uniq bool
+    w : Either<s1, bool> // error
+    z : Maybe<bool>
+    g : (bool, bool)
+    h : shared (bool, u32, u8, shared s16)
+    i : [bool] // error
+    j : shared [t1]
 }
 
 func mkt1() {

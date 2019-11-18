@@ -1,9 +1,12 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Typing where
 
 import qualified AST
 import qualified Control.Monad.State as S
 import qualified Data.HashMap        as MAP
 import qualified Data.HashSet        as SET
+import qualified Data.Maybe          as MB
 import           Debug.Trace
 import           Helper
 import           Module
@@ -87,6 +90,9 @@ checkUserType map mod (AST.QType _ qual (AST.IDType pos id _)) =
         Nothing -> fail $ errMsg file pos "unkown type specifier"
     where
         file = mod2file mod
+        checkIDType (_, _, NamedFunc _)  = fail $ errMsg file pos "specify type instead of function name"
+        checkIDType (_, _, NamedClass _) = fail $ errMsg file pos "specify type instead of class name"
+        checkIDType (_, _, NamedSum _ _) = fail $ errMsg file pos "specify type instead of data constructor"
         checkIDType (f, mod', obj) = do
             (s, callst) <- S.get
             let callst' = (file, pos):callst
@@ -95,6 +101,17 @@ checkUserType map mod (AST.QType _ qual (AST.IDType pos id _)) =
             if r then do
                 S.put (s, callst)
                 pure True
+            else
+                pure False
+checkUserType map mod (AST.QType _ qual (AST.TupleType pos qts))
+    | MB.isNothing qual = tupleMems qts
+    | otherwise = pure True
+    where
+        tupleMems [] = pure True
+        tupleMems (h:t) = do
+            r <- checkUserType map mod h
+            if r then
+                tupleMems t
             else
                 pure False
 checkUserType _ _ _ = pure True
@@ -106,6 +123,16 @@ checkRecSumMem map mod (AST.SumMem _ _ h:t) = do
         checkRecSumMem map mod t
     else
         pure False
+
+checkRecProdMem _ _ [] = pure True
+checkRecProdMem map mod (AST.ProdMem _ _ h:t) = do
+    r <- checkUserType map mod h
+    if r then
+        checkRecProdMem map mod t
+    else
+        pure False
+    where
+        file = mod2file mod
 
 checkObjRec1st map =
     checkObjRec1st2 map maplist
@@ -127,19 +154,26 @@ checkObjRec1st4 map mod file obj =
 
 checkRec :: File2Mod -> LModule -> (FP.FilePath, Named) -> S.State (SET.Set (FP.FilePath, String), [(FP.FilePath, AST.Position)]) Bool
 checkRec map mod (file, NamedData (AST.Data pos (AST.IDPos _ id) _ _ mem)) = do
-    (s, callst) <- S.get
+    let fun = checkRecSumMem map mod mem
+    checkRec2 map mod file id fun
+checkRec map mod (file, NamedStruct (AST.Struct pos (AST.IDPos _ id) _ _ mem)) = do
+    let fun = checkRecProdMem map mod mem
+    checkRec2 map mod file id fun
+checkRec _ _ _ = pure True
+
+checkRec2 map mod file id fun = do
+    state@(s, callst) <- S.get
     if SET.member (file, id) s then
         fail $ getRecErrMsg callst
     else do
         let s' = SET.insert (file, id) s
         S.put (s', callst)
-        r <- checkRecSumMem map mod mem
+        r <- fun
         if r then do
-            S.put (s, callst)
+            S.put state
             pure True
         else
             pure False
-checkRec _ _ _ = pure True
 
 findUserObj :: File2Mod -> LModule -> [String] -> Maybe (FP.FilePath, LModule, Named)
 findUserObj map mod [id]

@@ -4,8 +4,8 @@
       '(("//.*" . font-lock-comment-face)
 	("'.*'" . font-lock-string-face)
 	("`\\<\\w+\\>" . font-lock-variable-name-face)
-	("\\<\\(bool\\|void\\|u64\\|s64\\|u32\\|s32\\|u16\\|s16\\|u8\\|s8\\)\\>" . font-lock-type-face)
-	("\\<\\(import\\|here\\|as\\|class\\|require\\|func\\|infix\\|prefix\\|instance\\|let\\|if\\|elif\\|else\\|match\\|in\\|struct\\|data\\|new\\|shared\\)\\>" . font-lock-keyword-face)
+	("\\<\\(fp64\\|fp32\\|bool\\|void\\|u64\\|s64\\|u32\\|s32\\|u16\\|s16\\|u8\\|s8\\)\\>" . font-lock-type-face)
+	("\\<\\(import\\|here\\|as\\|class\\|require\\|func\\|infix\\|prefix\\|instance\\|let\\|if\\|elif\\|else\\|match\\|in\\|struct\\|data\\|new\\|uniq\\|shared\\)\\>" . font-lock-keyword-face)
         ("\\<\\(true\\|false\\)\\>" . font-lock-constant-face)))
 
 (define-derived-mode lunar-mode prog-mode "lunar"
