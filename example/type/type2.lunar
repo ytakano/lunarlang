@@ -1,0 +1,5 @@
+import type
+
+data d0 {
+    x: type.t0
+}

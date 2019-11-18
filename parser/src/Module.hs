@@ -1,5 +1,6 @@
 module Module (
     LModule (..),
+    emptyLModule,
     loadFiles
 ) where
 
@@ -34,6 +35,8 @@ data STExtFiles =
     (SET.Set [String]) -- extracted modules
     [(String, AST.Import, [String])] -- result
     deriving (Show)
+
+emptyLModule = LModule "" [] [] []
 
 {-
     input:  relative of absolute path
@@ -129,11 +132,11 @@ loadRecursive _ ((file, AST.Import pos _ _, []):m) _ = do
     let msg = errMsg file pos "could not find module"
     putStrLn msg
     fail "module load error"
-loadRecursive dict ((file, ast, h:t):m) dirs =
-    if MAP.member h dict then do
+loadRecursive dict ((file, ast, h:t):m) dirs
+    | MAP.member h dict = do
         dict' <- appendImportInfo dict file ast h
         loadRecursive dict' m dirs
-    else do
+    | otherwise = do
         handle <- catch (Just <$> IO.openFile h IO.ReadMode) notFound
         loadHandle handle
     where

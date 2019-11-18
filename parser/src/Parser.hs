@@ -183,7 +183,7 @@ qtype' pos = do
         <|> (reserved "uniq" >> whiteSpace $> Just AST.Uniq)
         <|> pure Nothing)
     t <- typeTuple <|> typeArray <|> typeFuncID
-    pure $ AST.QType pos Nothing t
+    pure $ AST.QType pos qual t
 
 {-
     ( $QTYPES? )

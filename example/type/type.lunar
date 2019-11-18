@@ -1,8 +1,19 @@
 //import vec
+import type2
 
 data t0 {
-    a: bool
-    b: u32
+    a: t1
+    b: t2
+    y: shared type2.d0
+}
+
+data t1 {
+    c: s1
+}
+
+data t2 {
+    d: u64
+    e: bool
 }
 
 func mkt0() {
@@ -11,7 +22,7 @@ func mkt0() {
     let c = t0(true, 10)
 }
 
-struct t1 {
+struct s1 {
     x : u32
     y : bool
     w : Either<u32, bool>

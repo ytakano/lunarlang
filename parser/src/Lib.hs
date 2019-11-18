@@ -15,3 +15,5 @@ parseFile files = do
     mod <- loadFiles files dirs
     let mod' = MAP.map namedObj mod
     PP.pPrint mod'
+    let isRec = checkObjRec1st mod'
+    PP.pPrint isRec
