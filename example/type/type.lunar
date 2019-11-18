@@ -33,6 +33,7 @@ struct s1 {
     h : shared (bool, u32, u8, shared s16)
     i : [bool] // error
     j : shared [t1]
+    k : [u32 : 100 * 29 + -3]
 }
 
 func mkt1() {

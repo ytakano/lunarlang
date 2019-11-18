@@ -124,6 +124,44 @@ def = L.emptyDef{T.commentLine = "//",
                                     "match", "import", "as", "here",
                                     "prefix", "infix", "shared", "uniq"]}
 
+tableNum = [[prefix "-" (opPrefix "-")],
+            [binary "*" (opBin "*") E.AssocLeft,
+             binary "/" (opBin "/") E.AssocLeft,
+             binary "%" (opBin "%") E.AssocLeft],
+            [binary "+" (opBin "+") E.AssocLeft,
+             binary "-" (opBin "-") E.AssocLeft]]
+    where
+        opPrefix = AST.ExprPrefix
+        opBin = AST.ExprBin
+        binary name fun assoc = E.Infix (do{ reservedOpNum name; pure fun }) assoc
+        prefix name fun = E.Prefix (do{ reservedOpNum name; pure fun })
+
+{-
+    $NUMEXP := $PREFIX? $NUMEXP | $NATURAL | $NUMEXP $INFIX $NUMEXP | ( $NUMEXP )
+-}
+exprNum = E.buildExpressionParser tableNum termNum <?> "constant number expression"
+
+termNum = exprNumLit <|> parensNum (exprNum <* whiteSpaceNum) <?> "constant term"
+
+lexerNum      = T.makeTokenParser defNum
+whiteSpaceNum = T.whiteSpace lexerNum
+reservedOpNum = T.reservedOp lexerNum
+naturalNum    = T.natural lexerNum
+parensNum     = T.parens lexerNum
+
+exprNumLit = do
+    pos <- getPos
+    num <- naturalNum
+    pure $ AST.ExprLiteral pos (AST.LitInt num)
+
+defNum = L.emptyDef{T.commentLine = "//",
+                    T.identStart = parseNonum,
+                    T.identLetter = parseChar,
+                    T.opStart = P.oneOf "*/%+-",
+                    T.opLetter = P.oneOf "*/%+-",
+                    T.reservedOpNames = ["+", "-", "/", "*", "%"],
+                    T.reservedNames = []}
+
 statement = do
     pos <- getPos
     (reserved "func" >> defun pos)
@@ -171,7 +209,7 @@ arg = do
 {-
     $QTYPE   := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
     $TYPE    := $DOTID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
-                ( $QTYPES? ) | [ $QTYPE ]
+                ( $QTYPES? ) | [ $QTYPE ARRNUM? ]
 -}
 qtype = do
     pos <- getPos
@@ -194,12 +232,19 @@ typeTuple = do
     pure $ AST.TupleType pos qt
 
 {-
-    [ $QTYPE ]
+    [ $QTYPE $ARRNUM? ]
+    $ARRNUM := : $NUMEXP
 -}
 typeArray = do
     pos <- getPos
-    qt <- brackets $ qtype <* whiteSpace
-    pure $ AST.ArrayType pos qt
+    P.char '['
+    whiteSpace
+    qt <- qtype
+    whiteSpace
+    num <- (P.char ':' >> whiteSpace >> (Just <$> exprNum)) <|> pure Nothing
+    whiteSpace
+    P.char ']' $> Nothing
+    pure $ AST.ArrayType pos qt num
 
 {-
     $DOTID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE

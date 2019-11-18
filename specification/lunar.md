@@ -163,9 +163,16 @@ $QUALIFIER := shared | uniq
 ```
 $QTYPE   := $QUALIFIER? $TYPE | $TVAR <$QTYPES>?
 $TYPE    := $DOTID <$QTYPES>? | func ( $QTYPES? ) $RETTYPE |
-           ( $QTYPES? ) | [ $QTYPE ]
+           ( $QTYPES? ) | [ $QTYPE $ARRNUM? ]
 $RETTYPE := -> $QTYPE
 $QTYPES  := $QTYPE | $QTYPE , $QTYPES
+$ARRNUM  := : $NUMEXP
+```
+
+### Constant Number Expression
+
+```
+$NUMEXP := $PREFIX? $NUMEXP | $NATURAL | $NUMEXP $INFIX $NUMEXP | ( $NUMEXP )
 ```
 
 ### Type Specifier
@@ -229,7 +236,7 @@ $EXPR0' := $DOTID | $IF | $LET | ( $EXPR , ) | ( $EXPR ) | ( $EXPRS_? ) |
 $EXPR' := ∅ | [ $EXPR ] $EXPR' | $APPLY $EXPR'
 $EXPRS := $EXPR | $EXPR $SEP $EXPR
 $EXPRS_ := $EXPR | $EXPR , $EXPR
-$LITERAL := $STR | $DECIMAL | $FLOAT
+$LITERAL := $STR | $NATURAL | $FLOAT
 $PREFIX := - | *
 ```
 

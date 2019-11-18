@@ -35,7 +35,7 @@ data QType = QType Position (Maybe Qual) LType deriving (Show)
 data LType =
     IDType Position [String] [QType] |
     TVar Position String [QType] |
-    ArrayType Position QType |
+    ArrayType Position QType (Maybe Expr) |
     TupleType Position [QType] |
     FuncType Position [QType] QType |
     VoidType
