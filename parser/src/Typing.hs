@@ -7,6 +7,7 @@ import           Control.Monad       (mapM)
 import qualified Control.Monad.State as S
 import qualified Data.HashMap        as MAP
 import qualified Data.HashSet        as SET
+import qualified Data.List           as L
 import qualified Data.Maybe          as MB
 import           Debug.Trace
 import           Helper
@@ -75,27 +76,48 @@ addSumMem file dt (ast@(AST.SumMem pos ident _):t) dict
 
 checkRecMem dict mod = mapAnd (checkUserType dict mod)
 
-checkUserType dict mod (AST.QType _ qual (AST.IDType pos ident _)) =
-    case findUserObj dict mod ident of
-        Just x  -> case qual of
-            Nothing -> checkIDType x
-            _       -> pure True
-        Nothing -> fail $ errMsg file pos "unknown type specifier"
+checkUserType dict mod (AST.QType _ qual (AST.IDType pos ident typeArgs)) = do
+    r <- mapAnd (isDefType dict mod) typeArgs
+    if r then
+        case findUserObj dict mod ident of
+            Just x  -> checkIDType qual x
+            Nothing -> fail $ errMsg file pos "unknown type specifier"
+    else
+        pure False
     where
         file = mod2file mod
-        checkIDType (_, _, NamedFunc _)  = fail $ errMsg file pos "specify type instead of function name"
-        checkIDType (_, _, NamedClass _) = fail $ errMsg file pos "specify type instead of class name"
-        checkIDType (_, _, NamedSum _ _) = fail $ errMsg file pos "specify type instead of data constructor"
-        checkIDType (f, mod', obj) = do
+        msg  = errMsg file pos
+        lenTargs = length typeArgs
+        checkIDType _ (_, _, NamedFunc _)  = fail $ msg "specify type instead of function name"
+        checkIDType _ (_, _, NamedClass _) = fail $ msg "specify type instead of class name"
+        checkIDType _ (_, _, NamedSum _ _) = fail $ msg "specify type instead of data constructor"
+        checkIDType Nothing (f, mod', obj) = do
+            r1 <- checkTArgs obj
             (s, callst) <- S.get
             let callst' = (file, pos):callst
             S.put (s, callst')
-            r <- checkRec dict mod' (f, obj)
-            if r then do
+            r2 <- checkRec dict mod' (f, obj)
+            -- TODO: apply type arguments to mod'
+            if r1 && r2 then do
                 S.put (s, callst)
                 pure True
             else
                 pure False
+        checkIDType _ _ = pure True
+        checkTArgs (NamedData (AST.Data _ (AST.IDPos _ ident') tv _ _))     = checkLen ident' tv
+        checkTArgs (NamedStruct (AST.Struct _ (AST.IDPos _ ident') tv _ _)) = checkLen ident' tv
+        checkTArgs _ =
+            if lenTargs == 0 then
+                pure True
+            else
+                fail $ msg "cannot pass type arguments"
+        checkLen idnet' tv =
+            if length tv == lenTargs then
+                pure True
+            else
+                fail $ msg (idnet' ++ " requires " ++ show (length tv)
+                    ++ " type arguments, but " ++ show lenTargs
+                    ++ " type arguments are passed")
 checkUserType dict mod (AST.QType _ qual (AST.TupleType _ qts))
     | MB.isNothing qual = mapAnd (checkUserType dict mod) qts
     | otherwise = mapAnd (isDefType dict mod) qts
@@ -107,11 +129,17 @@ checkUserType _ _ _ = pure True
 
 mapAnd fun t = foldl (&&) True <$> mapM fun t
 
+-- TODO: check type arguments
 isDefType dict mod (AST.QType _ _ (AST.IDType pos ident _)) =
-    if MB.isJust $ findUserObj dict mod ident then
-        pure True
-    else
-        fail $ errMsg (mod2file mod) pos "unknown type specifier"
+    case findUserObj dict mod ident of
+        Just (_, _, NamedFunc _)  -> fail $ msg "specify type instead of function name"
+        Just (_, _, NamedClass _) -> fail $ msg "specify type instead of class name"
+        Just (_, _, NamedSum _ _) -> fail $ msg "specify type instead of data constructor"
+        Just _                    -> pure True
+        Nothing                   -> fail $ msg "unknown type specifier"
+    where
+        file = mod2file mod
+        msg  = errMsg file pos
 isDefType dict mod (AST.QType _ _ (AST.TupleType _ qts))  = mapAnd (isDefType dict mod) qts
 isDefType dict mod (AST.QType _ _ (AST.ArrayType _ qt _)) = isDefType dict mod qt
 isDefType dict mod (AST.QType _ _ (AST.FuncType _ args ret)) = do
@@ -236,18 +264,6 @@ primitiveTypes =
     SET.insert "void" $
     SET.insert "bool" SET.empty
 
-applyTypes (AST.Struct pos _ idpos tvar pred mem) args = pos
-
-getKind [] = AST.Kind
-getKind [_:t] =
-    AST.KArray AST.KStar $ getKind t
-
-applyQType2Tvar _ st@(NamedStruct (AST.Struct _ tvars _ _)) (AST.TypeVarKind _ tvid Nothing) = do
-    let k = getKind tvars
-    pure (tvid, k, st)
-applyQType2Tvar file st@(NamedStruct (AST.Struct pos tvars _ _)) (AST.TypeVarKind _ tvid (Just k)) = do
-    let k' = getKind tvars
-    if k == k' then
-        pure (tvid, k, st)
-    else
-        fail $ errMsg file pos ""
+getKind [] = AST.KStar
+getKind (_:t) =
+    AST.KArray AST.KStar (getKind t)

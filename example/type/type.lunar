@@ -2,15 +2,16 @@
 import type2
 
 data t0 {
-    a: t1
+    a: t1<bool>
+    q: bool <u32>
     b: t2
     y: shared type2.d0
     z: ((bool, u32))
     w: uniq func (bool) -> u16
 }
 
-data t1 {
-    c: bool
+data t1 <`a> {
+    c: `a
 }
 
 data t2 {
@@ -32,7 +33,7 @@ struct s1 {
     z : Maybe<bool>
     g : uniq (bool, bool, s1)
     h : shared (bool, u32, u8, shared s16)
-    i : [s1] // error
+//    i : [s1] // error
     j : shared [bool]
     k : [u32 : 100 * 29 + -3]
 }
