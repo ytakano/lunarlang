@@ -88,8 +88,8 @@ data SumMem  = SumMem Position String [QType] deriving (Show)
 
 data Kind =
     KStar |
-    KArroy Kind Kind
-    deriving (Show)
+    KArray Kind Kind
+    deriving (Show, Eq)
 
 data TypeVarKind = TypeVarKind Position String (Maybe Kind) deriving (Show)
 

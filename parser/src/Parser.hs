@@ -615,7 +615,7 @@ tvarKind = do
 -}
 kind = do
     lhs <- P.char '*' $> AST.KStar
-    (P.try (whiteSpace >> P.string "->") >> whiteSpace >> (AST.KArroy lhs <$> kind))
+    (P.try (whiteSpace >> P.string "->") >> whiteSpace >> (AST.KArray lhs <$> kind))
         <|> pure AST.KStar
 
 {-

@@ -235,3 +235,19 @@ primitiveTypes =
     SET.insert "fp32" $
     SET.insert "void" $
     SET.insert "bool" SET.empty
+
+applyTypes (AST.Struct pos _ idpos tvar pred mem) args = pos
+
+getKind [] = AST.Kind
+getKind [_:t] =
+    AST.KArray AST.KStar $ getKind t
+
+applyQType2Tvar _ st@(NamedStruct (AST.Struct _ tvars _ _)) (AST.TypeVarKind _ tvid Nothing) = do
+    let k = getKind tvars
+    pure (tvid, k, st)
+applyQType2Tvar file st@(NamedStruct (AST.Struct pos tvars _ _)) (AST.TypeVarKind _ tvid (Just k)) = do
+    let k' = getKind tvars
+    if k == k' then
+        pure (tvid, k, st)
+    else
+        fail $ errMsg file pos ""
