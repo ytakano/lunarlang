@@ -102,8 +102,8 @@ checkUserType dict mod (AST.QType _ qual (AST.TupleType _ qts))
 checkUserType dict mod (AST.QType _ qual (AST.ArrayType _ qt _))
     | MB.isNothing qual = checkUserType dict mod qt
     | otherwise = isDefType dict mod qt
+checkUserType dict mod func@(AST.QType _ _ AST.FuncType{}) = isDefType dict mod func
 checkUserType _ _ _ = pure True
--- TODO: Function
 
 mapAnd fun t = foldl (&&) True <$> mapM fun t
 
@@ -114,8 +114,11 @@ isDefType dict mod (AST.QType _ _ (AST.IDType pos ident _)) =
         fail $ errMsg (mod2file mod) pos "unknown type specifier"
 isDefType dict mod (AST.QType _ _ (AST.TupleType _ qts))  = mapAnd (isDefType dict mod) qts
 isDefType dict mod (AST.QType _ _ (AST.ArrayType _ qt _)) = isDefType dict mod qt
+isDefType dict mod (AST.QType _ _ (AST.FuncType _ args ret)) = do
+    a <- mapAnd (isDefType dict mod) args
+    b <- isDefType dict mod ret
+    pure $ a && b
 isDefType _ _ _ = pure True
--- TODO: Function
 
 checkRecSumMem dict mod = mapAnd (checkRecMem dict mod . sumMem)
     where

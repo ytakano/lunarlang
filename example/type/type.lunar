@@ -6,6 +6,7 @@ data t0 {
     b: t2
     y: shared type2.d0
     z: ((bool, u32))
+    w: uniq func (bool) -> u16
 }
 
 data t1 {
@@ -15,7 +16,7 @@ data t1 {
 data t2 {
     d: u64
     e: bool
-    f: (bool, u32, fp64, t2)
+    f: (bool, u32, fp64)
 }
 
 func mkt0() {
