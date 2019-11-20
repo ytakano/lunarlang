@@ -15,7 +15,7 @@ data t1 {
 data t2 {
     d: u64
     e: bool
-    f: (bool, u32, fp64)
+    f: (bool, u32, fp64, t2)
 }
 
 func mkt0() {
@@ -29,10 +29,10 @@ struct s1 {
     y : uniq bool
     w : Either<s1, bool> // error
     z : Maybe<bool>
-    g : (bool, bool)
+    g : uniq (bool, bool, s1)
     h : shared (bool, u32, u8, shared s16)
-    i : [bool] // error
-    j : shared [t1]
+    i : [s1] // error
+    j : shared [bool]
     k : [u32 : 100 * 29 + -3]
 }
 

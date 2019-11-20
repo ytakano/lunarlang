@@ -106,14 +106,14 @@ extractFilesST = do
     s <- S.get
     let STExtFiles mod ast ex ret = s
     case ast of
-        AST.TOPImport im@(AST.Import pos id _):t ->
-            if SET.member id ex then do
+        AST.TOPImport im@(AST.Import pos ident _):t ->
+            if SET.member ident ex then do
                 let LModule file _ _ _ = mod
                 fail $ errMsg file pos "multiply imported"
             else do
-                let ex' = SET.insert id ex
+                let ex' = SET.insert ident ex
                 let LModule file path _ _ = mod
-                let src = mod2file id ""
+                let src = mod2file ident ""
                 let ret' = (file, im, map (</> src) path) : ret
                 S.put $ STExtFiles mod t ex' ret'
                 extractFilesST
