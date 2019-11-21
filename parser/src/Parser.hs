@@ -610,11 +610,12 @@ tvarKind = do
     pure $ AST.TypeVarKind pos tv k
 
 {-
-    $KIND := $STAR | $STAR -> $KIND
+    $KIND := $STAR | $STAR -> $KIND | ( $KIND )
     $STAR := *
 -}
 kind = do
-    lhs <- P.char '*' $> AST.KStar
+    lhs <- (P.char '*' $> AST.KStar)
+        <|> (P.char '(' >> whiteSpace >> kind <* whiteSpace <* P.char ')')
     (P.try (whiteSpace >> P.string "->") >> whiteSpace >> (AST.KArray lhs <$> kind))
         <|> pure AST.KStar
 

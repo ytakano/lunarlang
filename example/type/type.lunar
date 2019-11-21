@@ -2,8 +2,8 @@
 import type2
 
 data t0 {
-    a: t1<bool>
-    q: bool <u32>
+    a: uniq t1<t1>
+    q: bool
     b: t2
     y: shared type2.d0
     z: ((bool, u32))
@@ -11,7 +11,7 @@ data t0 {
 }
 
 data t1 <`a> {
-    c: `a
+    c: `a <t1>
 }
 
 data t2 {

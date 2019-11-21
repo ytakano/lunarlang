@@ -137,7 +137,7 @@ respectively.
 ### Kind
 
 ```
-$KIND := $STAR | $STAR -> $KIND
+$KIND := $STAR | $STAR -> $KIND | ( $KIND )
 $STAR := *
 ```
 
