@@ -270,6 +270,9 @@ primitiveTypes =
     SET.insert "void" $
     SET.insert "bool" SET.empty
 
+{-
+    assing kind variable
+-}
 assignKV :: File2Mod -> S.State (Int, File2Mod) File2Mod
 assignKV dict = assignKV2 (MAP.elems dict)
 
@@ -281,10 +284,12 @@ assignKV2 ((mod, namedDict):t) = do
     assignKV2 t
 
 assignKV3 mod [] = pure ()
-assignKV3 mod ((ident, NamedData (AST.Data _ _ tv _ _)):t) = do
+assignKV3 mod ((ident, NamedData (AST.Data pos iddata tv preds mem)):t) = do
     (i, f2m) <- S.get
     let (tv', i') = assignKV4 tv i []
-    -- TODO: update state
+        named = NamedData (AST.Data pos iddata tv' preds mem)
+        f2m' = insertNamed (mod2file mod) ident named f2m
+    S.put (i', f2m')
     assignKV3 mod t
 
 assignKV4 [] i ret = (reverse ret, i)
@@ -292,3 +297,63 @@ assignKV4 (AST.TypeVarKind pos ident Nothing:t) i ret =
     assignKV4 t (i + 1) (AST.TypeVarKind pos ident (Just $ AST.KV i):ret)
 assignKV4 (h:t) i ret =
     assignKV4 t i (h:ret)
+
+insertNamed file ident named dict =
+    case MAP.lookup file dict of
+        Just (mod, dict') ->
+            let d1 = MAP.insert ident named dict' in
+                MAP.insert file (mod, d1) dict
+        Nothing -> dict
+
+{-
+    take kind constraint and return kind substitution
+-}
+unifyKind :: [(AST.Kind, AST.Kind)] -> Maybe [(AST.Kind, AST.Kind)]
+unifyKind [] = Just []
+unifyKind ((AST.KStar, AST.KStar):t) = unifyKind t
+unifyKind (k@(a@(AST.KV _), v):t) =
+    if hasFVKind a v then
+        Nothing
+    else
+        case unifyKind t' of
+            Just s  -> Just $ composeSbstKind s [k]
+            Nothing -> Nothing
+    where
+        t' = map app t
+        app (t1, t2) = (applySbstKind k t1, applySbstKind k t2)
+unifyKind ((v, k@(AST.KV _)):t) =
+    unifyKind ((k, v):t)
+unifyKind ((AST.KArray t1 t2, AST.KArray t1' t2'):t) =
+    unifyKind ((t1, t1'):(t2, t2'):t)
+unifyKind _ =
+    Nothing
+
+applySbstKind _ AST.KStar  = AST.KStar
+applySbstKind (AST.KV var1, v) k@(AST.KV var2)
+    | var1 == var2 = v
+    | otherwise = k
+applySbstKind sbst (AST.KArray lhs rhs) =
+    AST.KArray lhs' rhs'
+    where
+        lhs' = applySbstKind sbst lhs
+        rhs' = applySbstKind sbst rhs
+
+applySbstKindArr t term = foldl (flip applySbstKind) term t
+
+composeSbstKind :: [(AST.Kind, AST.Kind)] -> [(AST.Kind, AST.Kind)] -> [(AST.Kind, AST.Kind)]
+composeSbstKind s1 s2 =
+    [(k, applySbstKindArr s1 v) | (k, v) <- s2] ++ diffSbstKind s1 s2 []
+
+diffSbstKind [] _ ret = reverse ret
+diffSbstKind (h@(k@(AST.KV var1), _):t) s2 ret =
+    if any hasKey s2 then
+        diffSbstKind t s2 ret
+    else
+        diffSbstKind t s2 (h:ret)
+    where
+        hasKey (k', v) = k == k'
+
+hasFVKind _ AST.KStar                = False
+hasFVKind (AST.KV var) (AST.KV var') = var == var'
+hasFVKind v (AST.KArray t1 t2)       = hasFVKind v t1 || hasFVKind v t2
+hasFVKind _ _                        = False
