@@ -13,7 +13,8 @@ parseFile [] = putStrLn "no input file"
 parseFile files = do
     let dirs = []
     mod <- loadFiles files dirs
-    let mod' = MAP.map namedObj mod
-    PP.pPrint mod'
-    let isRec = checkObjRec1st mod'
+    let mod1 = MAP.map namedObj mod
+        mod2 = assignKV mod1
+    PP.pPrint mod2
+    let isRec = checkObjRec1st mod2
     PP.pPrint isRec

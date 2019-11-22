@@ -1,46 +1,46 @@
 //import vec
-import type2
+//import type2
 
-data t0 {
-    a: uniq t1<t1>
-    q: bool
-    b: t2
-    y: shared type2.d0
-    z: ((bool, u32))
-    w: uniq func (bool) -> u16
-}
+// data t0 {
+//     a: uniq t1<t1>
+//     q: bool
+//     b: t2
+//     y: shared type2.d0
+//     z: ((bool, u32))
+//     w: uniq func (bool) -> u16
+// }
 
-data t1 <`a> {
+struct t1 <`a> {
     c: `a <t1>
 }
 
-data t2 {
-    d: u64
-    e: bool
-    f: (bool, u32, fp64)
-}
+// data t2 {
+//     d: u64
+//     e: bool
+//     f: (bool, u32, fp64)
+// }
 
-func mkt0() {
-    let a = a(false) // Ref<t0>
-    let b = b(10)    // Ref<t0>
-    let c = t0(true, 10)
-}
+// func mkt0() {
+//     let a = a(false) // Ref<t0>
+//     let b = b(10)    // Ref<t0>
+//     let c = t0(true, 10)
+// }
 
-struct s1 {
-    x : shared u32
-    y : uniq bool
-    w : Either<s1, bool> // error
-    z : Maybe<bool>
-    g : uniq (bool, bool, s1)
-    h : shared (bool, u32, u8, shared s16)
-//    i : [s1] // error
-    j : shared [bool]
-    k : [u32 : 100 * 29 + -3]
-}
+// struct s1 {
+//     x : shared u32
+//     y : uniq bool
+//     w : Either<s1, bool> // error
+//     z : Maybe<bool>
+//     g : uniq (bool, bool, s1)
+//     h : shared (bool, u32, u8, shared s16)
+// //    i : [s1] // error
+//     j : shared [bool]
+//     k : [u32 : 100 * 29 + -3]
+// }
 
-func mkt1() {
-    let a = t1(10, true, left(20))
-}
+// func mkt1() {
+//     let a = t1(10, true, left(20))
+// }
 
 data Either<`a, `b> {
     Left : `a

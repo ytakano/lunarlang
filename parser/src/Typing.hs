@@ -19,7 +19,7 @@ data Named =
     NamedFunc AST.Defun |
     NamedData AST.Data |
     NamedStruct AST.Struct |
-    NamedSum AST.Data AST.SumMem |
+    NamedSum String AST.SumMem |
     NamedPrim String
     deriving (Show)
 
@@ -54,9 +54,11 @@ namedObjST = do
             let n = NamedFunc f
             updateDict file t ident n d pos
         setNamed file (AST.TOPData dt@(AST.Data _ (AST.IDPos pos ident) _ _ mem) : t) d = do
-            d' <- addSumMem file dt mem d
+            d' <- addSumMem file (dataId dt) mem d
             let n = NamedData dt
             updateDict file t ident n d' pos
+            where
+                dataId (AST.Data _ (AST.IDPos _ ident) _ _ _)= ident
         setNamed file (AST.TOPImport _ : t) d = do
             S.put (file, t, d)
             namedObjST
@@ -71,7 +73,7 @@ addSumMem file dt (ast@(AST.SumMem pos ident _):t) dict
         fail msg
     | otherwise = do
         let n = NamedSum dt ast
-        let d = MAP.insert ident n dict
+            d = MAP.insert ident n dict
         addSumMem file dt t d
 
 checkRecMem dict mod = mapAnd (checkUserType dict mod)
@@ -273,8 +275,13 @@ primitiveTypes =
 {-
     assing kind variable
 -}
-assignKV :: File2Mod -> S.State (Int, File2Mod) File2Mod
-assignKV dict = assignKV2 (MAP.elems dict)
+assignKV dict =
+ S.evalState assignKV' (0, dict)
+
+assignKV' :: S.State (Int, File2Mod) File2Mod
+assignKV' = do
+    (_, dict) <- S.get
+    assignKV2 (MAP.elems dict)
 
 assignKV2 [] = do
     (_, f2m) <- S.get
@@ -290,6 +297,15 @@ assignKV3 mod ((ident, NamedData (AST.Data pos iddata tv preds mem)):t) = do
         named = NamedData (AST.Data pos iddata tv' preds mem)
         f2m' = insertNamed (mod2file mod) ident named f2m
     S.put (i', f2m')
+    assignKV3 mod t
+assignKV3 mod ((ident, NamedStruct (AST.Struct pos iddata tv preds mem)):t) = do
+    (i, f2m) <- S.get
+    let (tv', i') = assignKV4 tv i []
+        named = NamedStruct (AST.Struct pos iddata tv' preds mem)
+        f2m' = insertNamed (mod2file mod) ident named f2m
+    S.put (i', f2m')
+    assignKV3 mod t
+assignKV3 mod (h:t) = do
     assignKV3 mod t
 
 assignKV4 [] i ret = (reverse ret, i)
@@ -357,3 +373,96 @@ hasFVKind _ AST.KStar                = False
 hasFVKind (AST.KV var) (AST.KV var') = var == var'
 hasFVKind v (AST.KArray t1 t2)       = hasFVKind v t1 || hasFVKind v t2
 hasFVKind _ _                        = False
+
+{-
+    check kind
+    x: foo // foo's kind must be *
+    y: `a  // unify (`a's kind, *)
+-}
+checkKindTop mod (AST.QType _ _ (AST.IDType pos ident [])) = do
+    (sbst, dict, _) <- S.get
+    case findUserObj dict mod ident of
+        Nothing -> fail $ errMsg file pos "unknown type specifier"
+        Just (f, m, n) ->
+            if checkTArgZero n then
+                pure AST.KStar
+            else
+                fail $ errMsg file pos "kind must be *"
+    where
+        file = mod2file mod
+checkKindTop mod (AST.QType _ _ (AST.TVar pos ident [])) = do
+    (sbst, dict, tv2kind) <- S.get
+    case MAP.lookup ident tv2kind of
+        Nothing -> fail $ errMsg file pos "unkown type variable"
+        Just k ->
+            case unifyKind [(applySbstKindArr sbst k, AST.KStar)] of
+                Nothing -> fail $ errMsg file pos "kind must be *"
+                Just s  -> do
+                    let s' = composeSbstKind s sbst
+                    S.put (s', dict, tv2kind)
+                    pure AST.KStar
+    where
+        file = mod2file mod
+
+{-
+    if x then return x's kind
+    if x<a,b> then
+        ak = a's kind
+        bk = b's kind
+        unify(x's kind, ak -> bk -> *)
+        return *
+    if `a then return ak
+    if `a<b,c> then
+        ak = `a's kind
+        bk = b's kind
+        ck = c's kind
+        unify(ak, bk -> ck -> *)
+        return *
+-}
+checkKind mod (AST.QType _ _ (AST.IDType pos ident qt)) = do
+    (sbst, dict, _) <- S.get
+    case findUserObj dict mod ident of
+        Nothing        -> fail $ err "unknown type specifier"
+        Just (_, _, n) -> do
+            k <- getKind mod pos n
+            case qt of
+                [] -> pure $ applySbstKindArr sbst k
+                _  ->checkKindUnify mod pos k qt
+    where
+        err = errMsg (mod2file mod) pos
+checkKind mod (AST.QType _ _ (AST.TVar pos ident qt)) = do
+    (sbst, _, tv2kind) <- S.get
+    case MAP.lookup ident tv2kind of
+        Nothing -> fail $ err "undefined type variable"
+        Just k  -> case qt of
+            [] -> pure $ applySbstKindArr sbst k
+            _  -> checkKindUnify mod pos k qt
+    where
+        err = errMsg (mod2file mod) pos
+
+checkKindUnify mod pos k qt = do
+    k2 <- foldr AST.KArray AST.KStar <$> mapM (checkKind mod) qt
+    (sbst, dict, tv2kind) <- S.get
+    let k1 = applySbstKindArr sbst k
+    case unifyKind [(k1, k2)] of
+        Nothing -> fail $ err "kind mismatch"
+        Just s -> do
+            let s' = composeSbstKind s sbst
+            S.put (s', dict, tv2kind)
+            pure AST.KStar
+    where
+        err = errMsg (mod2file mod) pos
+
+checkTArgZero (NamedStruct (AST.Struct _ _ [] _ _)) = True
+checkTArgZero (NamedData (AST.Data _ _ [] _ _))     = True
+checkTArgZero _                                     = False
+
+getKind _ _ (NamedStruct (AST.Struct _ _ tv _ _)) = getKindTVK tv
+getKind _ _ (NamedData (AST.Data _ _ tv _ _))     = getKindTVK tv
+getKind mod pos _     = fail $ errMsg (mod2file mod) pos "must be data or struct"
+
+getKindTVK tv = foldr AST.KArray AST.KStar <$> karr
+    where
+        ks (AST.TypeVarKind _ _ (Just k)) = pure k
+        ks _                              = fail "internal error"
+        karr = mapM ks tv
