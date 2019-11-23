@@ -10,8 +10,10 @@
 //     w: uniq func (bool) -> u16
 // }
 
-struct t1 <`a, `b> {
+struct t1 <`a, `b, `c> {
     c: `a <`b<`a>, bool>
+    g: (`c, bool)
+    h: [`c : 10]
 }
 
 // data t2 {

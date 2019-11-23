@@ -383,13 +383,12 @@ hasFVKind _ _                        = False
         ak = a's kind
         unify(ak, *)
         return *
-    if qual? a<b, c> then checkKind
     if qual? `a then
         ak = a's kind
         s' = unify(ak, *)
         s = s' s
         return *
-    if qual? `a<b, c> then checkKind
+    else checkKindIn
 -}
 checkKindTop mod (AST.QType _ _ (AST.IDType pos ident [])) = do
     (sbst, dict, _) <- S.get
@@ -402,7 +401,6 @@ checkKindTop mod (AST.QType _ _ (AST.IDType pos ident [])) = do
                 _       -> pure AST.KStar
     where
         err = errMsg (mod2file mod) pos
-checkKindTop mod qt@(AST.QType _ _ AST.IDType{}) = checkKindIn mod qt
 checkKindTop mod (AST.QType _ _ (AST.TVar pos ident [])) = do
     (sbst, dict, tv2kind) <- S.get
     case MAP.lookup ident tv2kind of
@@ -416,8 +414,7 @@ checkKindTop mod (AST.QType _ _ (AST.TVar pos ident [])) = do
                     pure AST.KStar
     where
         err = errMsg (mod2file mod) pos
-checkKindTop mod qt@(AST.QType _ _ AST.TVar{}) = checkKindIn mod qt
--- TODO: array, tuple, func, void
+checkKindTop mod qt = checkKindIn mod qt
 
 {-
     s: substitution
@@ -450,6 +447,17 @@ checkKindTop mod qt@(AST.QType _ _ AST.TVar{}) = checkKindIn mod qt
         s' = unify(ak, bk -> ck -> *)
         s = s' s
         return *
+    if qual? [a] then checkKindTop a
+    if qual? (a, b) then
+        checkKindTop a
+        checkKindTop b
+        return *
+    if qual? func (a, b) -> c then
+        checkKindTop a
+        checkKindTop b
+        checkKindTop c
+        return *
+    if qual? void then return *
 -}
 checkKindIn mod (AST.QType _ qual (AST.IDType pos ident qt)) = do
     (sbst, dict, _) <- S.get
@@ -485,7 +493,15 @@ checkKindIn mod (AST.QType _ qual (AST.TVar pos ident qt)) = do
                     let s' = composeSbstKind s sbst
                     S.put (s', dict, tv2kind)
                     pure AST.KStar
--- TODO: array, tuple, func, void
+checkKindIn mod (AST.QType _ _ (AST.ArrayType _ qt _)) = checkKindTop mod qt
+checkKindIn mod (AST.QType _ _ (AST.TupleType _ qt)) = do
+    mapM_ (checkKindTop mod) qt
+    pure AST.KStar
+checkKindIn mod (AST.QType _ _ (AST.FuncType _ args ret)) = do
+    mapM_ (checkKindTop mod) args
+    checkKindTop mod ret
+    pure AST.KStar
+checkKindIn _ _ = pure AST.KStar
 
 checkKindUnify mod pos k qt = do
     k2 <- foldr AST.KArray AST.KStar <$> mapM (checkKindIn mod) qt
