@@ -275,8 +275,7 @@ primitiveTypes =
 {-
     assing kind variable
 -}
-assignKV dict =
- S.evalState assignKV' (0, dict)
+assignKV dict = S.evalState assignKV' (0, dict)
 
 assignKV' :: S.State (Int, File2Mod) File2Mod
 assignKV' = do
@@ -375,73 +374,121 @@ hasFVKind v (AST.KArray t1 t2)       = hasFVKind v t1 || hasFVKind v t2
 hasFVKind _ _                        = False
 
 {-
-    check kind
-    x: foo // foo's kind must be *
-    y: `a  // unify (`a's kind, *)
+    s: substitution
+    a, b, c: type
+    `a: type variable
+    qual: uniq | shared
+
+    if qual? a then
+        ak = a's kind
+        unify(ak, *)
+        return *
+    if qual? a<b, c> then checkKind
+    if qual? `a then
+        ak = a's kind
+        s' = unify(ak, *)
+        s = s' s
+        return *
+    if qual? `a<b, c> then checkKind
 -}
 checkKindTop mod (AST.QType _ _ (AST.IDType pos ident [])) = do
     (sbst, dict, _) <- S.get
     case findUserObj dict mod ident of
-        Nothing -> fail $ errMsg file pos "unknown type specifier"
-        Just (f, m, n) ->
-            if checkTArgZero n then
-                pure AST.KStar
-            else
-                fail $ errMsg file pos "kind must be *"
+        Nothing -> fail $ err "unknown type specifier"
+        Just (_, _, n) -> do
+            k <- getKind mod pos n
+            case unifyKind [(k, AST.KStar)] of
+                Nothing -> fail $ err "kind must be *"
+                _       -> pure AST.KStar
     where
-        file = mod2file mod
+        err = errMsg (mod2file mod) pos
+checkKindTop mod qt@(AST.QType _ _ AST.IDType{}) = checkKindIn mod qt
 checkKindTop mod (AST.QType _ _ (AST.TVar pos ident [])) = do
     (sbst, dict, tv2kind) <- S.get
     case MAP.lookup ident tv2kind of
-        Nothing -> fail $ errMsg file pos "unkown type variable"
-        Just k ->
-            case unifyKind [(applySbstKindArr sbst k, AST.KStar)] of
-                Nothing -> fail $ errMsg file pos "kind must be *"
+        Nothing -> fail $ err "undefined type variable"
+        Just k  ->
+            case unifyKind [(k, AST.KStar)] of
+                Nothing -> fail $ err "kind must be *"
                 Just s  -> do
                     let s' = composeSbstKind s sbst
                     S.put (s', dict, tv2kind)
                     pure AST.KStar
     where
-        file = mod2file mod
+        err = errMsg (mod2file mod) pos
+checkKindTop mod qt@(AST.QType _ _ AST.TVar{}) = checkKindIn mod qt
+-- TODO: array, tuple, func, void
 
 {-
-    if x then return x's kind
-    if x<a,b> then
+    s: substitution
+    a, b, c: type
+    `a: type variable
+    qual: uniq | shared
+
+    if a then return a's kind
+    if qual a then
+        ak = a's kind
+        unify(ak, *)
+        return *
+    if qual? a<b,c> then
         ak = a's kind
         bk = b's kind
-        unify(x's kind, ak -> bk -> *)
+        ck = c's kind
+        s' = unify(ak, bk -> ck -> *)
+        s = s' s
         return *
-    if `a then return ak
-    if `a<b,c> then
+    if `a then return `a's kind
+    if qual `a then
+        ak = `a's kind
+        s' = unify(ak, *)
+        s = s' s
+        return *
+    if qual? `a<b,c> then
         ak = `a's kind
         bk = b's kind
         ck = c's kind
-        unify(ak, bk -> ck -> *)
+        s' = unify(ak, bk -> ck -> *)
+        s = s' s
         return *
 -}
-checkKind mod (AST.QType _ _ (AST.IDType pos ident qt)) = do
+checkKindIn mod (AST.QType _ qual (AST.IDType pos ident qt)) = do
     (sbst, dict, _) <- S.get
     case findUserObj dict mod ident of
         Nothing        -> fail $ err "unknown type specifier"
         Just (_, _, n) -> do
             k <- getKind mod pos n
             case qt of
-                [] -> pure $ applySbstKindArr sbst k
-                _  ->checkKindUnify mod pos k qt
+                [] -> checkQual (applySbstKindArr sbst k) qual
+                _  -> checkKindUnify mod pos k qt
     where
         err = errMsg (mod2file mod) pos
-checkKind mod (AST.QType _ _ (AST.TVar pos ident qt)) = do
+        checkQual k Nothing = pure k
+        checkQual k _ =
+            case unifyKind [(k, AST.KStar)] of
+                Nothing -> fail $ err "kind must be *"
+                Just s  -> pure AST.KStar
+checkKindIn mod (AST.QType _ qual (AST.TVar pos ident qt)) = do
     (sbst, _, tv2kind) <- S.get
     case MAP.lookup ident tv2kind of
         Nothing -> fail $ err "undefined type variable"
         Just k  -> case qt of
-            [] -> pure $ applySbstKindArr sbst k
+            [] -> checkQual (applySbstKindArr sbst k) qual
             _  -> checkKindUnify mod pos k qt
     where
         err = errMsg (mod2file mod) pos
+        checkQual k Nothing = pure k
+        checkQual k _ =
+            case unifyKind [(k, AST.KStar)] of
+                Nothing -> fail $ err "kind must be *"
+                Just s  -> do
+                    (sbst, dict, tv2kind) <- S.get
+                    let s' = composeSbstKind s sbst
+                    S.put (s', dict, tv2kind)
+                    pure AST.KStar
+-- TODO: array, tuple, func, void
 
 checkKindUnify mod pos k qt = do
-    k2 <- foldr AST.KArray AST.KStar <$> mapM (checkKind mod) qt
+    k2 <- foldr AST.KArray AST.KStar <$> mapM (checkKindIn mod) qt
     (sbst, dict, tv2kind) <- S.get
     let k1 = applySbstKindArr sbst k
     case unifyKind [(k1, k2)] of
@@ -453,16 +500,60 @@ checkKindUnify mod pos k qt = do
     where
         err = errMsg (mod2file mod) pos
 
-checkTArgZero (NamedStruct (AST.Struct _ _ [] _ _)) = True
-checkTArgZero (NamedData (AST.Data _ _ [] _ _))     = True
-checkTArgZero _                                     = False
-
 getKind _ _ (NamedStruct (AST.Struct _ _ tv _ _)) = getKindTVK tv
 getKind _ _ (NamedData (AST.Data _ _ tv _ _))     = getKindTVK tv
-getKind mod pos _     = fail $ errMsg (mod2file mod) pos "must be data or struct"
+getKind _ _ (NamedPrim _)                         = pure AST.KStar
+getKind mod pos _     = fail $ errMsg (mod2file mod) pos "must be data, struct, or primitive type"
 
 getKindTVK tv = foldr AST.KArray AST.KStar <$> karr
     where
         ks (AST.TypeVarKind _ _ (Just k)) = pure k
         ks _                              = fail "internal error"
         karr = mapM ks tv
+
+checkKindDataMem mod (AST.Data _ ident tv _ mem) = do
+    updateTv tv
+    mapM_ (checkKindMem mod . getMem) mem
+    where
+        getMem (AST.SumMem _ _ m) = m
+
+checkKindStructMem mod (AST.Struct _ _ tv _ mem) = do
+    updateTv tv
+    mapM_ (checkKindTop mod . getMem) mem
+    where
+        getMem (AST.ProdMem _ _ m) = m
+
+updateTv tv = do
+    tv' <- getMapTV2Kind tv
+    (sbst, dict, _) <- S.get
+    S.put (sbst, dict, tv')
+
+checkKindMem mod = mapM_ (checkKindTop mod)
+
+checkKindNamed mod (NamedData d@AST.Data{})     = checkKindDataMem mod d
+checkKindNamed mod (NamedStruct d@AST.Struct{}) = checkKindStructMem mod d
+checkKindNamed _ _                              = pure ()
+
+getMapTV2Kind tv = do
+    v <- mapM val tv
+    let k = map key tv
+        dict = MAP.fromList $ zip k v
+    pure dict
+    where
+        key (AST.TypeVarKind _ k _) = k
+        val (AST.TypeVarKind _ _ (Just v)) = pure v
+        val _                              = fail "internal error"
+
+checkKind dict =
+    S.evalState fun ([], dict, MAP.empty)
+    where
+        elems = MAP.elems dict
+        fun = do
+            mapM_ checkKindModDict elems
+            (sbst, _, _) <- S.get
+            pure sbst
+
+checkKindModDict (mod, dict) =
+    mapM_ (checkKindNamed mod) elems
+    where
+        elems = MAP.elems dict
