@@ -16,7 +16,8 @@ parseFile files = do
     let mod1 = MAP.map namedObj mod
         mod2 = assignKV mod1
         sbst = checkKind mod2
-    PP.pPrint mod2
+    mod3 <- applySbstDict sbst mod2
+    PP.pPrint mod3
     PP.pPrint sbst
-    let isRec = checkObjRec1st mod2
+    let isRec = checkObjRec1st mod3
     PP.pPrint isRec

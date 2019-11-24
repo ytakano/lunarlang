@@ -573,3 +573,23 @@ checkKindModDict (mod, dict) =
     mapM_ (checkKindNamed mod) elems
     where
         elems = MAP.elems dict
+
+applySbstTVK file sbst (AST.TypeVarKind pos ident (Just k)) =  do
+    let k' = applySbstKindArr sbst k
+    case k' of
+        AST.KV _ -> fail $ errMsg file pos "could not infer kind. specify kind statically"
+        _ ->  pure $ AST.TypeVarKind pos ident (Just k')
+
+applySbstNamed file sbst (NamedData (AST.Data pos ident tv pred mem)) = do
+    tv' <- mapM (applySbstTVK file sbst) tv
+    pure $ NamedData (AST.Data pos ident tv' pred mem)
+applySbstNamed file sbst (NamedStruct (AST.Struct pos ident tv pred mem)) = do
+    tv' <- mapM (applySbstTVK file sbst) tv
+    pure $ NamedStruct (AST.Struct pos ident tv' pred mem)
+applySbstNamed _ _ x = pure x
+
+applySbstDict sbst = mapM app
+    where
+        app (mod, dict) = do
+            dict' <- mapM (applySbstNamed (mod2file mod) sbst) dict
+            pure (mod, dict')
