@@ -19,5 +19,3 @@ parseFile files = do
     mod3 <- applySbstDict sbst mod2
     PP.pPrint mod3
     PP.pPrint sbst
-    let isRec = checkObjRec1st mod3
-    PP.pPrint isRec
