@@ -71,6 +71,11 @@ instance Types a => Types [a] where
     apply s = map (apply s)
     tv = L.nub . concatMap tv
 
+nullSubst = []
+
+(+->) :: Tyvar -> Type -> Subst
+u +-> t = [(u, t)]
+
 infixr 4 @@
 (@@) :: Subst -> Subst -> Subst
 s1 @@ s2 = [(u, apply s1 t) | (u, t) <- s2] ++ reverse (foldl chk [] s1)
@@ -80,10 +85,45 @@ s1 @@ s2 = [(u, apply s1 t) | (u, t) <- s2] ++ reverse (foldl chk [] s1)
             | otherwise         = a:ret
         hasKey (k1, _) (k2, _) = k1 == k2
 
-nullSubst = []
+merge :: Monad m => Subst -> Subst -> m Subst
+merge s1 s2 = if agree then pure (s1 ++ s2) else fail "merge fails"
+    where
+        agree = all (\v -> apply s1 (TVar v) == apply s2 (TVar v)) prod
+        prod  = map fst s1 `L.intersect` map fst s2
 
-(+->) :: Tyvar -> Type -> Subst
-u +-> t = [(u, t)]
+mgu :: Monad m => Type -> Type -> m Subst
+mgu (TAp l r) (TAp l' r') = do
+    s1 <- mgu l l'
+    s2 <- mgu (apply s1 r) (apply s1 r')
+    pure $ s2 @@ s1
+mgu (TVar u) t  = varBind u t
+mgu t (TVar u)  = varBind u t
+mgu (TCon tc1) (TCon tc2)
+    | tc1 == tc2 = pure nullSubst
+mgu _ _          = fail "types do not unify"
+
+varBind :: Monad m => Tyvar -> Type -> m Subst
+varBind u t
+    | t == TVar u      = pure nullSubst
+    | u `elem` tv t    = fail "occurs check fails"
+    | kind u /= kind t = fail "kinds do not match"
+    | otherwise        = pure $ u +-> t
+
+{-
+    s: substitution
+    t1, t2: type
+
+    if ∃s (s t1 = t2) then s else fail
+-}
+match (TAp l r) (TAp l' r') = do
+    sl <- match l l'
+    sr <- match r r'
+    merge sl sr
+match (TVar u) t
+    | kind u == kind t = pure $ u +-> t
+match (TCon tc1) (TCon tc2)
+    | tc1 == tc2       = pure nullSubst
+match _ _              = fail "types do not match"
 
 {-
     get user defined types from module
