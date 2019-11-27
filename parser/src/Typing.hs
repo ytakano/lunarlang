@@ -37,16 +37,25 @@ data Type =
     deriving (Show, Eq)
 
 data Tyvar = Tyvar Id Kind deriving (Show, Eq)
-data Tycon = Tycon (Maybe FP.FilePath) Id Kind deriving (Show, Eq)
+data Tycon = Tycon PathID Kind deriving (Show, Eq)
 
 type Id = String
+data PathID = PathID (Maybe FP.FilePath) Id deriving (Show, Eq)
+
+data STRec = STRec {
+    visitedType :: [PathID],
+    checkedType :: [Type],
+    posStack    :: [(FP.FilePath, AST.Position)],
+    tvSeq       :: Int
+} deriving (Show)
+
 
 class HasKind t where
     kind :: t -> Kind
 instance HasKind Tyvar where
     kind (Tyvar _ k) = k
 instance HasKind Tycon where
-    kind (Tycon _ _ k) = k
+    kind (Tycon _ k) = k
 instance HasKind Type where
     kind (TCon tc) = kind tc
     kind (TVar u)  = kind u
@@ -176,6 +185,38 @@ addSumMem file dt (ast@(AST.SumMem pos ident _):t) dict
         let n = NamedSum dt ast
             d = MAP.insert ident n dict
         addSumMem file dt t d
+
+checkRecNamed :: LModule -> [Type] -> Named -> S.State STRec Type
+checkRecNamed mod args (NamedData d@(AST.Data pos (AST.IDPos _ ident) _ pred mem)) = do
+    -- TODO: check predicates
+    s <- S.get
+    t <- data2Type mod args d
+    let vt = visitedType s
+        ct = checkedType s
+        ps = posStack s
+        s' = s { visitedType = PathID (Just $ mod2file mod) ident : vt,
+                 checkedType = t:ct,
+                 posStack = (mod2file mod, pos):ps }
+    S.put s'
+    -- TODO: check member variables
+    pure t
+
+astKind2TypeKind mod pos (AST.KV _) = fail $ errMsg (mod2file mod) pos "could not conver kind"
+astKind2TypeKind _ _ AST.KStar = pure Star
+astKind2TypeKind mod pos (AST.KArray l r) = do
+    l' <- astKind2TypeKind mod pos l
+    r' <- astKind2TypeKind mod pos r
+    pure $ Kfun l' r'
+
+data2Type mod args (AST.Data pos (AST.IDPos _ ident) tvk _ _) = toType mod args pos ident tvk
+struct2Type mod args (AST.Struct pos (AST.IDPos _ ident) tvk _ _) = toType mod args pos ident tvk
+
+toType mod args pos ident tvk = do
+    k  <- getKindTVK tvk
+    k' <- astKind2TypeKind mod pos k
+    let ident' = PathID (Just $ mod2file mod) ident
+        t      = TCon (Tycon ident' k')
+    pure $ foldl TAp t args
 
 -- checkRecMem dict mod = mapAnd (checkUserType dict mod)
 
@@ -625,7 +666,7 @@ getKind mod pos _     = fail $ errMsg (mod2file mod) pos "must be data, struct, 
 getKindTVK tv = foldr AST.KArray AST.KStar <$> karr
     where
         ks (AST.TypeVarKind _ _ (Just k)) = pure k
-        ks _                              = fail "internal error"
+        ks _                              = fail "internal error: getKindTVK"
         karr = mapM ks tv
 
 checkKindDataMem mod (AST.Data _ ident tv _ mem) = do
