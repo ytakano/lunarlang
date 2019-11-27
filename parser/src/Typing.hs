@@ -186,22 +186,40 @@ addSumMem file dt (ast@(AST.SumMem pos ident _):t) dict
             d = MAP.insert ident n dict
         addSumMem file dt t d
 
-checkRecNamed :: LModule -> [Type] -> Named -> S.State STRec Type
-checkRecNamed mod args (NamedData d@(AST.Data pos (AST.IDPos _ ident) _ pred mem)) = do
+checkRecNamed :: LModule -> [AST.QType] -> [Type] -> Named -> S.State STRec Type
+checkRecNamed mod argsAST argsType (NamedData d@(AST.Data pos (AST.IDPos _ ident) tvk pred mem)) = do
     -- TODO: check predicates
+
+    -- update state
     s <- S.get
-    t <- data2Type mod args d
+    t <- data2Type mod argsType d
     let vt = visitedType s
         ct = checkedType s
         ps = posStack s
         s' = s { visitedType = PathID (Just $ mod2file mod) ident : vt,
                  checkedType = t:ct,
                  posStack = (mod2file mod, pos):ps }
+
+    -- TODO: check t is in vt or ct
+
     S.put s'
     -- TODO: check member variables
+
+    tv2qt <- getTV2QType tvk argsAST
+    -- TODO: apply tv2qt to member variables
+
     pure t
 
-astKind2TypeKind mod pos (AST.KV _) = fail $ errMsg (mod2file mod) pos "could not conver kind"
+getTV2QType tvs qts | length tvs == length qts = do
+    let z = L.zipWith fun tvs qts
+    pure $ MAP.fromList z
+    where
+        fun tv qt = (getIdTVK tv, qt)
+getTV2QType _ _ = fail "internal error: the number of arguments is incompatible"
+
+getIdTVK (AST.TypeVarKind _ ident _) = ident
+
+astKind2TypeKind mod pos (AST.KV _) = fail $ errMsg (mod2file mod) pos "could not convert kind"
 astKind2TypeKind _ _ AST.KStar = pure Star
 astKind2TypeKind mod pos (AST.KArray l r) = do
     l' <- astKind2TypeKind mod pos l
