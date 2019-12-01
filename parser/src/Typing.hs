@@ -186,29 +186,176 @@ addSumMem file dt (ast@(AST.SumMem pos ident _):t) dict
             d = MAP.insert ident n dict
         addSumMem file dt t d
 
-checkRecNamed :: LModule -> [AST.QType] -> [Type] -> Named -> S.State STRec Type
-checkRecNamed mod argsAST argsType (NamedData d@(AST.Data pos (AST.IDPos _ ident) tvk pred mem)) = do
-    -- TODO: check predicates
+{-
+    if a <b, c> then
+        if a ∈ visited then fail
 
+        push a to posStack
+
+        bt = b's type (checkRecIn b)
+        ct = c's type (checkRecIn c)
+
+        at = checkRecNamedIn a <bt, ct>
+
+        pop from posStack
+        return at
+    if qual a <b, c> then
+        checkRecIn qual a <b, c>
+-}
+checkRecTop :: LModule -> File2Mod -> AST.QType -> S.State STRec Type
+checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType pos ident qts)) = do
+    s <- S.get
+    let pid = PathID (Just $ mod2file mod) (last ident)
+        vt = visitedType s
+        ps = posStack s
+
+    -- TODO: check visited
+    -- TODO: push to posStack
+
+    if pid `elem` vt then do
+        let msg  = errMsg (mod2file mod) pos "data or struct is recursive"
+            msgs = errMsgStack ps
+        fail $ msg ++ msgs
+    else do
+        ts <- mapM (checkRecIn mod f2m) qts
+        case findUserObj f2m mod ident of
+            Just (fp, mod', nm) -> do
+                ret  <- named2Type mod' ts nm
+                -- TODO: apply qts to nm
+                checkRecNamedIn mod' f2m ret nm
+                -- TODO: posStack
+                pure ret
+            -- TODO: Nothing
+
+{-
+    if qual? a <b, c> then
+        v = visited
+        visited = []
+        push a to posStack
+
+        bt = b's type (checkRecIn b)
+        ct = c's type (checkRecIn c)
+
+        at = checkRecNamed a <bt, ct>
+
+        pop from posStack
+        visited = v
+        return qual at
+-}
+checkRecIn :: LModule -> File2Mod -> AST.QType -> S.State STRec Type
+checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType pos ident qts)) = do
+    s <- S.get
+    let v  = visitedType s
+        ps = posStack s
+    S.put $ s { visitedType = [], posStack = (mod2file mod, pos):ps }
+
+    ts <- mapM (checkRecIn mod f2m) qts
+
+    case findUserObj f2m mod ident of
+        Just (fp, mod', nm) -> do
+            checkRecNamed mod' f2m qts ts nm
+            -- TODO: pop from posStack
+            -- TODO: update visited
+            -- TODO: qual
+
+{-
+    if data foo <a, b> then
+        if foo <a, b> ∈ checked then return foo <a, b>
+
+        add foo <a, b> to checked
+        checkRecNamedIn foo <a, b>
+-}
+checkRecNamed :: LModule -> File2Mod -> [AST.QType] -> [Type] -> Named -> S.State STRec Type
+checkRecNamed mod f2m argsAST argsType (NamedData d@(AST.Data pos ident tvk _ mem)) = do
     -- update state
     s <- S.get
     t <- data2Type mod argsType d
-    let vt = visitedType s
-        ct = checkedType s
-        ps = posStack s
-        s' = s { visitedType = PathID (Just $ mod2file mod) ident : vt,
-                 checkedType = t:ct,
+    let ps = posStack s
+        ck = checkedType s
+        s' = s { checkedType = t : ck,
                  posStack = (mod2file mod, pos):ps }
 
-    -- TODO: check t is in vt or ct
+    -- TODO: t ∈ checked ?
 
     S.put s'
-    -- TODO: check member variables
 
     tv2qt <- getTV2QType tvk argsAST
-    -- TODO: apply tv2qt to member variables
+    mem'  <- mapM (applyTv2QTypeSumMem mod tv2qt) mem
 
-    pure t
+    checkRecNamedIn mod f2m t (NamedData (d { AST.dataMem = mem' }))
+
+checkRecNamedIn mod f2m ret (NamedData (AST.Data _ (AST.IDPos _ ident) _ pred mem)) = do
+    s <- S.get
+    let vt = visitedType s
+        s' = s { visitedType =  PathID (Just $ mod2file mod) ident : vt }
+    S.put s'
+
+    mapM_ (checkRecSumMem mod f2m) mem
+    S.put s
+
+    pure ret
+
+checkRecSumMem mod f2m (AST.SumMem _ _ mem) = mapM_ (checkRecTop mod f2m) mem
+
+
+applyTv2QTypeSumMem mod tv2qt (AST.SumMem pos ident mem) = do
+    mem' <- mapM (applyTv2QType mod tv2qt) mem
+    pure $ AST.SumMem pos ident mem'
+
+applyTv2QType mod tv2qt qt@(AST.QType pos (Just qual) (AST.TVar _ ident _)) =
+    case MAP.lookup ident tv2qt of
+        Just arg@(AST.QType _ (Just qual') _) ->
+            if qual /= qual' then do
+                s <- S.get
+                let msg  = errMsg (mod2file mod) pos "qualifiers are incompatible"
+                    msgs = errMsgStack $ posStack s
+                fail $ msg ++ msgs
+            else
+                applyTv2QType2 mod tv2qt qt arg
+        Just arg -> applyTv2QType2 mod tv2qt qt arg
+        Nothing -> pure qt
+applyTv2QType mod tv2qt qt@(AST.QType pos Nothing tv@(AST.TVar _ ident _)) =
+    case MAP.lookup ident tv2qt of
+        Just arg@(AST.QType _ argQt _) -> applyTv2QType2 mod tv2qt (AST.QType pos argQt tv) arg
+        Nothing                        -> pure qt
+applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.IDType pos2 ident qts)) = do
+    qts' <- mapM (applyTv2QType mod tv2qt) qts
+    pure $ AST.QType pos1 qual (AST.IDType pos2 ident qts')
+applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.ArrayType pos2 qt ex)) = do
+    qt' <- applyTv2QType mod tv2qt qt
+    pure $ AST.QType pos1 qual (AST.ArrayType pos2 qt' ex)
+applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.TupleType pos2 qts)) = do
+    qts' <- mapM (applyTv2QType mod tv2qt) qts
+    pure $ AST.QType pos1 qual (AST.TupleType pos2 qts')
+applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.FuncType pos2 args ret)) = do
+    args' <- mapM (applyTv2QType mod tv2qt) args
+    ret'  <- applyTv2QType mod tv2qt ret
+    pure $ AST.QType pos1 qual (AST.FuncType pos2 args' ret')
+applyTv2QType _ _ qt = pure qt
+
+applyTv2QType2 mod tv2qt (AST.QType pos1 qual (AST.TVar pos2 _ targs)) (AST.QType _ _ (AST.IDType _ ident [])) = do
+    targs' <- mapM (applyTv2QType mod tv2qt) targs
+    pure $ AST.QType pos1 qual (AST.IDType pos2 ident targs')
+applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _ (AST.IDType _ ident targs)) =
+    pure $ AST.QType pos1 qual (AST.IDType pos2 ident targs)
+applyTv2QType2 mod tv2qt (AST.QType pos1 qual (AST.TVar pos2 _ targs)) (AST.QType _ _ (AST.TVar _ ident [])) = do
+    targs' <- mapM (applyTv2QType mod tv2qt) targs
+    pure $ AST.QType pos1 qual (AST.TVar pos2 ident targs')
+applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _ (AST.TVar _ ident targs)) =
+    pure $ AST.QType pos1 qual (AST.TVar pos2 ident targs)
+applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _  (AST.ArrayType _ arrqt arrexpr)) =
+    pure $ AST.QType pos1 qual (AST.ArrayType pos2 arrqt arrexpr)
+applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _  (AST.TupleType _ tupqt)) =
+    pure $ AST.QType pos1 qual (AST.TupleType pos2 tupqt)
+applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _  (AST.FuncType _ args ret)) =
+    pure $ AST.QType pos1 qual (AST.FuncType pos2 args ret)
+applyTv2QType2 mod _ (AST.QType pos1 qual _) (AST.QType _ _ AST.VoidType) =
+    pure $ AST.QType pos1 qual AST.VoidType
+applyTv2QType2 mod _ (AST.QType pos _ _) _ = do
+    s <- S.get
+    let msg  = errMsg (mod2file mod) pos "type mismatch"
+        msgs = errMsgStack $ posStack s
+    fail $ msg ++ msgs
 
 getTV2QType tvs qts | length tvs == length qts = do
     let z = L.zipWith fun tvs qts
@@ -226,6 +373,10 @@ astKind2TypeKind mod pos (AST.KArray l r) = do
     r' <- astKind2TypeKind mod pos r
     pure $ Kfun l' r'
 
+named2Type mod args (NamedData d)   = data2Type mod args d
+named2Type mod args (NamedStruct d) = struct2Type mod args d
+named2Type _ _ _                    = fail "internal error"
+
 data2Type mod args (AST.Data pos (AST.IDPos _ ident) tvk _ _) = toType mod args pos ident tvk
 struct2Type mod args (AST.Struct pos (AST.IDPos _ ident) tvk _ _) = toType mod args pos ident tvk
 
@@ -235,134 +386,6 @@ toType mod args pos ident tvk = do
     let ident' = PathID (Just $ mod2file mod) ident
         t      = TCon (Tycon ident' k')
     pure $ foldl TAp t args
-
--- checkRecMem dict mod = mapAnd (checkUserType dict mod)
-
--- checkUserType dict mod (AST.QType _ qual (AST.IDType pos ident typeArgs)) = do
---     r <- mapAnd (isDefType dict mod) typeArgs
---     if r then
---         case findUserObj dict mod ident of
---             Just x  -> checkIDType qual x
---             Nothing -> fail $ errMsg file pos "unknown type specifier"
---     else
---         pure False
---     where
---         file = mod2file mod
---         msg  = errMsg file pos
---         lenTargs = length typeArgs
---         checkIDType _ (_, _, NamedFunc _)  = fail $ msg "specify type instead of function name"
---         checkIDType _ (_, _, NamedClass _) = fail $ msg "specify type instead of class name"
---         checkIDType _ (_, _, NamedSum _ _) = fail $ msg "specify type instead of data constructor"
---         checkIDType Nothing (f, mod', obj) = do
---             r1 <- checkTArgs file pos lenTargs obj
---             (s, callst) <- S.get
---             let callst' = (file, pos):callst
---             S.put (s, callst')
---             r2 <- checkRec dict mod' (f, obj)
---             -- TODO: apply type arguments to mod'
---             if r1 && r2 then do
---                 S.put (s, callst)
---                 pure True
---             else
---                 pure False
---         checkIDType _ (_, _, obj) = checkTArgs file pos lenTargs obj
--- checkUserType dict mod (AST.QType _ qual (AST.TupleType _ qts))
---     | MB.isNothing qual = mapAnd (checkUserType dict mod) qts
---     | otherwise = mapAnd (isDefType dict mod) qts
--- checkUserType dict mod (AST.QType _ qual (AST.ArrayType _ qt _))
---     | MB.isNothing qual = checkUserType dict mod qt
---     | otherwise = isDefType dict mod qt
--- checkUserType dict mod func@(AST.QType _ _ AST.FuncType{}) = isDefType dict mod func
--- checkUserType _ _ _ = pure True
-
--- mapAnd fun t = foldl (&&) True <$> mapM fun t
-
--- checkTArgs file pos lenTargs (NamedData (AST.Data _ (AST.IDPos _ ident) tv _ _))     = checkLen file pos lenTargs ident tv
--- checkTArgs file pos lenTargs (NamedStruct (AST.Struct _ (AST.IDPos _ ident) tv _ _)) = checkLen file pos lenTargs ident tv
--- checkTArgs file pos lenTargs _ =
---     if lenTargs == 0 then
---         pure True
---     else
---         fail $ errMsg file pos "cannot pass type arguments"
-
--- checkLen file pos lenTargs ident tv =
---     if length tv == lenTargs then
---         pure True
---     else
---         fail $ errMsg file pos (ident ++ " requires " ++ show (length tv)
---             ++ " type arguments, but " ++ show lenTargs
---             ++ " type arguments are passed")
-
--- isDefType dict mod (AST.QType _ _ (AST.IDType pos ident typeArgs)) = do
---     r <- mapAnd (isDefType dict mod) typeArgs
---     if r then
---         case findUserObj dict mod ident of
---             Just (_, _, NamedFunc _)  -> fail $ msg "specify type instead of function name"
---             Just (_, _, NamedClass _) -> fail $ msg "specify type instead of class name"
---             Just (_, _, NamedSum _ _) -> fail $ msg "specify type instead of data constructor"
---             Just (_, _, obj)          -> checkTArgs file pos lenTargs obj
---             Nothing                   -> fail $ msg "unknown type specifier"
---     else
---         pure False
---     where
---         file = mod2file mod
---         msg  = errMsg file pos
---         lenTargs = length typeArgs
--- isDefType dict mod (AST.QType _ _ (AST.TupleType _ qts))  = mapAnd (isDefType dict mod) qts
--- isDefType dict mod (AST.QType _ _ (AST.ArrayType _ qt _)) = isDefType dict mod qt
--- isDefType dict mod (AST.QType _ _ (AST.FuncType _ args ret)) = do
---     a <- mapAnd (isDefType dict mod) args
---     b <- isDefType dict mod ret
---     pure $ a && b
--- isDefType _ _ _ = pure True
-
--- checkRecSumMem dict mod = mapAnd (checkRecMem dict mod . sumMem)
---     where
---         sumMem (AST.SumMem _ _ m) = m
-
--- checkRecProdMem dict mod = mapAnd (checkUserType dict mod . prodMem)
---     where
---         prodMem (AST.ProdMem _ _ m) = m
-
--- checkObjRec1st dict = checkObjRec1st2 dict dictlist
---     where
---         dictlist = MAP.toList dict
-
--- checkObjRec1st2 _ [] = True
--- checkObjRec1st2 dict ((file, (mod, obj)):t) =
---     checkObjRec1st3 dict mod file objlist && checkObjRec1st2 dict t
---     where
---         objlist = MAP.toList obj
-
--- checkObjRec1st3 _ _ _ [] = True
--- checkObjRec1st3 dict mod file ((_, obj):t) =
---     checkObjRec1st4 dict mod file obj && checkObjRec1st3 dict mod file t
-
--- checkObjRec1st4 dict mod file obj =
---     S.evalState (checkRec dict mod (file, obj)) (SET.empty, [])
-
--- checkRec :: File2Mod -> LModule -> (Maybe FP.FilePath, Named) -> S.State (SET.Set (FP.FilePath, String), [(FP.FilePath, AST.Position)]) Bool
--- checkRec dict mod (Just file, NamedData (AST.Data pos (AST.IDPos _ ident) _ _ mem)) = do
---     let fun = checkRecSumMem dict mod mem
---     checkRec2 dict mod file ident fun
--- checkRec dict mod (Just file, NamedStruct (AST.Struct pos (AST.IDPos _ ident) _ _ mem)) = do
---     let fun = checkRecProdMem dict mod mem
---     checkRec2 dict mod file ident fun
--- checkRec _ _ _ = pure True
-
--- checkRec2 dict mod file ident fun = do
---     state@(s, callst) <- S.get
---     if SET.member (file, ident) s then
---         fail $ getRecErrMsg callst
---     else do
---         let s' = SET.insert (file, ident) s
---         S.put (s', callst)
---         r <- fun
---         if r then do
---             S.put state
---             pure True
---         else
---             pure False
 
 findUserObj :: File2Mod -> LModule -> [String] -> Maybe (Maybe FP.FilePath, LModule, Named)
 findUserObj dict mod [ident]
@@ -411,12 +434,14 @@ findUserObj dict mod ident =
 mod2file (LModule f _ _ _) = f
 mod2imports (LModule _ _ _ i) = i
 
+{-
 getRecErrMsg ((file, pos):t) =
     getRecErrMsg2 t $ errMsg file pos "error: data or struct is recursive"
 
 getRecErrMsg2 [] msg = msg
 getRecErrMsg2 ((file, pos):t) msg =
     getRecErrMsg2 t $ msg ++ "\ndefined from: " ++ msgFilePos file pos
+-}
 
 primitiveTypes =
     SET.insert "u64" $

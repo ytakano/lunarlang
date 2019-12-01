@@ -14,7 +14,14 @@ data IDPos = IDPos Position String deriving (Show)
 data ClassDef = ClassDef Position IDPos [TypeVarKind] [Pred] [Interface] deriving (Show)
 data Instance = Instance Position Pred [Pred] [Defun] deriving (Show)
 data Defun    = Defun Position IDPos [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
-data Data     = Data Position IDPos [TypeVarKind] [Pred] [SumMem] deriving (Show)
+data Data     = Data {
+    dataPos  :: Position,
+    dataID   :: IDPos,
+    dataTVK  :: [TypeVarKind],
+    dataPred :: [Pred],
+    dataMem  :: [SumMem]
+} deriving (Show)
+
 data Import   = Import Position [String] HereAs deriving (Show)
 data Struct   = Struct Position IDPos [TypeVarKind] [Pred] [ProdMem] deriving (Show)
 
@@ -26,7 +33,7 @@ data Arg = Arg Position DBind (Maybe QType) deriving (Show)
 -- qualifier
 data Qual =
     Shared |             -- shared type
-    Uniq deriving (Show) -- unique type
+    Uniq deriving (Show, Eq) -- unique type
 
 -- qualified type
 data QType = QType Position (Maybe Qual) LType deriving (Show)

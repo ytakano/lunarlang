@@ -7,3 +7,6 @@ errMsg file (AST.Pos line column) msg =
 
 msgFilePos file (AST.Pos line column) =
     "\"" ++ file ++ "\" (line " ++ show line ++ ", column " ++ show column ++ ")"
+
+errMsgStack ((file, pos):t) =
+    "from " ++ msgFilePos file pos ++ errMsgStack t
