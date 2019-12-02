@@ -263,7 +263,7 @@ typeID pos id = do
     id' <- dotid2 [id]
     whiteSpace
     ta <- angles (commaSep1 qtype <* whiteSpace) <|> pure []
-    pure $ AST.IDType pos id' ta
+    pure $ AST.IDType (AST.IDRel pos id') ta
 
 {-
     ( $QTYPES? ) $RETTYPE
@@ -333,7 +333,7 @@ predicate = do
     id <- dotid
     whiteSpace
     qt <- angles qtype
-    pure $ AST.Pred pos id qt
+    pure $ AST.Pred pos (AST.IDRel pos id) qt
 
 predicates = (reserved "require" >> whiteSpace >> commaSep1 predicate) <|> pure []
 

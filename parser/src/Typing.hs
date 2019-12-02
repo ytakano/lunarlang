@@ -778,3 +778,7 @@ applySbstDict sbst = mapM app
         app (mod, dict) = do
             dict' <- mapM (applySbstNamed (mod2file mod) sbst) dict
             pure (mod, dict')
+
+{-
+    resolve ID
+-}
