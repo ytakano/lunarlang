@@ -24,8 +24,21 @@ data ClassDef = ClassDef {
     classIF   :: [Interface]
 } deriving (Show)
 
-data Instance = Instance Position Pred [Pred] [Defun] deriving (Show)
-data Defun    = Defun Position IDPos [Arg] (Maybe QType) [Pred] [Expr] deriving (Show)
+data Instance = Instance {
+    instPos   :: Position,
+    instHead  :: Pred,
+    instPred  :: [Pred],
+    instDefun :: [Defun]
+} deriving (Show)
+
+data Defun    = Defun {
+    defunPos  :: Position,
+    defunID   :: IDPos,
+    defunArgs :: [Arg],
+    defunRet  :: Maybe QType,
+    defunPred :: [Pred],
+    defunExpr :: [Expr]
+} deriving (Show)
 
 data Data     = Data {
     dataPos  :: Position,
@@ -131,7 +144,11 @@ data Pattern =
     deriving (Show)
 
 data TypeVar = TypeVar Position String deriving (Show)
-data SumMem  = SumMem Position String [QType] deriving (Show)
+data SumMem  = SumMem {
+    sumMemPos   :: Position,
+    sumMemID    :: String,
+    sumMemQType :: [QType]
+} deriving (Show)
 
 data Kind =
     KV Int |
@@ -147,7 +164,10 @@ data IntName =
     IntPrefix Position String
     deriving (Show)
 
-data Interface = Interface [IntName] LType deriving (Show)
+data Interface = Interface {
+    ifName :: [IntName],
+    ifType :: LType
+} deriving (Show)
 
 data HereAs =
     ImportNS |
@@ -155,4 +175,8 @@ data HereAs =
     ImportAs [String]
     deriving (Show)
 
-data ProdMem = ProdMem Position String QType deriving (Show)
+data ProdMem = ProdMem {
+    prodMemPos   :: Position,
+    prodMemID    :: String,
+    prodMemQType :: QType
+} deriving (Show)

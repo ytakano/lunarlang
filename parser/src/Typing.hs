@@ -782,3 +782,92 @@ applySbstDict sbst = mapM app
 {-
     resolve ID
 -}
+resolveLType mod f2m (AST.IDType ident@AST.IDRel{} qts) =
+    case findUserObj f2m mod ident' of
+        Just (fp, _, nm) -> do
+            objid <- getTypeIdOfNamed mod pos nm
+            qts'  <- mapM (resolveQType mod f2m) qts
+            pure $ AST.IDType (AST.IDAbs pos ident' fp objid) qts'
+        Nothing -> fail $ errMsg (mod2file mod) pos "no such type"
+    where
+        pos    = AST.idRelPos ident
+        ident' = AST.idRelID ident
+resolveLType mod f2m (AST.TVar pos ident qts) = do
+    qts' <- mapM (resolveQType mod f2m) qts
+    pure $ AST.TVar pos ident qts'
+resolveLType mod f2m (AST.ArrayType pos qt exp) = do
+    qt' <- resolveQType mod f2m qt
+    pure $ AST.ArrayType pos qt' exp
+resolveLType mod f2m (AST.TupleType pos qts) = do
+    qts' <- mapM (resolveQType mod f2m) qts
+    pure $ AST.TupleType pos qts'
+resolveLType mod f2m (AST.FuncType pos args ret) = do
+    args' <- mapM (resolveQType mod f2m) args
+    ret'  <- resolveQType mod f2m ret
+    pure $ AST.FuncType pos args' ret'
+resolveLType _ _ v = pure v
+
+getTypeIdOfNamed mod pos (NamedStruct s) = pure $ AST.idPosID (AST.structID s)
+getTypeIdOfNamed mod pos (NamedData d)   = pure $ AST.idPosID (AST.dataID d)
+getTypeIdOfNamed mod pos (NamedPrim i)   = pure i
+getTypeIdOfNamed mod pos _               = fail $ errMsg (mod2file mod) pos "must be primitive, struct or data type"
+
+resolveQType mod f2m qt = do
+    t <- resolveLType mod f2m (AST.qtypeType qt)
+    pure $ qt { AST.qtypeType = t }
+
+getClassIdOfNamed _ _ (NamedClass c) = pure $ AST.idPosID (AST.classID c)
+getClassIdOfNamed mod pos _          = fail $ errMsg (mod2file mod) pos "must be class name"
+
+resolvePred mod f2m (AST.Pred pos ident@AST.IDRel{} qt) =
+    case findUserObj f2m mod ident' of
+        Just (fp, _, nm) -> do
+            clsid <- getClassIdOfNamed mod pos nm
+            qt'   <- resolveQType mod f2m qt
+            pure $ AST.Pred pos (AST.IDAbs idpos ident' fp clsid) qt'
+        Nothing -> fail $ errMsg (mod2file mod) pos "no such class"
+    where
+        ident' = AST.idRelID ident
+        idpos  = AST.idRelPos ident
+resolvePred _ _ pred = pure pred
+
+resolveStruct mod f2m s = do
+    pred <- mapM (resolvePred mod f2m) (AST.structPred s)
+    mem  <- mapM (resolveProdMem mod f2m) (AST.structMem s)
+    pure $ s { AST.structPred = pred, AST.structMem = mem }
+
+resolveProdMem mod f2m mem = do
+    qt <- resolveQType mod f2m (AST.prodMemQType mem)
+    pure $ mem { AST.prodMemQType = qt }
+
+resolveData mod f2m d = do
+    pred <- mapM (resolvePred mod f2m) (AST.dataPred d)
+    mem  <- mapM (resolveSumMem mod f2m) (AST.dataMem d)
+    pure $ d { AST.dataPred = pred, AST.dataMem = mem }
+
+resolveSumMem mod f2m mem = do
+    inmem <- mapM (resolveQType mod f2m) (AST.sumMemQType mem)
+    pure $ mem { AST.sumMemQType = inmem }
+
+resolveClass mod f2m cls = do
+    pred <- mapM (resolvePred mod f2m) (AST.classPred cls)
+    intf <- mapM (resolveInterface mod f2m) (AST.classIF cls)
+    pure $ cls { AST.classPred = pred, AST.classIF = intf }
+
+resolveInterface mod f2m intf = do
+    t <- resolveLType mod f2m (AST.ifType intf)
+    pure $ intf { AST.ifType = t }
+
+resolveInstance mod f2m inst = do
+    head  <- resolvePred mod f2m (AST.instHead inst)
+    pred  <- mapM (resolvePred mod f2m) (AST.instPred inst)
+    defun <- mapM (resolveDefun mod f2m) (AST.instDefun inst)
+    pure $ inst { AST.instHead = head, AST.instPred = pred, AST.instDefun = defun }
+
+resolveDefun mod f2m defun = do
+    ret <- case AST.defunRet defun of
+        Just qt -> Just <$> resolveQType mod f2m qt
+        Nothing -> pure Nothing
+    pred <- mapM (resolvePred mod f2m) (AST.defunPred defun)
+    -- TODO: arg, expr
+    pure $ defun { AST.defunRet = ret, AST.defunPred = pred }
