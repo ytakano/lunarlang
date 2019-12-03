@@ -1,14 +1,9 @@
 //import vec
-//import type2
+import type2
 
-// data t0 {
-//     a: uniq t1<t1>
-//     q: bool
-//     b: t2
-//     y: shared type2.d0
-//     z: ((bool, u32))
-//     w: uniq func (bool) -> u16
-// }
+data t0 {
+    b: t2
+}
 
 struct t1 <`a, `b, `c> {
     c: `a <`b<`a>, bool>
@@ -16,11 +11,11 @@ struct t1 <`a, `b, `c> {
     h: [`c : 10]
 }
 
-// data t2 {
-//     d: u64
-//     e: bool
-//     f: (bool, u32, fp64)
-// }
+data t2 {
+    d: u64
+    e: bool
+    f: (bool, u32, fp64)
+}
 
 // func mkt0() {
 //     let a = a(false) // Ref<t0>

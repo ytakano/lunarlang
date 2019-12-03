@@ -98,7 +98,6 @@ extractFiles [] = pure []
 extractFiles (h:t) = do
     let LModule _ path ast _ = h
         r = S.evalState extractFilesST (STExtFiles h ast SET.empty [])
-    PP.pPrint r
     return r
 
 extractFilesST :: S.State STExtFiles [(String, AST.Import, [String])]

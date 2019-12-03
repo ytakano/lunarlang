@@ -13,9 +13,16 @@ parseFile [] = putStrLn "no input file"
 parseFile files = do
     let dirs = []
     mod <- loadFiles files dirs
+
+    -- collect named objects
     let mod1 = MAP.map namedObj mod
-        mod2 = assignKV mod1
-        sbst = checkKind mod2
-    mod3 <- applySbstDict sbst mod2
-    PP.pPrint mod3
-    PP.pPrint sbst
+
+    -- resolve identifiers
+    mod2 <- resolve mod1
+
+    -- infer kind
+    let mod3 = assignKV mod2
+        sbst = checkKind mod3
+    mod4 <- applySbstDict sbst mod3
+
+    PP.pPrint mod4

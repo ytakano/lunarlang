@@ -203,11 +203,14 @@ addSumMem file dt (ast@(AST.SumMem pos ident _):t) dict
         checkRecIn qual a <b, c>
 -}
 checkRecTop :: LModule -> File2Mod -> AST.QType -> S.State STRec Type
-checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType pos ident qts)) = do
+checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType ident@AST.IDAbs{} qts)) = do
     s <- S.get
-    let pid = PathID (Just $ mod2file mod) (last ident)
-        vt = visitedType s
-        ps = posStack s
+    let ident' = AST.idAbsID ident
+        fp  = AST.idAbsFile ident
+        pos = AST.idAbsPos ident
+        pid = PathID (Just $ mod2file mod) ident'
+        vt  = visitedType s
+        ps  = posStack s
 
     -- TODO: check visited
     -- TODO: push to posStack
@@ -218,14 +221,14 @@ checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType pos ident qts)) = do
         fail $ msg ++ msgs
     else do
         ts <- mapM (checkRecIn mod f2m) qts
-        case findUserObj f2m mod ident of
-            Just (fp, mod', nm) -> do
-                ret  <- named2Type mod' ts nm
+        case findUserObj2 f2m fp ident' of
+            Just (mod', nm) -> do
+                ret <- named2Type mod' ts nm
                 -- TODO: apply qts to nm
                 checkRecNamedIn mod' f2m ret nm
                 -- TODO: posStack
                 pure ret
-            -- TODO: Nothing
+                -- TODO: Nothing
 
 {-
     if qual? a <b, c> then
@@ -243,16 +246,19 @@ checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType pos ident qts)) = do
         return qual at
 -}
 checkRecIn :: LModule -> File2Mod -> AST.QType -> S.State STRec Type
-checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType pos ident qts)) = do
+checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType ident qts)) = do
     s <- S.get
-    let v  = visitedType s
-        ps = posStack s
+    let ident' = AST.idAbsID ident
+        fp  = AST.idAbsFile ident
+        pos = AST.idAbsPos ident
+        v   = visitedType s
+        ps  = posStack s
     S.put $ s { visitedType = [], posStack = (mod2file mod, pos):ps }
 
     ts <- mapM (checkRecIn mod f2m) qts
 
-    case findUserObj f2m mod ident of
-        Just (fp, mod', nm) -> do
+    case findUserObj2 f2m fp ident' of
+        Just (mod', nm) -> do
             checkRecNamed mod' f2m qts ts nm
             -- TODO: pop from posStack
             -- TODO: update visited
@@ -436,13 +442,13 @@ mod2imports (LModule _ _ _ i) = i
 
 findUserObj2 f2m (Just fp) name =
     case MAP.lookup fp f2m of
-        Just (_, m) ->
-            case MAP.lookup name m of
-                Just n  -> Just n
+        Just (mod, dict) ->
+            case MAP.lookup name dict of
+                Just n  -> Just (mod, n)
                 Nothing -> Nothing
         Nothing -> Nothing
 findUserObj2 f2m _ name
-    | SET.member name primitiveTypes = Just $ NamedPrim name
+    | SET.member name primitiveTypes = Just (emptyLModule, NamedPrim name)
     | otherwise = Nothing
 
 primitiveTypes =
@@ -581,7 +587,7 @@ checkKindTop mod (AST.QType _ _ (AST.IDType ident@AST.IDAbs{} [])) = do
     (sbst, dict, _) <- S.get
     case findUserObj2 dict fp name of
         Nothing -> fail $ err "unknown type specifier"
-        Just n -> do
+        Just (_, n) -> do
             k <- getKind mod pos n
             case unifyKind [(k, AST.KStar)] of
                 Nothing -> fail $ err "kind must be *"
@@ -653,7 +659,7 @@ checkKindIn mod (AST.QType _ qual (AST.IDType ident@AST.IDAbs{} qt)) = do
     (sbst, dict, _) <- S.get
     case findUserObj2 dict fp name of
         Nothing        -> fail $ err "unknown type specifier"
-        Just n -> do
+        Just (_, n) -> do
             k <- getKind mod pos n
             case qt of
                 [] -> checkQual (applySbstKindArr sbst k) qual
@@ -893,3 +899,9 @@ resolveNamed mod f2m (NamedClass c)       = NamedClass <$> resolveClass mod f2m 
 resolveNamed mod f2m (NamedSum ident mem) = NamedSum ident <$> resolveSumMem mod f2m mem
 resolveNamed mod f2m (NamedFunc f)        = NamedFunc <$> resolveDefun mod f2m f
 resolveNamed _ _ p                        = pure p
+
+resolveDictIn f2m (mod, dict) = do
+    dict' <- mapM (resolveNamed mod f2m) dict
+    pure (mod, dict')
+
+resolve f2m = mapM (resolveDictIn f2m) f2m
