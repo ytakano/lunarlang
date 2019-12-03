@@ -61,7 +61,11 @@ data Struct   = Struct {
 data Position = Pos Int Int deriving (Show)
 
 -- argument
-data Arg = Arg Position DBind (Maybe QType) deriving (Show)
+data Arg = Arg {
+    argPos   :: Position,
+    argDBind :: DBind,
+    argQType :: Maybe QType
+} deriving (Show)
 
 -- qualifier
 data Qual =

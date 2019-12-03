@@ -318,9 +318,9 @@ applyTv2QType mod tv2qt qt@(AST.QType pos Nothing tv@(AST.TVar _ ident _)) =
     case MAP.lookup ident tv2qt of
         Just arg@(AST.QType _ argQt _) -> applyTv2QType2 mod tv2qt (AST.QType pos argQt tv) arg
         Nothing                        -> pure qt
-applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.IDType pos2 ident qts)) = do
+applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.IDType ident qts)) = do
     qts' <- mapM (applyTv2QType mod tv2qt) qts
-    pure $ AST.QType pos1 qual (AST.IDType pos2 ident qts')
+    pure $ AST.QType pos1 qual (AST.IDType ident qts')
 applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.ArrayType pos2 qt ex)) = do
     qt' <- applyTv2QType mod tv2qt qt
     pure $ AST.QType pos1 qual (AST.ArrayType pos2 qt' ex)
@@ -333,11 +333,11 @@ applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.FuncType pos2 args ret)) = do
     pure $ AST.QType pos1 qual (AST.FuncType pos2 args' ret')
 applyTv2QType _ _ qt = pure qt
 
-applyTv2QType2 mod tv2qt (AST.QType pos1 qual (AST.TVar pos2 _ targs)) (AST.QType _ _ (AST.IDType _ ident [])) = do
+applyTv2QType2 mod tv2qt (AST.QType pos1 qual (AST.TVar pos2 _ targs)) (AST.QType _ _ (AST.IDType ident [])) = do
     targs' <- mapM (applyTv2QType mod tv2qt) targs
-    pure $ AST.QType pos1 qual (AST.IDType pos2 ident targs')
-applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _ (AST.IDType _ ident targs)) =
-    pure $ AST.QType pos1 qual (AST.IDType pos2 ident targs)
+    pure $ AST.QType pos1 qual (AST.IDType ident targs')
+applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _ (AST.IDType ident targs)) =
+    pure $ AST.QType pos1 qual (AST.IDType ident targs)
 applyTv2QType2 mod tv2qt (AST.QType pos1 qual (AST.TVar pos2 _ targs)) (AST.QType _ _ (AST.TVar _ ident [])) = do
     targs' <- mapM (applyTv2QType mod tv2qt) targs
     pure $ AST.QType pos1 qual (AST.TVar pos2 ident targs')
@@ -434,14 +434,16 @@ findUserObj dict mod ident =
 mod2file (LModule f _ _ _) = f
 mod2imports (LModule _ _ _ i) = i
 
-{-
-getRecErrMsg ((file, pos):t) =
-    getRecErrMsg2 t $ errMsg file pos "error: data or struct is recursive"
-
-getRecErrMsg2 [] msg = msg
-getRecErrMsg2 ((file, pos):t) msg =
-    getRecErrMsg2 t $ msg ++ "\ndefined from: " ++ msgFilePos file pos
--}
+findUserObj2 f2m (Just fp) name =
+    case MAP.lookup fp f2m of
+        Just (_, m) ->
+            case MAP.lookup name m of
+                Just n  -> Just n
+                Nothing -> Nothing
+        Nothing -> Nothing
+findUserObj2 f2m _ name
+    | SET.member name primitiveTypes = Just $ NamedPrim name
+    | otherwise = Nothing
 
 primitiveTypes =
     SET.insert "u64" $
@@ -575,17 +577,20 @@ hasFVKind _ _                        = False
         return *
     else checkKindIn
 -}
-checkKindTop mod (AST.QType _ _ (AST.IDType pos ident [])) = do
+checkKindTop mod (AST.QType _ _ (AST.IDType ident@AST.IDAbs{} [])) = do
     (sbst, dict, _) <- S.get
-    case findUserObj dict mod ident of
+    case findUserObj2 dict fp name of
         Nothing -> fail $ err "unknown type specifier"
-        Just (_, _, n) -> do
+        Just n -> do
             k <- getKind mod pos n
             case unifyKind [(k, AST.KStar)] of
                 Nothing -> fail $ err "kind must be *"
                 _       -> pure AST.KStar
     where
-        err = errMsg (mod2file mod) pos
+        fp   = AST.idAbsFile ident
+        name = AST.idAbsID ident
+        pos  = AST.idAbsPos ident
+        err  = errMsg (mod2file mod) pos
 checkKindTop mod (AST.QType _ _ (AST.TVar pos ident [])) = do
     (sbst, dict, tv2kind) <- S.get
     case MAP.lookup ident tv2kind of
@@ -644,17 +649,20 @@ checkKindTop mod qt = checkKindIn mod qt
         return *
     if qual? void then return *
 -}
-checkKindIn mod (AST.QType _ qual (AST.IDType pos ident qt)) = do
+checkKindIn mod (AST.QType _ qual (AST.IDType ident@AST.IDAbs{} qt)) = do
     (sbst, dict, _) <- S.get
-    case findUserObj dict mod ident of
+    case findUserObj2 dict fp name of
         Nothing        -> fail $ err "unknown type specifier"
-        Just (_, _, n) -> do
+        Just n -> do
             k <- getKind mod pos n
             case qt of
                 [] -> checkQual (applySbstKindArr sbst k) qual
                 _  -> checkKindUnify mod pos k qt
     where
-        err = errMsg (mod2file mod) pos
+        fp   = AST.idAbsFile ident
+        name = AST.idAbsID ident
+        pos  = AST.idAbsPos ident
+        err  = errMsg (mod2file mod) pos
         checkQual k Nothing = pure k
         checkQual k _ =
             case unifyKind [(k, AST.KStar)] of
@@ -869,5 +877,19 @@ resolveDefun mod f2m defun = do
         Just qt -> Just <$> resolveQType mod f2m qt
         Nothing -> pure Nothing
     pred <- mapM (resolvePred mod f2m) (AST.defunPred defun)
-    -- TODO: arg, expr
-    pure $ defun { AST.defunRet = ret, AST.defunPred = pred }
+    args <- mapM (resolveArg mod f2m) (AST.defunArgs defun)
+    -- TODO: expr
+    pure $ defun { AST.defunRet = ret, AST.defunPred = pred, AST.defunArgs = args }
+
+resolveArg mod f2m arg = do
+    t <- case AST.argQType arg of
+        Just qt -> Just <$> resolveQType mod f2m qt
+        Nothing -> pure Nothing
+    pure $ arg { AST.argQType = t }
+
+resolveNamed mod f2m (NamedStruct s)      = NamedStruct <$> resolveStruct mod f2m s
+resolveNamed mod f2m (NamedData d)        = NamedData <$> resolveData mod f2m d
+resolveNamed mod f2m (NamedClass c)       = NamedClass <$> resolveClass mod f2m c
+resolveNamed mod f2m (NamedSum ident mem) = NamedSum ident <$> resolveSumMem mod f2m mem
+resolveNamed mod f2m (NamedFunc f)        = NamedFunc <$> resolveDefun mod f2m f
+resolveNamed _ _ p                        = pure p
