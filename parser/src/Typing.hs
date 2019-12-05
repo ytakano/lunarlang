@@ -221,7 +221,7 @@ checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType ident@AST.IDAbs{} qts)) = d
         fail $ msg ++ msgs
     else do
         ts <- mapM (checkRecIn mod f2m) qts
-        case findUserObj2 f2m fp ident' of
+        case findObjFromABSPath f2m fp ident' of
             Just (mod', nm) -> do
                 ret <- named2Type mod' ts nm
                 -- TODO: apply qts to nm
@@ -257,7 +257,7 @@ checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType ident qts)) = do
 
     ts <- mapM (checkRecIn mod f2m) qts
 
-    case findUserObj2 f2m fp ident' of
+    case findObjFromABSPath f2m fp ident' of
         Just (mod', nm) -> do
             checkRecNamed mod' f2m qts ts nm
             -- TODO: pop from posStack
@@ -339,25 +339,54 @@ applyTv2QType mod tv2qt (AST.QType pos1 qual (AST.FuncType pos2 args ret)) = do
     pure $ AST.QType pos1 qual (AST.FuncType pos2 args' ret')
 applyTv2QType _ _ qt = pure qt
 
-applyTv2QType2 mod tv2qt (AST.QType pos1 qual (AST.TVar pos2 _ targs)) (AST.QType _ _ (AST.IDType ident [])) = do
+setPos2ID pos ident@AST.IDRel{} = ident { AST.idRelPos = pos }
+setPos2ID pos ident@AST.IDAbs{} = ident { AST.idAbsPos = pos }
+
+{-
+    apply a type to a type variable
+-}
+applyTv2QType2 mod tv2qt qt@AST.QType{ AST.qtypeType = AST.TVar pos _ targs} AST.QType{ AST.qtypeType = AST.IDType ident []} = do
+    -- ex: apply a to `b of `b<c, d>
     targs' <- mapM (applyTv2QType mod tv2qt) targs
-    pure $ AST.QType pos1 qual (AST.IDType ident targs')
-applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _ (AST.IDType ident targs)) =
-    pure $ AST.QType pos1 qual (AST.IDType ident targs)
-applyTv2QType2 mod tv2qt (AST.QType pos1 qual (AST.TVar pos2 _ targs)) (AST.QType _ _ (AST.TVar _ ident [])) = do
+    let ident' = setPos2ID pos ident
+        t = AST.IDType ident' targs'
+    pure $ qt { AST.qtypeType = t }
+applyTv2QType2 mod _ qt@AST.QType{ AST.qtypeType = AST.TVar pos _ []} AST.QType{ AST.qtypeType = AST.IDType ident targs} = do
+    -- ex:: apply a<b, c> to `d
+    let ident' = setPos2ID pos ident
+        t = AST.IDType ident' targs
+    pure $ qt { AST.qtypeType = t }
+applyTv2QType2 mod tv2qt qt@AST.QType{ AST.qtypeType = AST.TVar pos _ targs} AST.QType{ AST.qtypeType = AST.TVar _ ident []} = do
+    -- ex: apply `a to `b of `b<c, d>
     targs' <- mapM (applyTv2QType mod tv2qt) targs
-    pure $ AST.QType pos1 qual (AST.TVar pos2 ident targs')
-applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _ (AST.TVar _ ident targs)) =
-    pure $ AST.QType pos1 qual (AST.TVar pos2 ident targs)
-applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _  (AST.ArrayType _ arrqt arrexpr)) =
-    pure $ AST.QType pos1 qual (AST.ArrayType pos2 arrqt arrexpr)
-applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _  (AST.TupleType _ tupqt)) =
-    pure $ AST.QType pos1 qual (AST.TupleType pos2 tupqt)
-applyTv2QType2 mod _ (AST.QType pos1 qual (AST.TVar pos2 _ [])) (AST.QType _ _  (AST.FuncType _ args ret)) =
-    pure $ AST.QType pos1 qual (AST.FuncType pos2 args ret)
-applyTv2QType2 mod _ (AST.QType pos1 qual _) (AST.QType _ _ AST.VoidType) =
-    pure $ AST.QType pos1 qual AST.VoidType
+    let t = AST.TVar pos ident targs'
+    pure $ qt { AST.qtypeType = t }
+applyTv2QType2 mod _ qt@AST.QType{ AST.qtypeType = AST.TVar pos _ []} AST.QType{ AST.qtypeType = AST.TVar _ ident targs} = do
+    -- ex: apply `a<b, c> to `d
+    let t = AST.TVar pos ident targs
+    pure $ qt { AST.qtypeType = t }
+applyTv2QType2 mod _ qt@AST.QType{ AST.qtypeType = AST.TVar pos _ []} AST.QType{ AST.qtypeType = AST.ArrayType _ arrqt arrexpr} = do
+    -- ex: apply [a] to `b
+    let t = AST.ArrayType pos arrqt arrexpr
+    pure $ qt { AST.qtypeType = t }
+applyTv2QType2 mod _ qt@AST.QType{ AST.qtypeType = AST.TVar pos _ []} AST.QType{ AST.qtypeType = AST.TupleType _ tupqt} = do
+    -- ex: apply (a, b) to `c
+    let t = AST.TupleType pos tupqt
+    pure $ qt { AST.qtypeType = t }
+applyTv2QType2 mod _ qt@AST.QType{ AST.qtypeType = AST.TVar pos _ []} AST.QType{ AST.qtypeType = AST.FuncType _ args ret} = do
+    -- ex: apply func (a, b) -> c to `d
+    let t = AST.FuncType pos args ret
+    pure $ qt { AST.qtypeType = t }
+applyTv2QType2 mod _ qt@AST.QType{ AST.qtypeType = AST.TVar{}} AST.QType{ AST.qtypeType = AST.VoidType} =
+    -- ex: apply void to `a
+    pure $ qt { AST.qtypeType = AST.VoidType }
 applyTv2QType2 mod _ (AST.QType pos _ _) _ = do
+    -- error:
+    --   ex: apply `a<b, c> to `d of `d<e, f>
+    --       apply a<b, c> to `d of `d<e, f>
+    --       apply [a] to `b of `b<c, d>
+    --       apply (a, b) to `c of `c<d, e>
+    --       func (a, b) -> c to `d of `d<e, f>
     s <- S.get
     let msg  = errMsg (mod2file mod) pos "type mismatch"
         msgs = errMsgStack $ posStack s
@@ -393,8 +422,8 @@ toType mod args pos ident tvk = do
         t      = TCon (Tycon ident' k')
     pure $ foldl TAp t args
 
-findUserObj :: File2Mod -> LModule -> [String] -> Maybe (Maybe FP.FilePath, LModule, Named)
-findUserObj dict mod [ident]
+findObjFromRelPath :: File2Mod -> LModule -> [String] -> Maybe (Maybe FP.FilePath, LModule, Named)
+findObjFromRelPath dict mod [ident]
     | SET.member ident primitiveTypes = Just (Nothing, emptyLModule, NamedPrim ident)
     | otherwise =
         case getObj objdict of
@@ -416,7 +445,7 @@ findUserObj dict mod [ident]
                 Nothing        -> getObj2 t
         getObj2 (_:t) =
             getObj2 t
-findUserObj dict mod ident =
+findObjFromRelPath dict mod ident =
     getObj modid imp
     where
         modid = modid2 $ reverse ident
@@ -440,14 +469,14 @@ findUserObj dict mod ident =
 mod2file (LModule f _ _ _) = f
 mod2imports (LModule _ _ _ i) = i
 
-findUserObj2 f2m (Just fp) name =
+findObjFromABSPath f2m (Just fp) name =
     case MAP.lookup fp f2m of
         Just (mod, dict) ->
             case MAP.lookup name dict of
                 Just n  -> Just (mod, n)
                 Nothing -> Nothing
         Nothing -> Nothing
-findUserObj2 f2m _ name
+findObjFromABSPath f2m _ name
     | SET.member name primitiveTypes = Just (emptyLModule, NamedPrim name)
     | otherwise = Nothing
 
@@ -585,7 +614,7 @@ hasFVKind _ _                        = False
 -}
 checkKindTop mod (AST.QType _ _ (AST.IDType ident@AST.IDAbs{} [])) = do
     (sbst, dict, _) <- S.get
-    case findUserObj2 dict fp name of
+    case findObjFromABSPath dict fp name of
         Nothing -> fail $ err "unknown type specifier"
         Just (_, n) -> do
             k <- getKind mod pos n
@@ -657,7 +686,7 @@ checkKindTop mod qt = checkKindIn mod qt
 -}
 checkKindIn mod (AST.QType _ qual (AST.IDType ident@AST.IDAbs{} qt)) = do
     (sbst, dict, _) <- S.get
-    case findUserObj2 dict fp name of
+    case findObjFromABSPath dict fp name of
         Nothing        -> fail $ err "unknown type specifier"
         Just (_, n) -> do
             k <- getKind mod pos n
@@ -797,7 +826,7 @@ applySbstDict sbst = mapM app
     resolve ID
 -}
 resolveLType mod f2m (AST.IDType ident@AST.IDRel{} qts) =
-    case findUserObj f2m mod ident' of
+    case findObjFromRelPath f2m mod ident' of
         Just (fp, _, nm) -> do
             objid <- getTypeIdOfNamed mod pos nm
             qts'  <- mapM (resolveQType mod f2m) qts
@@ -834,7 +863,7 @@ getClassIdOfNamed _ _ (NamedClass c) = pure $ AST.idPosID (AST.classID c)
 getClassIdOfNamed mod pos _          = fail $ errMsg (mod2file mod) pos "must be class name"
 
 resolvePred mod f2m (AST.Pred pos ident@AST.IDRel{} qt) =
-    case findUserObj f2m mod ident' of
+    case findObjFromRelPath f2m mod ident' of
         Just (fp, _, nm) -> do
             clsid <- getClassIdOfNamed mod pos nm
             qt'   <- resolveQType mod f2m qt
