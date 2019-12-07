@@ -195,10 +195,10 @@ addSumMem file dt (ast@(AST.SumMem pos ident _):t) dict
         bt = b's type (checkRecIn b)
         ct = c's type (checkRecIn c)
 
-        at = checkRecNamedIn a <bt, ct>
+        checkRecNamedIn a <bt, ct>
 
         pop from posStack
-        return at
+        return a <bt, ct>
     if qual a <b, c> then
         checkRecIn qual a <b, c>
 -}
@@ -212,21 +212,30 @@ checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType ident@AST.IDAbs{} qts)) = d
         vt  = visitedType s
         ps  = posStack s
 
-    -- TODO: check visited
-    -- TODO: push to posStack
-
     if pid `elem` vt then do
+        -- check visited
         let msg  = errMsg (mod2file mod) pos "data or struct is recursive"
             msgs = errMsgStack ps
         fail $ msg ++ msgs
-    else do
-        ts <- mapM (checkRecIn mod f2m) qts
+    else
         case findObjFromABSPath f2m fp ident' of
             Just (mod', nm) -> do
-                ret <- named2Type mod' ts nm
-                -- TODO: apply qts to nm
-                checkRecNamedIn mod' f2m ret nm
-                -- TODO: posStack
+                -- push to posStack
+                let s' = s { posStack = (mod2file mod, pos):ps }
+                S.put s'
+
+                args <- mapM (checkRecIn mod f2m) qts
+                ret  <- named2Type mod' args nm
+
+                -- apply qts to nm
+                nm' <- applyQTypes2Named mod qts nm
+                checkRecNamedIn mod' f2m nm'
+
+                -- pop from posStack
+                s2 <- S.get
+                let s2' = s2 { posStack = ps }
+                S.put s2'
+
                 pure ret
                 -- TODO: Nothing
 
@@ -251,7 +260,7 @@ checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType ident qts)) = do
     let ident' = AST.idAbsID ident
         fp  = AST.idAbsFile ident
         pos = AST.idAbsPos ident
-        v   = visitedType s
+        vt  = visitedType s
         ps  = posStack s
     S.put $ s { visitedType = [], posStack = (mod2file mod, pos):ps }
 
@@ -270,6 +279,8 @@ checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType ident qts)) = do
 
         add foo <a, b> to checked
         checkRecNamedIn foo <a, b>
+
+        return foo <a, b>
 -}
 checkRecNamed :: LModule -> File2Mod -> [AST.QType] -> [Type] -> Named -> S.State STRec Type
 checkRecNamed mod f2m argsAST argsType (NamedData d@(AST.Data pos ident tvk _ mem)) = do
@@ -288,21 +299,31 @@ checkRecNamed mod f2m argsAST argsType (NamedData d@(AST.Data pos ident tvk _ me
     tv2qt <- getTV2QType tvk argsAST
     mem'  <- mapM (applyTv2QTypeSumMem mod tv2qt) mem
 
-    checkRecNamedIn mod f2m t (NamedData (d { AST.dataMem = mem' }))
+    checkRecNamedIn mod f2m (NamedData (d { AST.dataMem = mem' }))
+    pure t
 
-checkRecNamedIn mod f2m ret (NamedData (AST.Data _ (AST.IDPos _ ident) _ pred mem)) = do
+checkRecNamedIn mod f2m (NamedData (AST.Data _ (AST.IDPos _ ident) _ pred mem)) = do
+    -- push to visited
     s <- S.get
     let vt = visitedType s
-        s' = s { visitedType =  PathID (Just $ mod2file mod) ident : vt }
+        s' = s { visitedType = PathID (Just $ mod2file mod) ident : vt }
     S.put s'
 
     mapM_ (checkRecSumMem mod f2m) mem
-    S.put s
 
-    pure ret
+    -- pop from visited
+    s2 <- S.get
+    let s2' = s2 { visitedType = vt }
+    S.put s2'
 
 checkRecSumMem mod f2m (AST.SumMem _ _ mem) = mapM_ (checkRecTop mod f2m) mem
 
+applyQTypes2Named mod args (NamedData d@AST.Data{}) = do
+    let tvk = AST.dataTVK d
+        mem = AST.dataMem d
+    tv2qt <- getTV2QType tvk args
+    mem' <- mapM (applyTv2QTypeSumMem mod tv2qt) mem
+    pure $ NamedData (d { AST.dataMem = mem' })
 
 applyTv2QTypeSumMem mod tv2qt (AST.SumMem pos ident mem) = do
     mem' <- mapM (applyTv2QType mod tv2qt) mem
@@ -310,16 +331,14 @@ applyTv2QTypeSumMem mod tv2qt (AST.SumMem pos ident mem) = do
 
 applyTv2QType mod tv2qt qt@(AST.QType pos (Just qual) (AST.TVar _ ident _)) =
     case MAP.lookup ident tv2qt of
-        Just arg@(AST.QType _ (Just qual') _) ->
-            if qual /= qual' then do
-                s <- S.get
-                let msg  = errMsg (mod2file mod) pos "qualifiers are incompatible"
-                    msgs = errMsgStack $ posStack s
-                fail $ msg ++ msgs
-            else
-                applyTv2QType2 mod tv2qt qt arg
+        Just arg@(AST.QType _ (Just qual') _) -> do
+            -- error: applying qual a to `b of qual `b
+            s <- S.get
+            let msg  = errMsg (mod2file mod) pos "qualifiers are nested"
+                msgs = errMsgStack $ posStack s
+            fail $ msg ++ msgs
         Just arg -> applyTv2QType2 mod tv2qt qt arg
-        Nothing -> pure qt
+        Nothing  -> pure qt
 applyTv2QType mod tv2qt qt@(AST.QType pos Nothing tv@(AST.TVar _ ident _)) =
     case MAP.lookup ident tv2qt of
         Just arg@(AST.QType _ argQt _) -> applyTv2QType2 mod tv2qt (AST.QType pos argQt tv) arg
