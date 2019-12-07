@@ -94,8 +94,14 @@ s1 @@ s2 = [(u, apply s1 t) | (u, t) <- s2] ++ reverse (foldl chk [] s1)
             | otherwise         = a:ret
         hasKey (k1, _) (k2, _) = k1 == k2
 
-merge :: Monad m => Subst -> Subst -> m Subst
-merge s1 s2 = if agree then pure (s1 ++ s2) else fail "merge fails"
+mergeM :: Monad m => Subst -> Subst -> m Subst
+mergeM s1 s2 =
+    case merge s1 s2 of
+        Just s  -> pure s
+        Nothing -> fail "merge fails"
+
+merge :: Subst -> Subst -> Maybe Subst
+merge s1 s2 = if agree then Just (s1 ++ s2) else Nothing
     where
         agree = all (\v -> apply s1 (TVar v) == apply s2 (TVar v)) prod
         prod  = map fst s1 `L.intersect` map fst s2
@@ -124,15 +130,20 @@ varBind u t
 
     if ∃s (s t1 = t2) then s else fail
 -}
-match (TAp l r) (TAp l' r') = do
-    sl <- match l l'
-    sr <- match r r'
-    merge sl sr
+matchM lhs rhs =
+    case match lhs rhs of
+        Just s  -> pure s
+        Nothing -> fail "types do not match"
+
+match (TAp l r) (TAp l' r') =
+    case (match l l', match r r') of
+        (Just sl, Just sr) -> merge sl sr
+        _                  -> Nothing
 match (TVar u) t
-    | kind u == kind t = pure $ u +-> t
+    | kind u == kind t = Just $ u +-> t
 match (TCon tc1) (TCon tc2)
-    | tc1 == tc2       = pure nullSubst
-match _ _              = fail "types do not match"
+    | tc1 == tc2       = Just nullSubst
+match _ _              = Nothing
 
 {-
     get user defined types from module
@@ -221,8 +232,7 @@ checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType ident@AST.IDAbs{} qts)) = d
         case findObjFromABSPath f2m fp ident' of
             Just (mod', nm) -> do
                 -- push to posStack
-                let s' = s { posStack = (mod2file mod, pos):ps }
-                S.put s'
+                S.put $ s { posStack = (mod2file mod, pos):ps }
 
                 args <- mapM (checkRecIn mod f2m) qts
                 ret  <- named2Type mod' args nm
@@ -233,8 +243,7 @@ checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType ident@AST.IDAbs{} qts)) = d
 
                 -- pop from posStack
                 s2 <- S.get
-                let s2' = s2 { posStack = ps }
-                S.put s2'
+                S.put $ s2 { posStack = ps }
 
                 pure ret
                 -- TODO: Nothing
@@ -255,7 +264,7 @@ checkRecTop mod f2m (AST.QType _ Nothing (AST.IDType ident@AST.IDAbs{} qts)) = d
         return qual at
 -}
 checkRecIn :: LModule -> File2Mod -> AST.QType -> S.State STRec Type
-checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType ident qts)) = do
+checkRecIn mod f2m (AST.QType _ qual (AST.IDType ident qts)) = do
     s <- S.get
     let ident' = AST.idAbsID ident
         fp  = AST.idAbsFile ident
@@ -268,39 +277,44 @@ checkRecIn mod f2m (AST.QType _ Nothing (AST.IDType ident qts)) = do
 
     case findObjFromABSPath f2m fp ident' of
         Just (mod', nm) -> do
-            checkRecNamed mod' f2m qts ts nm
-            -- TODO: pop from posStack
-            -- TODO: update visited
-            -- TODO: qual
+            ret <- checkRecNamed mod' f2m qts ts nm
+            -- pop from posStack and restore update visited
+            s2 <- S.get
+            S.put $ s2 { visitedType = vt, posStack = ps }
+
+            pure $ getQualType qual ret
 
 {-
+    s: substitution
+
     if data foo <a, b> then
-        if foo <a, b> ∈ checked then return foo <a, b>
-
-        add foo <a, b> to checked
-        checkRecNamedIn foo <a, b>
-
-        return foo <a, b>
+        if ∃c ∃s (ck ∈ checked ∧ apply(s, foo <a, b>) = c) then
+            return foo <a, b>
+        else
+            add foo <a, b> to checked
+            checkRecNamedIn foo <a, b>
+            return foo <a, b>
 -}
 checkRecNamed :: LModule -> File2Mod -> [AST.QType] -> [Type] -> Named -> S.State STRec Type
 checkRecNamed mod f2m argsAST argsType (NamedData d@(AST.Data pos ident tvk _ mem)) = do
-    -- update state
     s <- S.get
     t <- data2Type mod argsType d
-    let ps = posStack s
-        ck = checkedType s
-        s' = s { checkedType = t : ck,
-                 posStack = (mod2file mod, pos):ps }
+    let ck = checkedType s
+        isChecked = any MB.isJust $ map (match t) ck
+    if isChecked then
+        pure t
+    else do
+        -- update state
+        let ps = posStack s
+            s' = s { checkedType = t : ck,
+                     posStack = (mod2file mod, pos):ps }
+        S.put s'
 
-    -- TODO: t ∈ checked ?
+        tv2qt <- getTV2QType tvk argsAST
+        mem'  <- mapM (applyTv2QTypeSumMem mod tv2qt) mem
 
-    S.put s'
-
-    tv2qt <- getTV2QType tvk argsAST
-    mem'  <- mapM (applyTv2QTypeSumMem mod tv2qt) mem
-
-    checkRecNamedIn mod f2m (NamedData (d { AST.dataMem = mem' }))
-    pure t
+        checkRecNamedIn mod f2m (NamedData (d { AST.dataMem = mem' }))
+        pure t
 
 checkRecNamedIn mod f2m (NamedData (AST.Data _ (AST.IDPos _ ident) _ pred mem)) = do
     -- push to visited
@@ -313,8 +327,7 @@ checkRecNamedIn mod f2m (NamedData (AST.Data _ (AST.IDPos _ ident) _ pred mem)) 
 
     -- pop from visited
     s2 <- S.get
-    let s2' = s2 { visitedType = vt }
-    S.put s2'
+    S.put $ s2 { visitedType = vt }
 
 checkRecSumMem mod f2m (AST.SumMem _ _ mem) = mapM_ (checkRecTop mod f2m) mem
 
@@ -421,7 +434,7 @@ getTV2QType _ _ = fail "internal error: the number of arguments is incompatible"
 getIdTVK (AST.TypeVarKind _ ident _) = ident
 
 astKind2TypeKind mod pos (AST.KV _) = fail $ errMsg (mod2file mod) pos "could not convert kind"
-astKind2TypeKind _ _ AST.KStar = pure Star
+astKind2TypeKind _ _ AST.KStar      = pure Star
 astKind2TypeKind mod pos (AST.KArray l r) = do
     l' <- astKind2TypeKind mod pos l
     r' <- astKind2TypeKind mod pos r
@@ -430,6 +443,15 @@ astKind2TypeKind mod pos (AST.KArray l r) = do
 named2Type mod args (NamedData d)   = data2Type mod args d
 named2Type mod args (NamedStruct d) = struct2Type mod args d
 named2Type _ _ _                    = fail "internal error"
+
+getQualType Nothing t     = t
+getQualType (Just qual) t = TAp (TCon tc) t
+    where
+        tc    = Tycon ident k
+        ident = case qual of
+            AST.Shared -> PathID Nothing "shared"
+            AST.Uniq   -> PathID Nothing "uniq"
+        k     = Kfun Star Star
 
 data2Type mod args (AST.Data pos (AST.IDPos _ ident) tvk _ _) = toType mod args pos ident tvk
 struct2Type mod args (AST.Struct pos (AST.IDPos _ ident) tvk _ _) = toType mod args pos ident tvk

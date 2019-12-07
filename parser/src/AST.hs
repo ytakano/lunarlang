@@ -69,7 +69,7 @@ data Arg = Arg {
 
 -- qualifier
 data Qual =
-    Shared |             -- shared type
+    Shared |                 -- shared type
     Uniq deriving (Show, Eq) -- unique type
 
 -- qualified type
